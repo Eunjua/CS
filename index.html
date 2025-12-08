@@ -224,13 +224,18 @@
         </div>
         
         <div class="form-group">
-            <label for="userId">유저 ID</label>
+            <label for="userId">유저 Public ID</label>
             <input type="text" id="userId" placeholder="예: jrkn79ihyp">
         </div>
         
         <button onclick="generateOrderNumber()">주문번호 생성</button>
         
         <div class="result-section" id="resultSection">
+            <div class="result-label">구매자명</div>
+            <div class="result-box" style="padding-bottom: 15px; margin-bottom: 15px;">
+                <span id="buyerName"></span>
+            </div>
+            
             <div class="result-label">생성된 주문번호</div>
             <div class="result-box" id="resultBox">
                 <span id="orderNumber"></span>
@@ -281,18 +286,37 @@
             }
             
             if (!userId) {
-                alert('유저 ID를 입력해주세요.');
+                alert('유저 Public ID를 입력해주세요.');
+                return;
+            }
+            
+            // 숫자만 입력된 경우 차단
+            if (/^\d+$/.test(userId)) {
+                alert('유저 Public ID는 숫자만으로 구성될 수 없습니다.\n영문자를 포함해주세요.');
                 return;
             }
             
             const ulid = generateULID();
-            const orderNumber = `${ulid}_certification_${certificationId}_${userId}`;
+            const orderNumber = `${ulid}-certification-${certificationId}-${userId}`;
+            
+            // 구매자명 생성
+            const certificationSelect = document.getElementById('certification');
+            const certificationText = certificationSelect.options[certificationSelect.selectedIndex].text;
+            const certificationName = certificationText.split('(ID:')[0].trim();
+            
+            let buyerName;
+            if (certificationId === '8') {
+                buyerName = '자격증-베이비시터(상장)';
+            } else {
+                buyerName = `자격증-${certificationName}(상장+카드)`;
+            }
             
             document.getElementById('orderNumber').textContent = orderNumber;
+            document.getElementById('buyerName').textContent = buyerName;
             document.getElementById('resultSection').classList.add('show');
             
             // 기록에 추가
-            addToHistory(orderNumber, certificationId, userId);
+            addToHistory(orderNumber, certificationId, userId, buyerName);
         }
         
         function copyToClipboard() {
@@ -313,7 +337,7 @@
             });
         }
         
-        function addToHistory(orderNumber, certId, userId) {
+        function addToHistory(orderNumber, certId, userId, buyerName) {
             const history = getHistory();
             const timestamp = new Date().toLocaleString('ko-KR');
             
@@ -321,6 +345,7 @@
                 orderNumber,
                 certId,
                 userId,
+                buyerName,
                 timestamp
             });
             
@@ -349,8 +374,9 @@
             
             historyList.innerHTML = history.map(item => `
                 <div class="history-item">
-                    <span class="time">${item.timestamp} | 자격증 ID: ${item.certId} | 유저 ID: ${item.userId}</span>
-                    <span class="order-id">${item.orderNumber}</span>
+                    <span class="time">${item.timestamp} | 자격증 ID: ${item.certId} | 유저 Public ID: ${item.userId}</span>
+                    <span class="order-id" style="display: block; margin-bottom: 5px;">${item.orderNumber}</span>
+                    ${item.buyerName ? `<span class="order-id" style="color: #667eea;">구매자명: ${item.buyerName}</span>` : ''}
                 </div>
             `).join('');
         }
