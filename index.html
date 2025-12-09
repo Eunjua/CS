@@ -231,6 +231,11 @@
         <button onclick="generateOrderNumber()">주문번호 생성</button>
         
         <div class="result-section" id="resultSection">
+            <div class="result-label">결제 금액</div>
+            <div class="result-box" style="padding-bottom: 15px; margin-bottom: 15px;">
+                <span id="paymentAmount" style="font-weight: bold; color: #667eea; font-size: 18px;"></span>
+            </div>
+            
             <div class="result-label">구매자명</div>
             <div class="result-box" style="padding-bottom: 15px; margin-bottom: 15px;">
                 <span id="buyerName"></span>
@@ -305,18 +310,22 @@
             const certificationName = certificationText.split('(ID:')[0].trim();
             
             let buyerName;
+            let paymentAmount;
             if (certificationId === '8') {
                 buyerName = '자격증-베이비시터(상장)';
+                paymentAmount = '83,000원';
             } else {
                 buyerName = `자격증-${certificationName}(상장+카드)`;
+                paymentAmount = '93,000원';
             }
             
             document.getElementById('orderNumber').textContent = orderNumber;
             document.getElementById('buyerName').textContent = buyerName;
+            document.getElementById('paymentAmount').textContent = paymentAmount;
             document.getElementById('resultSection').classList.add('show');
             
             // 기록에 추가
-            addToHistory(orderNumber, certificationId, userId, buyerName);
+            addToHistory(orderNumber, certificationId, userId, buyerName, paymentAmount);
         }
         
         function copyToClipboard() {
@@ -337,7 +346,7 @@
             });
         }
         
-        function addToHistory(orderNumber, certId, userId, buyerName) {
+        function addToHistory(orderNumber, certId, userId, buyerName, paymentAmount) {
             const history = getHistory();
             const timestamp = new Date().toLocaleString('ko-KR');
             
@@ -346,6 +355,7 @@
                 certId,
                 userId,
                 buyerName,
+                paymentAmount,
                 timestamp
             });
             
@@ -377,6 +387,7 @@
                     <span class="time">${item.timestamp} | 자격증 ID: ${item.certId} | 유저 Public ID: ${item.userId}</span>
                     <span class="order-id" style="display: block; margin-bottom: 5px;">${item.orderNumber}</span>
                     ${item.buyerName ? `<span class="order-id" style="color: #667eea;">구매자명: ${item.buyerName}</span>` : ''}
+                    ${item.paymentAmount ? `<span class="order-id" style="color: #28a745; display: block; margin-top: 3px;">결제 금액: ${item.paymentAmount}</span>` : ''}
                 </div>
             `).join('');
         }
