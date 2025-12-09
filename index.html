@@ -236,7 +236,7 @@
                 <span id="paymentAmount" style="font-weight: bold; color: #667eea; font-size: 18px;"></span>
             </div>
             
-            <div class="result-label">구매자명</div>
+            <div class="result-label">상품</div>
             <div class="result-box" style="padding-bottom: 15px; margin-bottom: 15px;">
                 <span id="buyerName"></span>
             </div>
@@ -304,7 +304,7 @@
             const ulid = generateULID();
             const orderNumber = `${ulid}-certification-${certificationId}-${userId}`;
             
-            // 구매자명 생성
+            // 상품명 생성
             const certificationSelect = document.getElementById('certification');
             const certificationText = certificationSelect.options[certificationSelect.selectedIndex].text;
             const certificationName = certificationText.split('(ID:')[0].trim();
@@ -313,10 +313,10 @@
             let paymentAmount;
             if (certificationId === '8') {
                 buyerName = '자격증-베이비시터(상장)';
-                paymentAmount = '83,000원';
+                paymentAmount = '83,000';
             } else {
                 buyerName = `자격증-${certificationName}(상장+카드)`;
-                paymentAmount = '93,000원';
+                paymentAmount = '93,000';
             }
             
             document.getElementById('orderNumber').textContent = orderNumber;
@@ -386,7 +386,7 @@
                 <div class="history-item">
                     <span class="time">${item.timestamp} | 자격증 ID: ${item.certId} | 유저 Public ID: ${item.userId}</span>
                     <span class="order-id" style="display: block; margin-bottom: 5px;">${item.orderNumber}</span>
-                    ${item.buyerName ? `<span class="order-id" style="color: #667eea;">구매자명: ${item.buyerName}</span>` : ''}
+                    ${item.buyerName ? `<span class="order-id" style="color: #667eea;">상품명: ${item.buyerName}</span>` : ''}
                     ${item.paymentAmount ? `<span class="order-id" style="color: #28a745; display: block; margin-top: 3px;">결제 금액: ${item.paymentAmount}</span>` : ''}
                 </div>
             `).join('');
