@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인입건수 비교 차트</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1200px;
+            width: 90%;
+        }
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .week-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .week-input-group {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: move;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .week-input-group.dragging { opacity: 0.5; transform: scale(0.95); }
+        .week-input-group.drag-over { border: 2px dashed #667eea; background: #f0f4ff; }
+        .drag-handle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 18px;
+            color: #999;
+            cursor: grab;
+            user-select: none;
+        }
+        .drag-handle:active { cursor: grabbing; }
+        .week-input-group h3 { margin: 0 0 10px 0; color: #667eea; font-size: 16px; }
+        .week-input-group label { display: block; margin: 8px 0; font-size: 13px; color: #555; }
+        .week-input-group input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .week-input-group input:focus { outline: none; border-color: #667eea; }
+        .btn-row { display: flex; gap: 10px; }
+        .update-btn {
+            flex: 1; padding: 12px;
+            background: #667eea; color: white;
+            border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: background 0.3s;
+        }
+        .update-btn:hover { background: #5568d3; }
+        .update-btn:active { transform: scale(0.98); }
+        .save-btn {
+            flex: 1; padding: 12px;
+            background: #43a047; color: white;
+            border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: background 0.3s;
+        }
+        .save-btn:hover { background: #388e3c; }
+        .save-btn:active { transform: scale(0.98); }
+        .save-status {
+            text-align: center; font-size: 13px;
+            color: #43a047; min-height: 20px;
+            margin-top: 8px; transition: opacity 0.5s;
+        }
+        h1 { text-align: center; color: #333; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+        .chart-wrapper { position: relative; height: 400px; margin-bottom: 30px; }
+        .stats { display: flex; justify-content: space-around; margin-bottom: 30px; gap: 20px; }
+        .stat-card { flex: 1; padding: 20px; background: #f8f9fa; border-radius: 10px; text-align: center; }
+        .stat-week { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .stat-total { font-size: 32px; font-weight: bold; color: #667eea; margin-bottom: 10px; }
+        .stat-detail { font-size: 13px; color: #888; margin: 5px 0; }
+        .growth { margin-top: 15px; padding: 10px; background: #e8f5e9; border-radius: 5px; color: #2e7d32; font-weight: bold; }
+        .decline { margin-top: 15px; padding: 10px; background: #ffebee; border-radius: 5px; color: #c62828; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 주간 인입건수 비교</h1>
+        <p class="subtitle">주차별 전화/채팅 인입건수 비교 차트</p>
+
+        <div class="chart-wrapper">
+            <canvas id="inboundChart"></canvas>
+        </div>
+
+        <div class="stats" id="statsContainer"></div>
+
+        <div class="input-section">
+            <div class="week-inputs" id="weekInputs"></div>
+            <div class="btn-row">
+                <button class="update-btn" onclick="updateChart()">차트 업데이트</button>
+                <button class="save-btn" onclick="saveData()">💾 저장</button>
+            </div>
+            <div class="save-status" id="saveStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        let chart;
+        let draggedElement = null;
+
+        const DEFAULT_DATA = [
+            { month: 1, week: 1, phone: 0, chat: 0 },
+            { month: 1, week: 2, phone: 0, chat: 0 },
+            { month: 1, week: 3, phone: 0, chat: 0 },
+            { month: 1, week: 4, phone: 246, chat: 554 },
+        ];
+        const STORAGE_KEY = 'inbound_chart_data';
+
+        // ── 저장/불러오기 (localStorage) ──────────────
+        function saveData() {
+            const weekGroups = document.querySelectorAll('.week-input-group');
+            const data = [];
+            weekGroups.forEach(group => {
+                data.push({
+                    month: parseInt(group.querySelector('.month').value) || 1,
+                    week:  parseInt(group.querySelector('.week-num').value) || 1,
+                    phone: parseInt(group.querySelector('.phone').value) || 0,
+                    chat:  parseInt(group.querySelector('.chat').value) || 0,
+                });
+            });
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                showSaveStatus('✅ 저장 완료!');
+            } catch(e) {
+                showSaveStatus('저장 실패: ' + e.message);
+            }
+        }
+
+        function loadData() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) return JSON.parse(saved);
+            } catch(e) {}
+            return DEFAULT_DATA;
+        }
+
+        function showSaveStatus(msg) {
+            const el = document.getElementById('saveStatus');
+            el.textContent = msg;
+            el.style.opacity = '1';
+            setTimeout(() => { el.style.opacity = '0'; }, 2500);
+        }
+
+        // ── 카드 생성 ──────────────────────────────────
+        function createCard(index, data) {
+            const div = document.createElement('div');
+            div.className = 'week-input-group';
+            div.draggable = true;
+            div.innerHTML = `
+                <div class="drag-handle">⋮⋮</div>
+                <h3>${index + 1}번 막대</h3>
+                <label>월: <input type="number" class="month" value="${data.month}" min="1" max="12"></label>
+                <label>주차: <input type="number" class="week-num" value="${data.week}" min="1"></label>
+                <label>전화: <input type="number" class="phone" value="${data.phone}" min="0"></label>
+                <label>채팅: <input type="number" class="chat" value="${data.chat}" min="0"></label>
+            `;
+            addDragListeners(div);
+            return div;
+        }
+
+        function renderCards(dataArr) {
+            const container = document.getElementById('weekInputs');
+            container.innerHTML = '';
+            dataArr.forEach((d, i) => container.appendChild(createCard(i, d)));
+        }
+
+        // ── 드래그&드롭 ────────────────────────────────
+        function addDragListeners(group) {
+            group.addEventListener('dragstart', handleDragStart);
+            group.addEventListener('dragover',  handleDragOver);
+            group.addEventListener('drop',      handleDrop);
+            group.addEventListener('dragend',   handleDragEnd);
+            group.addEventListener('dragenter', handleDragEnter);
+            group.addEventListener('dragleave', handleDragLeave);
+        }
+        function handleDragStart(e) { draggedElement = this; this.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+        function handleDragOver(e)  { if(e.preventDefault) e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+        function handleDragEnter(e) { if(this !== draggedElement) this.classList.add('drag-over'); }
+        function handleDragLeave(e) { this.classList.remove('drag-over'); }
+        function handleDrop(e) {
+            if(e.stopPropagation) e.stopPropagation();
+            if(draggedElement !== this) {
+                const container = document.getElementById('weekInputs');
+                const all = [...container.children];
+                const di = all.indexOf(draggedElement), ti = all.indexOf(this);
+                container.insertBefore(draggedElement, di < ti ? this.nextSibling : this);
+                updateCardTitles();
+                updateChart();
+            }
+            this.classList.remove('drag-over');
+            return false;
+        }
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.week-input-group').forEach(g => g.classList.remove('drag-over'));
+        }
+        function updateCardTitles() {
+            document.querySelectorAll('.week-input-group').forEach((g, i) => {
+                g.querySelector('h3').textContent = `${i + 1}번 막대`;
+            });
+        }
+
+        // ── 차트 ───────────────────────────────────────
+        function initChart() {
+            const ctx = document.getElementById('inboundChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: '전화', data: [], backgroundColor: '#667eea', borderColor: '#667eea', borderWidth: 2, borderRadius: 8 },
+                        { label: '채팅', data: [], backgroundColor: '#81c784', borderColor: '#81c784', borderWidth: 2, borderRadius: 8 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 14, weight: 'bold' } } },
+                        y: {
+                            stacked: true, beginAtZero: true,
+                            ticks: { font: { size: 12 }, callback: v => v.toLocaleString() + '건' },
+                            grid: { color: '#f0f0f0' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true, position: 'top',
+                            labels: { padding: 20, font: { size: 14, weight: 'bold' }, usePointStyle: true, pointStyle: 'circle' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label:      c => (c.dataset.label || '') + ': ' + c.parsed.y.toLocaleString() + '건',
+                                afterLabel: c => `비율: ${((c.parsed.y / c.chart.data.datasets.reduce((s,d)=>s+d.data[c.dataIndex],0))*100).toFixed(1)}%`,
+                                footer:     i => `총계: ${i[0].chart.data.datasets.reduce((s,d)=>s+d.data[i[0].dataIndex],0).toLocaleString()}건`
+                            },
+                            backgroundColor: 'rgba(0,0,0,0.8)', padding: 12,
+                            titleFont: { size: 14 }, bodyFont: { size: 13 }, footerFont: { size: 13, weight: 'bold' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            const weekGroups = document.querySelectorAll('.week-input-group');
+            const labels=[], phoneData=[], chatData=[], weekStats=[];
+            weekGroups.forEach(group => {
+                const month  = parseInt(group.querySelector('.month').value);
+                const weekNum= parseInt(group.querySelector('.week-num').value);
+                const phone  = parseInt(group.querySelector('.phone').value) || 0;
+                const chat   = parseInt(group.querySelector('.chat').value)  || 0;
+                const total  = phone + chat;
+                if (total > 0) {
+                    labels.push(`${month}월 ${weekNum}주차`);
+                    phoneData.push(phone); chatData.push(chat);
+                    weekStats.push({ month, week: weekNum, phone, chat, total });
+                }
+            });
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = phoneData;
+            chart.data.datasets[1].data = chatData;
+            const maxValue = Math.max(...phoneData.map((p,i)=>p+chatData[i]), 0);
+            chart.options.scales.y.max = Math.ceil(maxValue * 1.2 / 100) * 100 || 100;
+            chart.update();
+            updateStats(weekStats);
+        }
+
+        function updateStats(weekStats) {
+            const container = document.getElementById('statsContainer');
+            container.innerHTML = '';
+            weekStats.forEach((stat, idx) => {
+                const phonePercent = ((stat.phone / stat.total) * 100).toFixed(1);
+                const chatPercent  = ((stat.chat  / stat.total) * 100).toFixed(1);
+                let growthHtml = '';
+                if (idx > 0) {
+                    const g = ((stat.total - weekStats[idx-1].total) / weekStats[idx-1].total * 100).toFixed(1);
+                    growthHtml = `<div class="${g>=0?'growth':'decline'}">${g>=0?'↑':'↓'} ${Math.abs(g)}% ${g>=0?'증가':'감소'}</div>`;
+                }
+                container.innerHTML += `
+                    <div class="stat-card">
+                        <div class="stat-week">${stat.month}월 ${stat.week}주차</div>
+                        <div class="stat-total">${stat.total.toLocaleString()}</div>
+                        <div class="stat-detail">📞 전화: ${stat.phone.toLocaleString()}건 (${phonePercent}%)</div>
+                        <div class="stat-detail">💬 채팅: ${stat.chat.toLocaleString()}건 (${chatPercent}%)</div>
+                        ${growthHtml}
+                    </div>`;
+            });
+        }
+
+        // ── 초기화 ─────────────────────────────────────
+        function init() {
+            initChart();
+            const data = loadData();
+            renderCards(data);
+            updateChart();
+            const hasSaved = !!localStorage.getItem(STORAGE_KEY);
+            if (hasSaved) showSaveStatus('✅ 저장된 데이터를 불러왔어요');
+        }
+
+        init();
+    </script>
+</body>
+</html>
