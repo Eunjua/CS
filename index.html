@@ -946,6 +946,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
 let cVol, cCh, cIssue;
 let allData  = [];   // { id, week, sortKey, ch, tags, state, assigneeId }
 let csatData = {};   // { [상담id]: { 만족도, 친절도, 해결여부, 대기시간, 자유의견 } }
+let csatSendData = []; // 만족도 발송건 시트 [{날짜, 건수}]
 let npsData  = [];   // { id, userId, date, week, sortKey, score, reason, type }
 let weeks = [];
 let npsWeeks = [];
@@ -1281,7 +1282,14 @@ async function loadFromSheet(isAuto) {
       if (raw2.length) csatData = parseCsatRows(raw2);
     } catch(e2) { console.warn('CSAT 로드 실패(무시):', e2.message); }
 
-    // ③ NPS 요양 + 기관 (실패해도 무시)
+    // ③ 만족도 발송건 (실패해도 무시)
+    csatSendData = [];
+    try {
+      const rawSend = await fetchSheet(baseUrl, 'csat_send');
+      if (rawSend.length) csatSendData = rawSend;
+    } catch(e3) { console.warn('발송건 로드 실패(무시):', e3.message); }
+
+    // ④ NPS 요양 + 기관 (실패해도 무시)
     npsData = [];
     try {
       const [raw3a, raw3b] = await Promise.allSettled([
@@ -1830,6 +1838,12 @@ function switchCommentTab(mode) {
   renderCsatComments(selectedWeek);
 }
 
+function getSendCountForWeek(week) {
+  return csatSendData
+    .filter(r => { const d = new Date(r['날짜']); return !isNaN(d) && getWeekLabel(d).label === week; })
+    .reduce((sum, r) => sum + (Number(r['건수']) || 0), 0);
+}
+
 function getCsatMatchedForWeek(curWeek) {
   const curIds = allData.filter(r => r.week === curWeek && r.id).map(r => String(r.id));
   return curIds.map(id => csatData[id] ? { _id: id, ...csatData[id] } : null).filter(Boolean);
@@ -1872,10 +1886,15 @@ function renderCsatTab(curWeek) {
   const prevMatched = prevWeek ? getCsatMatchedForWeek(prevWeek) : [];
 
   // ① KPI — 응답률(왼쪽) → 만족도 → 친절도
-  const totalCnt  = allData.filter(r => r.week === curWeek).length;
+  const sendCnt     = getSendCountForWeek(curWeek);
+  const prevSendCnt = prevWeek ? getSendCountForWeek(prevWeek) : 0;
+  const totalCnt    = allData.filter(r => r.week === curWeek).length;
   const prevTotalCnt = prevWeek ? allData.filter(r => r.week === prevWeek).length : 0;
-  const respRate  = totalCnt > 0 ? (matched.length / totalCnt * 100) : null;
-  const prevRespRate = (prevWeek && prevTotalCnt > 0) ? (prevMatched.length / prevTotalCnt * 100) : null;
+  const denominator     = sendCnt > 0 ? sendCnt : totalCnt;
+  const prevDenominator = prevSendCnt > 0 ? prevSendCnt : prevTotalCnt;
+  const respRate     = denominator > 0 ? (matched.length / denominator * 100) : null;
+  const prevRespRate = (prevWeek && prevDenominator > 0) ? (prevMatched.length / prevDenominator * 100) : null;
+  const usingSendData = sendCnt > 0;
 
   const kpiRow = document.getElementById('csatKpiRow4');
   if (kpiRow) {
@@ -1891,6 +1910,9 @@ function renderCsatTab(curWeek) {
       const sign = diff > 0 ? '+' : '';
       respChgHtml = `<div class="chg ${cls}">${sign}${diff}%p 전주 대비</div>`;
     }
+    const respDesc = usingSendData
+      ? `발송 ${sendCnt}건 중 ${matched.length}건 응답`
+      : `전체 ${totalCnt}건 중 ${matched.length}건 수집`;
     kpiRow.innerHTML += `
       <div class="kpi" style="--c:var(--accent4)">
         <div class="lbl">CSAT 응답률</div>
@@ -1899,7 +1921,7 @@ function renderCsatTab(curWeek) {
         <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
           <div style="width:${respBar}%;height:100%;background:var(--accent4);border-radius:2px;transition:width .4s"></div>
         </div>
-        <div style="font-size:9px;color:var(--muted);margin-top:4px">전체 ${totalCnt}건 중 ${matched.length}건 수집</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:4px">${respDesc}</div>
       </div>`;
 
     // 만족도·친절도 카드
@@ -1929,21 +1951,6 @@ function renderCsatTab(curWeek) {
 
   // ③ 주차별 트렌드 차트
   const trendLabels = weeks.slice(-4); // 최근 4주
-  const datasets = METRICS.map(m => ({
-    label: m.label,
-    data: trendLabels.map(w => {
-      const wMatched = getCsatMatchedForWeek(w);
-      const v = avg(wMatched, m.key);
-      return v !== null ? parseFloat(v.toFixed(2)) : null;
-    }),
-    borderColor: m.color,
-    backgroundColor: m.color.replace(')', ', 0.1)').replace('var(', 'rgba(').replace('--accent)', '110,231,183,').replace('--accent2)', '244,114,182,').replace('--accent3)', '96,165,250,').replace('--accent4)', '251,191,36,'),
-    borderWidth: 2,
-    pointRadius: 4,
-    pointHoverRadius: 6,
-    tension: 0.3,
-    spanGaps: true,
-  }));
 
   // 색상을 CSS var 대신 실제 값으로
   const colorMap = {
@@ -1952,9 +1959,42 @@ function renderCsatTab(curWeek) {
     'var(--accent3)': '#60a5fa',
     'var(--accent4)': '#fbbf24',
   };
-  datasets.forEach((ds, i) => {
-    ds.borderColor = colorMap[METRICS[i].color] || '#6ee7b7';
-    ds.backgroundColor = ds.borderColor + '22';
+
+  const datasets = METRICS.map((m, i) => ({
+    label: m.label,
+    data: trendLabels.map(w => {
+      const wMatched = getCsatMatchedForWeek(w);
+      const v = avg(wMatched, m.key);
+      return v !== null ? parseFloat(v.toFixed(2)) : null;
+    }),
+    borderColor: colorMap[m.color] || '#6ee7b7',
+    backgroundColor: (colorMap[m.color] || '#6ee7b7') + '22',
+    borderWidth: 2,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    spanGaps: true,
+    yAxisID: 'y',
+  }));
+
+  // 응답률 dataset 추가
+  datasets.push({
+    label: '응답률',
+    data: trendLabels.map(w => {
+      const wMatched = getCsatMatchedForWeek(w);
+      const sc = getSendCountForWeek(w);
+      const tot = sc > 0 ? sc : allData.filter(r => r.week === w).length;
+      return tot > 0 ? parseFloat((wMatched.length / tot * 100).toFixed(1)) : null;
+    }),
+    borderColor: '#fbbf24',
+    backgroundColor: '#fbbf2422',
+    borderWidth: 2,
+    borderDash: [5, 3],
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    spanGaps: true,
+    yAxisID: 'yRight',
   });
 
   const trendCtx = document.getElementById('cCsatTrend');
@@ -1967,13 +2007,26 @@ function renderCsatTab(curWeek) {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { mode: 'index', intersect: false,
-            callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '—'}점` }
+          tooltip: {
+            mode: 'index', intersect: false,
+            callbacks: {
+              label: ctx => {
+                if (ctx.dataset.yAxisID === 'yRight')
+                  return ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) + '%' : '—'}`;
+                return ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '—'}점`;
+              }
+            }
           }
         },
         scales: {
           x: { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
-          y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } }
+          y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } },
+          yRight: {
+            position: 'right',
+            min: 0, max: 100,
+            ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v + '%' },
+            grid: { drawOnChartArea: false },
+          },
         }
       }
     });
@@ -1981,12 +2034,18 @@ function renderCsatTab(curWeek) {
     // 트렌드 레전드
     const legend = document.getElementById('csatTrendLegend');
     if (legend) {
-      legend.innerHTML = METRICS.map((m, i) =>
+      legend.innerHTML = [
+        ...METRICS.map((m, i) =>
+          `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
+            <span style="width:12px;height:2px;background:${colorMap[m.color]};display:inline-block;border-radius:1px"></span>
+            ${m.label}
+          </span>`
+        ),
         `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
-          <span style="width:12px;height:2px;background:${colorMap[m.color]};display:inline-block;border-radius:1px"></span>
-          ${m.label}
-        </span>`
-      ).join('');
+          <span style="width:12px;height:2px;background:#fbbf24;display:inline-block;border-radius:1px;border-top:2px dashed #fbbf24"></span>
+          응답률
+        </span>`,
+      ].join('');
     }
   }
 
