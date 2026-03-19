@@ -872,7 +872,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   <div class="card">
     <div class="card-head">
       <div>
-        <div class="card-title">리뷰 의견</div>
+        <div class="card-title">NPS 의견</div>
         <div class="card-sub" id="npsCommentSub">추천자 / 중립 / 비추천 분류</div>
       </div>
       <div style="display:flex;gap:4px;align-items:center">
@@ -893,7 +893,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
         </button>
       </div>
     </div>
-    <div id="npsCommentList" style="margin-top:8px"></div>
+    <div id="npsCommentList" style="margin-top:8px;max-height:480px;overflow-y:auto;padding-right:4px"></div>
   </div>
 </div>
 
@@ -2810,7 +2810,7 @@ function renderNpsComments(curWeek) {
     listEl.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:16px 0;text-align:center">${label} 의견이 없어요.</div>`;
     return;
   }
-  listEl.innerHTML = [...filtered].reverse().slice(0, 20).map(r => `
+  listEl.innerHTML = [...filtered].reverse().map(r => `
     <div style="font-size:11px;color:var(--text);padding:10px 14px;
       background:var(--surface2);border-left:2px solid ${borderColor};
       border-radius:0 6px 6px 0;margin-bottom:6px;line-height:1.7">
