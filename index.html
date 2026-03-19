@@ -477,7 +477,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   <div class="grid2">
     <div class="card">
       <div class="card-head">
-        <div><div class="card-title">주차별 문의 볼륨 추세</div><div class="card-sub">채팅 · 전화 채널별 누적</div></div>
+        <div><div class="card-title">주차별 문의 추이</div><div class="card-sub">채팅 · 전화 채널별 누적</div></div>
         <div id="volLegend" style="display:flex;gap:14px;align-items:center;font-size:10px"></div>
       </div>
       <div class="chart-wrap" style="height:210px"><canvas id="cVol"></canvas></div>
@@ -1480,20 +1480,36 @@ function render(w) {
   const phoneCs = dw.map(wk=>activeData.filter(r=>r.week===wk&&r.ch==='전화').length);
   const tots    = dw.map(wk=>activeData.filter(r=>r.week===wk).length);
 
+  // 재문의율 데이터 & 동적 Y축 범위
+  const recontactRates = dw.map(wk => {
+    const r = calcRecontactRate(wk).rate;
+    return r !== null ? parseFloat(r) : null;
+  });
+  const validRates = recontactRates.filter(v => v !== null);
+  const rateMax = validRates.length
+    ? Math.max(10, Math.ceil(Math.max(...validRates) * 1.4 / 5) * 5)
+    : 30;
+
   if(cVol)cVol.destroy();
   cVol = new Chart(document.getElementById('cVol'),{
     type:'bar', data:{ labels:dw, datasets:[
-      {label:'채팅',data:chatCs,backgroundColor:'rgba(96,165,250,.7)',borderRadius:3,stack:'s'},
-      {label:'전화',data:phoneCs,backgroundColor:'rgba(244,114,182,.7)',borderRadius:3,stack:'s'},
+      {label:'채팅',data:chatCs,backgroundColor:'rgba(96,165,250,.7)',borderRadius:3,stack:'s',yAxisID:'y'},
+      {label:'전화',data:phoneCs,backgroundColor:'rgba(244,114,182,.7)',borderRadius:3,stack:'s',yAxisID:'y'},
       {label:'총 문의',data:tots,type:'line',borderColor:'rgba(110,231,183,.9)',
        backgroundColor:'rgba(110,231,183,.06)',borderWidth:2,pointBackgroundColor:'#6ee7b7',
-       pointRadius:3,tension:.4,fill:false,stack:undefined}
+       pointRadius:3,tension:.4,fill:false,stack:undefined,yAxisID:'y'},
+      {label:'재문의율',data:recontactRates,type:'line',borderColor:'#f472b6',
+       backgroundColor:'rgba(244,114,182,.08)',borderWidth:2,borderDash:[5,3],
+       pointBackgroundColor:'#f472b6',pointRadius:3,tension:.4,fill:false,
+       spanGaps:true,yAxisID:'yRate'},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},
         tooltip:{mode:'index', intersect:false, callbacks:{
           label: ctx => {
-            if (ctx.dataset.type === 'line') return ` 총 문의: ${ctx.parsed.y}건`;
+            if (ctx.dataset.label === '재문의율')
+              return ` 재문의율: ${ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—'}`;
+            if (ctx.dataset.label === '총 문의') return ` 총 문의: ${ctx.parsed.y}건`;
             const wkIdx = ctx.dataIndex;
             const chat  = chatCs[wkIdx]  || 0;
             const phone = phoneCs[wkIdx] || 0;
@@ -1506,8 +1522,14 @@ function render(w) {
           }
         }}
       },
-      scales:{x:{ticks:{color:'#6b6b80',font:{size:9}},grid:{color:'#1e1e28'},stacked:true},
-              y:{ticks:{color:'#6b6b80',font:{size:9}},grid:{color:'#1e1e28'},stacked:true}}}
+      scales:{
+        x:    {ticks:{color:'#6b6b80',font:{size:9}},grid:{color:'#1e1e28'},stacked:true},
+        y:    {ticks:{color:'#6b6b80',font:{size:9}},grid:{color:'#1e1e28'},stacked:true},
+        yRate:{position:'right',min:0,max:rateMax,
+               ticks:{color:'#f472b6',font:{size:9},callback:v=>v+'%'},
+               grid:{drawOnChartArea:false}},
+      }
+    }
   });
 
   const volLegend = document.getElementById('volLegend');
@@ -1523,6 +1545,10 @@ function render(w) {
     <span style="display:flex;align-items:center;gap:5px">
       <span style="width:10px;height:3px;border-radius:2px;background:rgba(110,231,183,.9);flex-shrink:0"></span>
       <span style="color:#6b6b80">총 문의</span>
+    </span>
+    <span style="display:flex;align-items:center;gap:5px">
+      <span style="width:10px;height:3px;border-radius:2px;background:#f472b6;flex-shrink:0;border-top:2px dashed #f472b6"></span>
+      <span style="color:#6b6b80">재문의율</span>
     </span>`;
   if(cCh)cCh.destroy();
   const svcData = SVC_DEF.map(s => svcCounts[s.prefix]);
