@@ -52,11 +52,12 @@ index.html 대시보드 (GitHub Pages)
 ```
 
 ## Apps Script 웹앱 API 파라미터
-- `?sheet=dashboard` → 대시보드_공개용 (VOC 상담 데이터)
-- `?sheet=csat`      → 매핑결과 (CSAT 만족도 데이터)
-- `?sheet=nps_요양`  → 고객NPS_요양 (요양 앱 NPS 데이터)
-- `?sheet=nps_기관`  → 고객NPS_기관 (기관 NPS 데이터)
-- `?sheet=report`   → 주차별 태그 집계 JSON
+- `?sheet=dashboard`  → 대시보드_공개용 (VOC 상담 데이터)
+- `?sheet=csat`       → 매핑결과 (CSAT 만족도 데이터)
+- `?sheet=csat_send`  → 만족도발송건 (날짜별 만족도 조사 발송 건수)
+- `?sheet=nps_요양`   → 고객NPS_요양 (요양 앱 NPS 데이터)
+- `?sheet=nps_기관`   → 고객NPS_기관 (기관 NPS 데이터)
+- `?sheet=report`    → 주차별 태그 집계 JSON
 
 ## 시트 구조
 ### 고객NPS_요양
@@ -64,6 +65,14 @@ index.html 대시보드 (GitHub Pages)
 
 ### 고객NPS_기관
 - 컬럼: id, business_id, score(0~10), reason, public_id, created_at, updated_at
+
+### 만족도발송건
+- 컬럼: 날짜, 건수
+- 용도: CSAT 응답률 계산 시 분모 (발송건수 기준)
+
+### 상담사_매핑
+- 컬럼: assigneeId, name
+- 용도: 상담사 ID → 이름 변환 (runDashboardSync 실행 시 자동 치환)
 
 ### NPS 계산 방식
 - 추천자(Promoter): 9~10점
@@ -73,7 +82,25 @@ index.html 대시보드 (GitHub Pages)
 
 ## 대시보드 탭 구성
 1. 📊 대시보드 — 총 문의, 채팅/전화, 재문의율, 볼륨 추세, 이슈 현황
-2. 👤 상담사 — 상담사별 응대량
+2. 👤 상담사 — 상담사별 응대량 (상담사_매핑 시트로 이름 매핑)
 3. 🔁 재문의 고객 — 14일 이내 동일 이슈 재문의 고객 상세
-4. ⭐ 고객 만족도 (CSAT) — 만족도/친절도 추이, 태그별 히트맵, AI 자유의견 분석
+4. ⭐ 고객 만족도 (CSAT) — 만족도/친절도 추이 (응답률 포함), 채널별 비교, 태그별 히트맵, 채팅/전화 대기시간별 만족도, AI 자유의견 분석
 5. 📈 NPS — NPS 점수 추이, 응답자 분류, 점수 분포, NPS 의견 (요양/기관 필터)
+
+## 주요 함수 (index.html)
+- `getSendCountForWeek(week)` — 만족도발송건 시트에서 주차별 발송건수 합산
+- `parseSendDate(raw)` — ISO/텍스트 날짜 형식 UTC→로컬 보정 파싱
+- `scoreToColor(score)` — 만족도 점수 구간별 색상 반환
+- `buildWaitSatChart(ch, ...)` — 채널별 대기시간 구간별 만족도 차트 렌더링
+
+## GAS 상수 (최신)
+```javascript
+const SHEET_FORM      = '설문지 응답 시트1';
+const SHEET_RAW       = '상담데이터';
+const SHEET_MAPPED    = '매핑결과';
+const SHEET_PUBLIC    = '대시보드_공개용';
+const SHEET_NPS_요양  = '고객NPS_요양';
+const SHEET_NPS_기관  = '고객NPS_기관';
+const SHEET_CSAT_SEND = '만족도발송건';
+const SHEET_AGENT_MAP = '상담사_매핑';
+```
