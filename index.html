@@ -771,7 +771,29 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     <div id="csatHeatmapWrap" style="overflow-x:auto;overflow-y:auto;max-height:520px"></div>
   </div>
 
-  <!-- 섹션5: 자유의견 AI 분석 -->
+  <!-- 섹션5: 채널별 대기시간별 만족도 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">채팅 대기시간별 만족도</div>
+          <div class="card-sub" id="chatWaitSatSub">선택 주차 기준 · 실제 대기시간 구간별 평균 만족도</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="cChatWaitSat"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">전화 대기시간별 만족도</div>
+          <div class="card-sub" id="phoneWaitSatSub">선택 주차 기준 · 실제 대기시간 구간별 평균 만족도</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="cPhoneWaitSat"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 섹션6: 자유의견 AI 분석 -->
   <div class="card">
     <div class="card-head">
       <div>
@@ -1781,6 +1803,8 @@ function renderAgentStats(curWeek) {
 let csatCommentMode = 'pos'; // 'pos' | 'neg'
 let cCsatTrendChart = null;
 let cCsatChannelChart = null;
+let cChatWaitSatChart = null;
+let cPhoneWaitSatChart = null;
 // ── 히트맵 상태
 let hmSortLow      = true;
 let hmSelectedTag  = null;
@@ -2199,7 +2223,69 @@ function renderCsatTab(curWeek) {
     }).join('');
   });
 
-  // ⑥ 자유의견 (AI 분석 결과 또는 기본 리스트)
+  // ⑥ 채널별 대기시간 구간별 만족도 차트
+  const WAIT_BUCKETS = [
+    { label: '~5분',    min: 0,  max: 5  },
+    { label: '5~10분',  min: 5,  max: 10 },
+    { label: '10~20분', min: 10, max: 20 },
+    { label: '20~30분', min: 20, max: 30 },
+    { label: '30분+',   min: 30, max: Infinity },
+  ];
+  const WAIT_COLORS = ['#6ee7b7', '#a7f3d0', '#fbbf24', '#fb923c', '#f87171'];
+
+  function buildWaitSatChart(ch, canvasId, chartRef, subId) {
+    // allData에서 해당 주차+채널 row → waitMin + csatData 만족도 조인
+    const rows = allData.filter(r => r.week === curWeek && r.ch === ch && r.id && r.waitMin !== null);
+    const bucketData = WAIT_BUCKETS.map(b => {
+      const group = rows.filter(r => r.waitMin >= b.min && r.waitMin < b.max);
+      const scores = group.map(r => csatData[String(r.id)]?.['만족도']).filter(v => v != null);
+      return { avg: scores.length ? parseFloat((scores.reduce((a, v) => a + v, 0) / scores.length).toFixed(2)) : null, cnt: group.length };
+    });
+
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    if (chartRef.chart) chartRef.chart.destroy();
+    chartRef.chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: WAIT_BUCKETS.map(b => b.label),
+        datasets: [{
+          label: '평균 만족도',
+          data: bucketData.map(d => d.avg),
+          backgroundColor: WAIT_COLORS.map(c => c + '99'),
+          borderColor: WAIT_COLORS,
+          borderWidth: 1,
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => {
+            const d = bucketData[ctx.dataIndex];
+            return ` 평균 만족도: ${d.avg !== null ? d.avg + '점' : '—'} (${d.cnt}건)`;
+          }}}
+        },
+        scales: {
+          x: { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
+          y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } }
+        }
+      }
+    });
+    const sub = document.getElementById(subId);
+    const total = rows.filter(r => csatData[String(r.id)]).length;
+    if (sub) sub.textContent = `선택 주차 기준 · 실제 대기시간 구간별 평균 만족도 · ${total}건`;
+  }
+
+  const chatWaitRef = { chart: cChatWaitSatChart };
+  const phoneWaitRef = { chart: cPhoneWaitSatChart };
+  buildWaitSatChart('채팅', 'cChatWaitSat', chatWaitRef, 'chatWaitSatSub');
+  buildWaitSatChart('전화', 'cPhoneWaitSat', phoneWaitRef, 'phoneWaitSatSub');
+  cChatWaitSatChart = chatWaitRef.chart;
+  cPhoneWaitSatChart = phoneWaitRef.chart;
+
+  // ⑦ 자유의견 (AI 분석 결과 또는 기본 리스트)
   renderCsatComments(curWeek);
 
 
