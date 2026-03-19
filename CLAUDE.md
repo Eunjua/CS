@@ -21,9 +21,26 @@
 - 작업 완료 후 변경 내용 요약해줄 것
 
 ## 기술 스택
-- HTML/CSS/JavaScript (정적 사이트)
-- GitHub Pages 배포
-- Google Apps Script (웹앱 API — 데이터 브릿지)
+
+### 프론트엔드
+- HTML / CSS / Vanilla JavaScript (외부 프레임워크 없음)
+- 정적 사이트 — 빌드 과정 없음, index.html 단일 파일
+
+### 라이브러리
+| 라이브러리 | 버전 | 용도 | 로드 방식 |
+|---|---|---|---|
+| Chart.js | 4.4.1 | 모든 차트 (막대/라인/도넛) | CDN (cdnjs) |
+| Noto Sans KR | — | 본문 폰트 (wght 300~900) | Google Fonts |
+| DM Mono | — | 숫자/코드 모노스페이스 폰트 | Google Fonts |
+
+### 외부 API
+- **Anthropic Claude API** (`claude-sonnet-4-20250514`) — CSAT 자유의견 AI 감성 분석 (긍정/중립/부정 분류)
+  - 브라우저에서 직접 호출 (API Key 필요 — 현재 미설정 시 AI 분석 버튼만 비활성)
+
+### 인프라
+- **GitHub Pages** — index.html 정적 호스팅
+- **Google Apps Script** — 웹앱 API (데이터 브릿지), 자동화 트리거
+- **Google Sheets** — 데이터 저장소
 
 ## 데이터 흐름
 ```
