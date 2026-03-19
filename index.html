@@ -1838,9 +1838,26 @@ function switchCommentTab(mode) {
   renderCsatComments(selectedWeek);
 }
 
+function parseSendDate(raw) {
+  if (!raw) return null;
+  // ISO 형식 "2026-03-11T00:00:00.000Z" → UTC→로컬 보정
+  if (typeof raw === 'string' && raw.includes('T')) {
+    const d = new Date(raw);
+    // UTC 날짜 기준으로 로컬 Date 생성 (타임존 어긋남 방지)
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  // "2026-03-11" 텍스트 형식 → 로컬 기준 파싱
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, day] = raw.split('-').map(Number);
+    return new Date(y, m - 1, day);
+  }
+  const d = new Date(raw);
+  return isNaN(d) ? null : d;
+}
+
 function getSendCountForWeek(week) {
   return csatSendData
-    .filter(r => { const d = new Date(r['날짜']); return !isNaN(d) && getWeekLabel(d).label === week; })
+    .filter(r => { const d = parseSendDate(r['날짜']); return d && getWeekLabel(d).label === week; })
     .reduce((sum, r) => sum + (Number(r['건수']) || 0), 0);
 }
 
@@ -1977,15 +1994,23 @@ function renderCsatTab(curWeek) {
     yAxisID: 'y',
   }));
 
+  // 응답률 데이터 계산 (동적 Y축 범위 산출용)
+  const respRateData = trendLabels.map(w => {
+    const wMatched = getCsatMatchedForWeek(w);
+    const sc = getSendCountForWeek(w);
+    const tot = sc > 0 ? sc : allData.filter(r => r.week === w).length;
+    return tot > 0 ? parseFloat((wMatched.length / tot * 100).toFixed(1)) : null;
+  });
+  const validRates = respRateData.filter(v => v !== null);
+  // 최대값의 150%, 10 단위 올림, 최소 20% 확보
+  const yRightMax = validRates.length
+    ? Math.max(20, Math.ceil(Math.max(...validRates) * 1.5 / 10) * 10)
+    : 100;
+
   // 응답률 dataset 추가
   datasets.push({
     label: '응답률',
-    data: trendLabels.map(w => {
-      const wMatched = getCsatMatchedForWeek(w);
-      const sc = getSendCountForWeek(w);
-      const tot = sc > 0 ? sc : allData.filter(r => r.week === w).length;
-      return tot > 0 ? parseFloat((wMatched.length / tot * 100).toFixed(1)) : null;
-    }),
+    data: respRateData,
     borderColor: '#fbbf24',
     backgroundColor: '#fbbf2422',
     borderWidth: 2,
@@ -2023,8 +2048,8 @@ function renderCsatTab(curWeek) {
           y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } },
           yRight: {
             position: 'right',
-            min: 0, max: 100,
-            ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v + '%' },
+            min: 0, max: yRightMax,
+            ticks: { color: '#fbbf24', font: { size: 10 }, callback: v => v + '%', stepSize: Math.ceil(yRightMax / 5 / 5) * 5 },
             grid: { drawOnChartArea: false },
           },
         }
