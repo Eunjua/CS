@@ -1616,6 +1616,9 @@ function render(w) {
     tbody.appendChild(tr);
   });
 
+  // 재문의율 KPI 카드 업데이트
+  renderRecontact(curWeek);
+
   // 상담사 탭이 열려 있으면 같이 업데이트
   if (currentTab === 'agent') renderAgentStats(curWeek);
 }
