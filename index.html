@@ -1987,6 +1987,7 @@ function renderCsatTab(curWeek) {
     borderColor: colorMap[m.color] || '#6ee7b7',
     backgroundColor: (colorMap[m.color] || '#6ee7b7') + '22',
     borderWidth: 2,
+    borderDash: [5, 3],
     pointRadius: 4,
     pointHoverRadius: 6,
     tension: 0.3,
@@ -2045,7 +2046,8 @@ function renderCsatTab(curWeek) {
         },
         scales: {
           x: { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
-          y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' } },
+          y: { min: 1, max: 5, ticks: { color: '#6b6b80', font: { size: 10 }, stepSize: 1 }, grid: { color: '#2a2a38' },
+               title: { display: true, text: '만족, 친절', color: '#6b6b80', font: { size: 9 } } },
           yRight: {
             position: 'right',
             min: 0, max: yRightMax,
@@ -2959,6 +2961,14 @@ function renderNpsTab(curWeek) {
   const trendWeeks = npsWeeks.slice(Math.max(0, curIdx - 3), curIdx + 1);
   const npsVals  = trendWeeks.map(w => calcNpsForWeek(w).nps);
   const avgVals  = trendWeeks.map(w => calcNpsForWeek(w).avgScore);
+
+  // NPS Y축 동적 범위 (-100~100 안에서 데이터 기반)
+  const validNps = npsVals.filter(v => v !== null);
+  const npsMin = validNps.length ? Math.max(-100, Math.floor(Math.min(...validNps) / 10) * 10 - 10) : -100;
+  const npsMax = validNps.length ? Math.min(100,  Math.ceil(Math.max(...validNps)  / 10) * 10 + 10) : 100;
+  // 평균 점수 Y축 동적 범위 (0~10 안에서 데이터 기반)
+  const validAvg = avgVals.filter(v => v !== null);
+  const avgMax = validAvg.length ? Math.min(10, Math.ceil(Math.max(...validAvg) * 2) / 2 + 1) : 10;
   const trendCtx = document.getElementById('cNpsTrend');
   if (trendCtx) {
     if (cNpsTrendChart) cNpsTrendChart.destroy();
@@ -2985,10 +2995,10 @@ function renderNpsTab(curWeek) {
         },
         scales: {
           x:    { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
-          yNps: { position: 'left',  min: -100, max: 100,
+          yNps: { position: 'left',  min: npsMin, max: npsMax,
                   ticks: { color: '#60a5fa', font: { size: 9 } }, grid: { color: '#2a2a38' },
                   title: { display: true, text: 'NPS', color: '#60a5fa', font: { size: 9 } } },
-          yAvg: { position: 'right', min: 0, max: 10,
+          yAvg: { position: 'right', min: 0, max: avgMax,
                   ticks: { color: '#fbbf24', font: { size: 9 } }, grid: { display: false },
                   title: { display: true, text: '평균 점수', color: '#fbbf24', font: { size: 9 } } }
         }
