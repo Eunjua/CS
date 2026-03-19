@@ -2231,7 +2231,14 @@ function renderCsatTab(curWeek) {
     { label: '20~30분', min: 20, max: 30 },
     { label: '30분+',   min: 30, max: Infinity },
   ];
-  const WAIT_COLORS = ['#6ee7b7', '#a7f3d0', '#fbbf24', '#fb923c', '#f87171'];
+  function scoreToColor(score) {
+    if (score === null) return '#3a3a4a';
+    if (score >= 4.5) return '#6ee7b7'; // 매우 좋음
+    if (score >= 4.0) return '#a7f3d0'; // 좋음
+    if (score >= 3.0) return '#fbbf24'; // 보통
+    if (score >= 2.0) return '#fb923c'; // 나쁨
+    return '#f87171';                   // 매우 나쁨
+  }
 
   function buildWaitSatChart(ch, canvasId, chartRef, subId) {
     // allData에서 해당 주차+채널 row → waitMin + csatData 만족도 조인
@@ -2252,8 +2259,8 @@ function renderCsatTab(curWeek) {
         datasets: [{
           label: '평균 만족도',
           data: bucketData.map(d => d.avg),
-          backgroundColor: WAIT_COLORS.map(c => c + '99'),
-          borderColor: WAIT_COLORS,
+          backgroundColor: bucketData.map(d => scoreToColor(d.avg) + '99'),
+          borderColor: bucketData.map(d => scoreToColor(d.avg)),
           borderWidth: 1,
           borderRadius: 6,
         }]
