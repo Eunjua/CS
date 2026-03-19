@@ -294,6 +294,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <button class="tab-btn" id="tabAgent" onclick="switchTab('agent')">👤 상담사</button>
       <button class="tab-btn" id="tabRecontact" onclick="switchTab('recontact')">🔁 재문의 고객</button>
       <button class="tab-btn" id="tabCsat" onclick="switchTab('csat')">⭐ 고객 만족도</button>
+      <button class="tab-btn" id="tabNps" onclick="switchTab('nps')">📈 NPS</button>
     </div>
   </div>
   <div class="header-right">
@@ -810,6 +811,92 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
 
 </div>
 
+<!-- NPS TAB -->
+<div class="dash" id="npsTab" style="display:none">
+  <div class="week-bar" id="npsWeekBar">
+    <span class="week-label">주차</span>
+    <select class="week-select" id="npsWeekSelect" onchange="selectNpsWeek(this.value)"></select>
+    <span class="week-range-info" id="npsWeekRangeInfo"></span>
+  </div>
+
+  <!-- 서비스 필터 -->
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:10px;color:var(--muted)">서비스</span>
+    <button id="npsFilter_전체" onclick="toggleNpsFilter('전체')"
+      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+      background:var(--surface2);color:var(--text);border:1px solid var(--accent);
+      font-family:'Noto Sans KR',sans-serif">전체</button>
+    <button id="npsFilter_요양" onclick="toggleNpsFilter('요양')"
+      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+      background:var(--surface2);color:var(--muted);border:1px solid var(--border);
+      font-family:'Noto Sans KR',sans-serif">요양</button>
+    <button id="npsFilter_기관" onclick="toggleNpsFilter('기관')"
+      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+      background:var(--surface2);color:var(--muted);border:1px solid var(--border);
+      font-family:'Noto Sans KR',sans-serif">기관</button>
+  </div>
+
+  <div class="kpi-row" id="npsKpiRow"></div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">주차별 NPS 추이</div>
+        <div class="card-sub">최근 4주 · NPS 점수(좌) / 평균 평점(우)</div>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:220px"><canvas id="cNpsTrend"></canvas></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">응답자 분류</div>
+          <div class="card-sub" id="npsDistSub">선택 주차 기준</div>
+        </div>
+      </div>
+      <div id="npsDistBar" style="padding:4px 0"></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">점수 분포</div>
+          <div class="card-sub">선택 주차 · 0~10점</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:160px"><canvas id="cNpsScoreDist"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">리뷰 의견</div>
+        <div class="card-sub" id="npsCommentSub">추천자 / 중립 / 비추천 분류</div>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button id="npsComment_pro" onclick="switchNpsCommentTab('pro')"
+          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
+          border-radius:6px;cursor:pointer;background:var(--accent);color:#0f0f13;border:none">
+          😊 추천
+        </button>
+        <button id="npsComment_pas" onclick="switchNpsCommentTab('pas')"
+          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
+          border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid var(--border)">
+          😐 중립
+        </button>
+        <button id="npsComment_det" onclick="switchNpsCommentTab('det')"
+          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
+          border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid var(--border)">
+          😞 비추천
+        </button>
+      </div>
+    </div>
+    <div id="npsCommentList" style="margin-top:8px"></div>
+  </div>
+</div>
+
 <!-- SHEET CONNECT PANEL -->
 <div class="settings-overlay" id="sheetOverlay" onclick="closeSheetPanelOnOverlay(event)">
   <div class="settings-panel" style="width:380px">
@@ -859,8 +946,15 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
 let cVol, cCh, cIssue;
 let allData  = [];   // { id, week, sortKey, ch, tags, state, assigneeId }
 let csatData = {};   // { [상담id]: { 만족도, 친절도, 해결여부, 대기시간, 자유의견 } }
+let npsData  = [];   // { id, userId, date, week, sortKey, score, reason, type }
 let weeks = [];
+let npsWeeks = [];
 let selectedWeek = 'all';
+let npsSelectedWeek = null;
+let cNpsTrendChart = null;
+let cNpsScoreDistChart = null;
+let npsCommentMode = 'pro';
+let npsSourceFilter = '전체';  // '전체' | '요양' | '기관'
 
 const SHEET_URL_KEY = 'voc_sheet_url';   // Apps Script 웹앱 URL
 const LAST_SYNC_KEY = 'voc_last_sync';
@@ -1003,11 +1097,12 @@ function switchTab(tab) {
   document.getElementById('tabAgent').classList.toggle('active', tab === 'agent');
   document.getElementById('tabRecontact').classList.toggle('active', tab === 'recontact');
   document.getElementById('tabCsat').classList.toggle('active', tab === 'csat');
-  ['dash','agentTab','recontactTab','csatTab'].forEach(id => {
+  document.getElementById('tabNps').classList.toggle('active', tab === 'nps');
+  ['dash','agentTab','recontactTab','csatTab','npsTab'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : null;
+  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : null;
   if (activeId && allData.length) {
     const activeEl = document.getElementById(activeId);
     if (activeEl) activeEl.style.display = 'block';
@@ -1026,6 +1121,9 @@ function switchTab(tab) {
     const s = document.getElementById('csatWeekSelect');
     if (s) s.value = selectedWeek;
     renderCsatTab(selectedWeek);
+  }
+  if (tab === 'nps') {
+    renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
   }
 }
 
@@ -1182,6 +1280,20 @@ async function loadFromSheet(isAuto) {
       const raw2 = await fetchSheet(baseUrl, 'csat');
       if (raw2.length) csatData = parseCsatRows(raw2);
     } catch(e2) { console.warn('CSAT 로드 실패(무시):', e2.message); }
+
+    // ③ NPS 요양 + 기관 (실패해도 무시)
+    npsData = [];
+    try {
+      const [raw3a, raw3b] = await Promise.allSettled([
+        fetchSheet(baseUrl, 'nps_요양'),
+        fetchSheet(baseUrl, 'nps_기관'),
+      ]);
+      if (raw3a.status === 'fulfilled' && raw3a.value.length)
+        npsData.push(...parseNpsRows(raw3a.value, '요양'));
+      if (raw3b.status === 'fulfilled' && raw3b.value.length)
+        npsData.push(...parseNpsRows(raw3b.value, '기관'));
+      if (npsData.length) { rebuildNpsWeeks(); buildNpsWeekBar(); }
+    } catch(e3) { console.warn('NPS 로드 실패(무시):', e3.message); }
 
     rebuildWeeks();
     const now = new Date().toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -2570,6 +2682,286 @@ function updateFilterBadge() {
   } else {
     badge.style.display = 'none';
   }
+}
+
+// ── NPS
+
+function getFilteredNpsData() {
+  if (npsSourceFilter === '전체') return npsData;
+  return npsData.filter(r => r.source === npsSourceFilter);
+}
+
+function toggleNpsFilter(source) {
+  npsSourceFilter = source;
+  ['전체','요양','기관'].forEach(s => {
+    const btn = document.getElementById('npsFilter_' + s);
+    if (!btn) return;
+    const isActive = s === source;
+    btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
+    btn.style.color       = isActive ? 'var(--text)'   : 'var(--muted)';
+  });
+  rebuildNpsWeeks();
+  buildNpsWeekBar();
+  renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
+}
+
+function parseKoreanDate(s) {
+  // "2026. 2. 5" 또는 ISO 형식 모두 처리
+  const m = String(s).match(/(\d{4})[.\s/-]+(\d{1,2})[.\s/-]+(\d{1,2})/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+
+function parseNpsRows(rows, source) {
+  return rows.map(r => {
+    const dtRaw = r['created_at'] || r['createdAt'] || '';
+    const d = parseKoreanDate(dtRaw) || (dtRaw ? new Date(dtRaw) : null);
+    const wo = d && !isNaN(d) ? getWeekLabel(d) : null;
+    if (!wo) return null;
+    const score = parseInt(r['score']);
+    if (isNaN(score)) return null;
+    return {
+      id:     r['id'] || null,
+      userId: r['user_id'] || r['business_id'] || null,
+      date: d, week: wo.label, sortKey: wo.sortKey,
+      score,
+      source: source || '전체',   // '요양' | '기관'
+      type: score >= 9 ? 'pro' : score >= 7 ? 'pas' : 'det',
+      reason: (r['reason'] || '').trim(),
+    };
+  }).filter(Boolean);
+}
+
+function rebuildNpsWeeks() {
+  const map = {};
+  getFilteredNpsData().forEach(r => { map[r.week] = r.sortKey; });
+  npsWeeks = Object.keys(map).sort((a, b) => map[a].localeCompare(map[b]));
+}
+
+function buildNpsWeekBar() {
+  const sel = document.getElementById('npsWeekSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  [...npsWeeks].reverse().forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = w;
+    opt.textContent = `${w}  (${npsData.filter(r => r.week === w).length}건)`;
+    sel.appendChild(opt);
+  });
+  if (!npsSelectedWeek || !npsWeeks.includes(npsSelectedWeek)) {
+    npsSelectedWeek = npsWeeks[npsWeeks.length - 1] || null;
+  }
+  sel.value = npsSelectedWeek;
+  const info = document.getElementById('npsWeekRangeInfo');
+  if (info) info.textContent = `총 ${npsWeeks.length}주차 데이터`;
+}
+
+function selectNpsWeek(w) {
+  npsSelectedWeek = w;
+  const info = document.getElementById('npsWeekRangeInfo');
+  if (info) {
+    const idx = npsWeeks.indexOf(w);
+    const range = npsWeeks.slice(Math.max(0, idx - 3), idx + 1);
+    info.textContent = `${range.length}주 표시 중`;
+  }
+  renderNpsTab(w);
+}
+
+function calcNpsForWeek(w) {
+  const base = getFilteredNpsData();
+  const data = w ? base.filter(r => r.week === w) : base;
+  const total = data.length;
+  if (!total) return { nps: null, proRate: 0, pasRate: 0, detRate: 0, total: 0, pro: 0, pas: 0, det: 0, avgScore: null };
+  const pro = data.filter(r => r.type === 'pro').length;
+  const pas = data.filter(r => r.type === 'pas').length;
+  const det = data.filter(r => r.type === 'det').length;
+  const nps = Math.round((pro / total - det / total) * 100);
+  const avg = parseFloat((data.reduce((s, r) => s + r.score, 0) / total).toFixed(1));
+  return { nps, proRate: Math.round(pro/total*100), pasRate: Math.round(pas/total*100),
+           detRate: Math.round(det/total*100), total, pro, pas, det, avgScore: avg };
+}
+
+function switchNpsCommentTab(mode) {
+  npsCommentMode = mode;
+  const colors = { pro: 'var(--accent)', pas: 'var(--muted)', det: 'var(--red)' };
+  ['pro','pas','det'].forEach(m => {
+    const btn = document.getElementById('npsComment_' + m);
+    if (!btn) return;
+    const isActive = m === mode;
+    btn.style.background = isActive ? colors[m] : 'transparent';
+    btn.style.color      = isActive ? '#0f0f13' : 'var(--muted)';
+    btn.style.border     = isActive ? 'none' : '1px solid var(--border)';
+  });
+  renderNpsComments(npsSelectedWeek);
+}
+
+function renderNpsComments(curWeek) {
+  const listEl = document.getElementById('npsCommentList');
+  const subEl  = document.getElementById('npsCommentSub');
+  if (!listEl) return;
+  const base = getFilteredNpsData();
+  const data = curWeek ? base.filter(r => r.week === curWeek) : base;
+  const filtered = data.filter(r => r.type === npsCommentMode && r.reason && r.reason.length > 1);
+  const label    = npsCommentMode === 'pro' ? '추천자' : npsCommentMode === 'det' ? '비추천자' : '중립';
+  if (subEl) subEl.textContent = `${label} 의견 ${filtered.length}건`;
+  const borderColor = npsCommentMode === 'pro' ? 'var(--accent)' : npsCommentMode === 'det' ? 'var(--red)' : 'var(--muted)';
+  if (!filtered.length) {
+    listEl.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:16px 0;text-align:center">${label} 의견이 없어요.</div>`;
+    return;
+  }
+  listEl.innerHTML = [...filtered].reverse().slice(0, 20).map(r => `
+    <div style="font-size:11px;color:var(--text);padding:10px 14px;
+      background:var(--surface2);border-left:2px solid ${borderColor};
+      border-radius:0 6px 6px 0;margin-bottom:6px;line-height:1.7">
+      ${r.reason}
+      <span style="font-size:9px;color:${borderColor};font-family:'DM Mono',monospace;margin-left:6px">${r.score}점</span>
+    </div>`).join('');
+}
+
+function renderNpsTab(curWeek) {
+  if (!getFilteredNpsData().length) {
+    document.getElementById('npsKpiRow').innerHTML =
+      `<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:40px;text-align:center">
+        NPS 데이터가 없어요. Apps Script에서 <code>nps</code> 시트를 연결해주세요.</div>`;
+    return;
+  }
+  const curIdx   = npsWeeks.indexOf(curWeek);
+  const prevWeek = curIdx > 0 ? npsWeeks[curIdx - 1] : null;
+  const cur  = calcNpsForWeek(curWeek);
+  const prev = prevWeek ? calcNpsForWeek(prevWeek) : null;
+
+  // ① KPI
+  const kpiRow = document.getElementById('npsKpiRow');
+  if (kpiRow) {
+    const npsColor = cur.nps === null ? 'var(--muted)' : cur.nps >= 50 ? '#6ee7b7' : cur.nps >= 0 ? '#fbbf24' : '#f87171';
+    let npsChg = '<div class="chg flat">—</div>';
+    if (cur.nps !== null && prev && prev.nps !== null) {
+      const d = cur.nps - prev.nps;
+      const cls = d > 0 ? 'dn' : d < 0 ? 'up' : 'flat';
+      npsChg = `<div class="chg ${cls}">${d > 0 ? '+' : ''}${d}p 전주 대비</div>`;
+    }
+    kpiRow.innerHTML = `
+      <div class="kpi" style="--c:var(--accent3)">
+        <div class="lbl">NPS 점수</div>
+        <div class="val" style="font-size:28px;color:${npsColor}">${cur.nps !== null ? cur.nps : '—'}</div>
+        ${npsChg}
+        <div style="font-size:9px;color:var(--muted);margin-top:4px">-100 ~ +100 범위</div>
+      </div>
+      <div class="kpi" style="--c:var(--accent)">
+        <div class="lbl">추천자 비율</div>
+        <div class="val" style="font-size:28px">${cur.total ? cur.proRate + '%' : '—'}</div>
+        <div class="chg flat">${cur.pro}명 · 9~10점</div>
+        <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
+          <div style="width:${cur.proRate}%;height:100%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
+        </div>
+      </div>
+      <div class="kpi" style="--c:var(--red)">
+        <div class="lbl">비추천자 비율</div>
+        <div class="val" style="font-size:28px">${cur.total ? cur.detRate + '%' : '—'}</div>
+        <div class="chg flat">${cur.det}명 · 0~6점</div>
+        <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
+          <div style="width:${cur.detRate}%;height:100%;background:var(--red);border-radius:2px;transition:width .4s"></div>
+        </div>
+      </div>
+      <div class="kpi" style="--c:var(--accent4)">
+        <div class="lbl">총 응답</div>
+        <div class="val" style="font-size:28px">${cur.total || '—'}</div>
+        <div class="chg flat">평균 ${cur.avgScore !== null ? cur.avgScore + '점' : '—'} · 10점 만점</div>
+      </div>`;
+  }
+
+  // ② NPS 추이 차트
+  const trendWeeks = npsWeeks.slice(Math.max(0, curIdx - 3), curIdx + 1);
+  const npsVals  = trendWeeks.map(w => calcNpsForWeek(w).nps);
+  const avgVals  = trendWeeks.map(w => calcNpsForWeek(w).avgScore);
+  const trendCtx = document.getElementById('cNpsTrend');
+  if (trendCtx) {
+    if (cNpsTrendChart) cNpsTrendChart.destroy();
+    cNpsTrendChart = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: trendWeeks,
+        datasets: [
+          { label: 'NPS 점수', data: npsVals, borderColor: '#60a5fa', backgroundColor: '#60a5fa18',
+            borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true, yAxisID: 'yNps', spanGaps: true },
+          { label: '평균 평점', data: avgVals, borderColor: '#fbbf24', backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: 4, tension: 0.3, borderDash: [4,4], fill: false, yAxisID: 'yAvg', spanGaps: true },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#6b6b80', font: { size: 10 }, boxWidth: 14, padding: 12 } },
+          tooltip: { mode: 'index', intersect: false, callbacks: {
+            label: ctx => ctx.datasetIndex === 0
+              ? ` NPS: ${ctx.raw !== null ? ctx.raw : '—'}`
+              : ` 평균: ${ctx.raw !== null ? ctx.raw + '점' : '—'}`
+          }}
+        },
+        scales: {
+          x:    { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
+          yNps: { position: 'left',  min: -100, max: 100,
+                  ticks: { color: '#60a5fa', font: { size: 9 } }, grid: { color: '#2a2a38' },
+                  title: { display: true, text: 'NPS', color: '#60a5fa', font: { size: 9 } } },
+          yAvg: { position: 'right', min: 0, max: 10,
+                  ticks: { color: '#fbbf24', font: { size: 9 } }, grid: { display: false },
+                  title: { display: true, text: '평균 점수', color: '#fbbf24', font: { size: 9 } } }
+        }
+      }
+    });
+  }
+
+  // ③ 응답자 분류 분포 바
+  const distEl = document.getElementById('npsDistBar');
+  if (distEl) {
+    const subEl = document.getElementById('npsDistSub');
+    if (subEl) subEl.textContent = `선택 주차 기준 · 응답 ${cur.total}건`;
+    distEl.innerHTML = [
+      { label: '😊 추천자 (9~10점)', color: '#6ee7b7', pct: cur.proRate, cnt: cur.pro },
+      { label: '😐 중립  (7~8점)',   color: '#fbbf24', pct: cur.pasRate, cnt: cur.pas },
+      { label: '😞 비추천 (0~6점)',  color: '#f87171', pct: cur.detRate, cnt: cur.det },
+    ].map(o => `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--text)">${o.label}</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted)">${o.pct}% · ${o.cnt}명</span>
+        </div>
+        <div style="height:6px;background:var(--dim);border-radius:3px;overflow:hidden">
+          <div style="width:${o.pct}%;height:100%;background:${o.color};border-radius:3px;transition:width .4s ease"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  // ④ 점수 분포 차트
+  const scoreCtx = document.getElementById('cNpsScoreDist');
+  if (scoreCtx) {
+    const curNpsData = getFilteredNpsData().filter(r => r.week === curWeek);
+    const scoreCounts = Array.from({ length: 11 }, (_, i) => curNpsData.filter(r => r.score === i).length);
+    const bgColors     = scoreCounts.map((_, i) => i >= 9 ? '#6ee7b770' : i >= 7 ? '#fbbf2470' : '#f8717170');
+    const borderColors = bgColors.map(c => c.replace('70', 'cc'));
+    if (cNpsScoreDistChart) cNpsScoreDistChart.destroy();
+    cNpsScoreDistChart = new Chart(scoreCtx, {
+      type: 'bar',
+      data: {
+        labels: ['0','1','2','3','4','5','6','7','8','9','10'],
+        datasets: [{ data: scoreCounts, backgroundColor: bgColors, borderColor: borderColors,
+                     borderWidth: 1, borderRadius: 3 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+                   tooltip: { callbacks: { label: c => ` ${c.raw}명` } } },
+        scales: {
+          x: { ticks: { color: '#6b6b80', font: { size: 9 } }, grid: { display: false } },
+          y: { ticks: { color: '#6b6b80', font: { size: 9 }, stepSize: 1 }, grid: { color: '#2a2a38' } }
+        }
+      }
+    });
+  }
+
+  // ⑤ 자유의견
+  renderNpsComments(curWeek);
 }
 
 // ── TOAST
