@@ -722,7 +722,21 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     </div>
   </div>
 
-  <!-- 섹션3: 태그별 만족도 히트맵 — 풀 width -->
+  <!-- 섹션3: 상관분석 + 태그별 만족도 히트맵 — 2열 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+  <!-- 섹션3-L: 해결여부 × 대기시간 상관 분석 -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">해결여부 × 대기시간 상관 분석</div>
+        <div class="card-sub" id="corrSubLabel">선택 주차 기준 · 해결여부별 대기시간 체감 분포 및 실제 대기분·평균 만족도</div>
+      </div>
+    </div>
+    <div id="corrAnalysisWrap"></div>
+  </div>
+
+  <!-- 섹션3-R: 태그별 만족도 히트맵 -->
   <div class="card">
     <div class="card-head">
       <div>
@@ -770,6 +784,8 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     </div>
     <div id="csatHeatmapWrap" style="overflow-x:auto;overflow-y:auto;max-height:520px"></div>
   </div>
+
+  </div><!-- /섹션3 2열 그리드 end -->
 
   <!-- 섹션5: 채널별 대기시간별 만족도 -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
@@ -2251,6 +2267,97 @@ function renderCsatTab(curWeek) {
         </div>`;
     }).join('');
   });
+
+  // ⑤-c 해결여부 × 대기시간 상관 분석
+  (function renderCorrAnalysis() {
+    const el = document.getElementById('corrAnalysisWrap');
+    if (!el) return;
+
+    const RESOLVE_OPTS = DIST_METRICS[0].options; // ✅ 🔶 ❌
+    const WAIT_OPTS    = DIST_METRICS[1].options; // 😊 🙂 😞
+
+    // idToWait: id → { waitMin, ch }
+    const idToWait = {};
+    allData.forEach(row => {
+      if (row.id && row.waitMin !== null) {
+        idToWait[String(row.id)] = { waitMin: row.waitMin, ch: row.ch };
+      }
+    });
+
+    const avgMin = arr => arr.length ? Math.round(arr.reduce((a,b) => a+b, 0) / arr.length) : null;
+
+    const groups = RESOLVE_OPTS.map(ro => {
+      const coreR = ro.text.replace(/[\u{1F300}-\u{1FFFF}✅🔶❌]/gu, '').trim();
+      const groupRows = matched.filter(r => {
+        const v = (r['해결여부'] || '').trim();
+        return v === ro.text || v.includes(coreR);
+      });
+      const total = groupRows.length;
+
+      // 평균 만족도 (csatData 기준)
+      const satVals = groupRows.map(r => csatData[String(r._id)]?.['만족도']).filter(v => v != null);
+      const avgSat = satVals.length ? parseFloat((satVals.reduce((a,b) => a+b, 0) / satVals.length).toFixed(1)) : null;
+
+      const waitBars = WAIT_OPTS.map(wo => {
+        const coreW = wo.text.replace(/[\u{1F300}-\u{1FFFF}😊🙂😞]/gu, '').trim();
+        const subRows = groupRows.filter(r => {
+          const v = (r['대기시간'] || '').trim();
+          return v === wo.text || v.includes(coreW);
+        });
+        const cnt = subRows.length;
+        const pct = total ? ((cnt / total) * 100).toFixed(1) : '0.0';
+
+        // 실제 대기분
+        const waits = subRows.map(r => idToWait[r._id]).filter(Boolean);
+        const allW   = waits.map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+        const chatW  = waits.filter(w => w.ch === '채팅').map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+        const phoneW = waits.filter(w => w.ch === '전화').map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+        const aAll = avgMin(allW), aChat = avgMin(chatW), aPhone = avgMin(phoneW);
+
+        let avgStr = '';
+        if (aAll !== null) {
+          const detail = [aChat !== null ? `채팅 ${aChat}분` : null, aPhone !== null ? `전화 ${aPhone}분` : null].filter(Boolean).join(' · ');
+          avgStr = `<span style="font-family:'DM Mono',monospace;font-size:10px;color:${wo.color};margin-left:5px">avg ${aAll}분${detail ? ` (${detail})` : ''}</span>`;
+        }
+        return { wo, cnt, pct, avgStr };
+      });
+
+      return { ro, total, avgSat, waitBars };
+    });
+
+    const satColor = s => {
+      if (s === null) return 'var(--muted)';
+      if (s >= 4.5) return '#6ee7b7';
+      if (s >= 4.0) return '#a7f3d0';
+      if (s >= 3.0) return '#fbbf24';
+      if (s >= 2.0) return '#fb923c';
+      return '#f87171';
+    };
+
+    const totalAll = matched.length;
+    const subEl = document.getElementById('corrSubLabel');
+    if (subEl) subEl.textContent = `선택 주차 기준 · 응답 ${totalAll}건`;
+
+    el.innerHTML = groups.map((g, gi) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div style="width:8px;height:8px;border-radius:50%;background:${g.ro.color};flex-shrink:0"></div>
+        <span style="font-size:11px;font-weight:700">${g.ro.text}</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:400">${g.total}건</span>
+        <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:${satColor(g.avgSat)}">${g.avgSat !== null ? g.avgSat : '—'}<span style="font-size:9px;color:var(--muted);margin-left:2px">점</span></span>
+      </div>
+      <div style="margin-bottom:${gi < groups.length - 1 ? '18' : '14'}px">
+        ${g.waitBars.map(b => `
+          <div style="margin-bottom:9px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+              <span style="font-size:10px;color:var(--text)">${b.wo.text}${b.avgStr}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${b.pct}% · ${b.cnt}건</span>
+            </div>
+            <div style="height:6px;background:var(--dim);border-radius:3px;overflow:hidden">
+              <div style="width:${b.pct}%;height:100%;background:${b.wo.color}99;border-radius:3px;transition:width .4s ease"></div>
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+  })();
 
   // ⑥ 채널별 대기시간 구간별 만족도 차트
   const WAIT_BUCKETS = [
