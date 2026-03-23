@@ -3015,6 +3015,7 @@ function toggleNpsFilter(source) {
     btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
     btn.style.color       = isActive ? 'var(--text)'   : 'var(--muted)';
   });
+  npsSelectedWeek = null;
   rebuildNpsWeeks();
   buildNpsWeekBar();
   renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
