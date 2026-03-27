@@ -278,6 +278,39 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .hm-chart-box { position:relative; height:170px; }
 th.hm-cur { color:var(--accent); }
 th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
+
+/* ── 태그 추이 탭 */
+.tt-control-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.tt-filter-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.tt-filter-btn{
+  display:flex;align-items:center;gap:5px;
+  padding:5px 13px;border-radius:8px;font-size:11px;font-weight:700;
+  font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);
+  background:none;color:var(--muted);cursor:pointer;transition:all .15s;
+}
+.tt-filter-btn:hover{border-color:var(--muted);color:var(--text);}
+.tt-filter-btn.active{border-color:transparent;}
+.tt-filter-btn[data-status="전체"].active{background:var(--surface2);border-color:var(--border);color:var(--text);}
+.tt-filter-btn[data-status="분리검토"].active{background:rgba(248,113,113,.15);border-color:rgba(248,113,113,.4);color:var(--red);}
+.tt-filter-btn[data-status="통합검토"].active{background:rgba(96,165,250,.15);border-color:rgba(96,165,250,.4);color:var(--accent3);}
+.tt-filter-btn[data-status="안정"].active{background:rgba(110,231,183,.12);border-color:rgba(110,231,183,.3);color:var(--accent);}
+.tt-filter-count{font-family:'DM Mono',monospace;font-size:10px;opacity:.75;}
+.tt-legend-bar{
+  display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  padding:10px 16px;background:var(--surface2);
+  border-radius:8px;border:1px solid var(--border);
+  font-size:10px;color:var(--muted);
+}
+.tt-legend-bar strong{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+.tt-legend-item{display:flex;align-items:center;gap:5px;}
+.tt-legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.tt-status-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+.tt-s-split{background:rgba(248,113,113,.15);color:var(--red);}
+.tt-s-merge{background:rgba(96,165,250,.15);color:var(--accent3);}
+.tt-s-stable{background:rgba(110,231,183,.12);color:var(--accent);}
+.tt-tbl th.tt-latest{color:var(--accent);}
+.tt-tbl tr.tt-row-split td:first-child{border-left:2px solid var(--red);}
+.tt-tbl tr.tt-row-merge td:first-child{border-left:2px solid var(--accent3);}
 </style>
 </head>
 <body>
@@ -295,6 +328,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <button class="tab-btn" id="tabRecontact" onclick="switchTab('recontact')">🔁 재문의 고객</button>
       <button class="tab-btn" id="tabCsat" onclick="switchTab('csat')">⭐ 고객 만족도</button>
       <button class="tab-btn" id="tabNps" onclick="switchTab('nps')">📈 NPS</button>
+      <button class="tab-btn" id="tabTagTrend" onclick="switchTab('tagtrend')">🏷️ 태그 추이</button>
     </div>
   </div>
   <div class="header-right">
@@ -935,6 +969,59 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   </div>
 </div>
 
+<!-- TAG TREND TAB -->
+<div class="dash" id="tagTrendTab" style="display:none">
+  <div class="tt-control-bar">
+    <span class="week-label">상태</span>
+    <div class="tt-filter-btns">
+      <button class="tt-filter-btn active" data-status="전체"    onclick="ttSetStatus('전체',this)">전체 <span class="tt-filter-count" id="ttCnt-전체"></span></button>
+      <button class="tt-filter-btn"        data-status="분리검토" onclick="ttSetStatus('분리검토',this)">📈 분리 검토 <span class="tt-filter-count" id="ttCnt-분리검토"></span></button>
+      <button class="tt-filter-btn"        data-status="통합검토" onclick="ttSetStatus('통합검토',this)">📉 통합·삭제 검토 <span class="tt-filter-count" id="ttCnt-통합검토"></span></button>
+      <button class="tt-filter-btn"        data-status="안정"    onclick="ttSetStatus('안정',this)">✅ 안정 <span class="tt-filter-count" id="ttCnt-안정"></span></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <span style="font-size:10px;color:var(--muted)">정렬</span>
+      <select class="week-select" style="min-width:120px" onchange="ttSetSort(this.value)">
+        <option value="total">5주 합계순</option>
+        <option value="latest">최신 주차순</option>
+        <option value="status">상태별</option>
+        <option value="name">태그명순</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="tt-legend-bar">
+    <strong>판단 기준</strong>
+    <div class="tt-legend-item"><span class="tt-legend-dot" style="background:var(--red)"></span>📈 분리 검토: 후반 2주 평균이 전반 2주 대비 130% 이상 증가</div>
+    <div class="tt-legend-item"><span class="tt-legend-dot" style="background:var(--accent3)"></span>📉 통합·삭제: 최근 3주 합계 ≤ 5, 또는 후반 2주 평균이 전반 대비 70% 미만 감소</div>
+    <div class="tt-legend-item"><span class="tt-legend-dot" style="background:var(--accent)"></span>✅ 안정: 그 외</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">태그별 주차 집계</div>
+        <div class="card-sub" id="ttCardSub"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="ttRowCount"></span>
+        <div style="position:relative">
+          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--muted)">🔍</span>
+          <input style="font-family:'Noto Sans KR',sans-serif;font-size:11px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 14px 7px 30px;border-radius:8px;width:180px;outline:none;"
+            placeholder="태그 검색..." oninput="ttFilterTable(this.value)"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl tt-tbl" style="width:100%">
+        <thead id="ttHead"></thead>
+        <tbody id="ttBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- SHEET CONNECT PANEL -->
 <div class="settings-overlay" id="sheetOverlay" onclick="closeSheetPanelOnOverlay(event)">
   <div class="settings-panel" style="width:380px">
@@ -988,6 +1075,9 @@ let csatSendData = []; // 만족도 발송건 시트 [{날짜, 건수}]
 let npsData  = [];   // { id, userId, date, week, sortKey, score, reason, type }
 let weeks = [];
 let npsWeeks = [];
+let reportWeeks = [];   // report.json 주차별 태그 집계 [{week, tags:{...}}]
+let ttStatus = '전체';
+let ttSort   = 'total';
 let selectedWeek = 'all';
 let npsSelectedWeek = null;
 let cNpsTrendChart = null;
@@ -1137,11 +1227,12 @@ function switchTab(tab) {
   document.getElementById('tabRecontact').classList.toggle('active', tab === 'recontact');
   document.getElementById('tabCsat').classList.toggle('active', tab === 'csat');
   document.getElementById('tabNps').classList.toggle('active', tab === 'nps');
-  ['dash','agentTab','recontactTab','csatTab','npsTab'].forEach(id => {
+  document.getElementById('tabTagTrend').classList.toggle('active', tab === 'tagtrend');
+  ['dash','agentTab','recontactTab','csatTab','npsTab','tagTrendTab'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : null;
+  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : tab === 'tagtrend' ? 'tagTrendTab' : null;
   if (activeId && allData.length) {
     const activeEl = document.getElementById(activeId);
     if (activeEl) activeEl.style.display = 'block';
@@ -1163,6 +1254,9 @@ function switchTab(tab) {
   }
   if (tab === 'nps') {
     renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
+  }
+  if (tab === 'tagtrend') {
+    renderTagTrendTab();
   }
 }
 
@@ -1340,6 +1434,13 @@ async function loadFromSheet(isAuto) {
         npsData.push(...parseNpsRows(raw3b.value, '기관'));
       if (npsData.length) { rebuildNpsWeeks(); buildNpsWeekBar(); }
     } catch(e3) { console.warn('NPS 로드 실패(무시):', e3.message); }
+
+    // ⑤ 주차별 태그 집계 (실패해도 무시)
+    reportWeeks = [];
+    try {
+      const raw5 = await fetchSheet(baseUrl, 'report');
+      if (raw5 && raw5.weeks) reportWeeks = raw5.weeks;
+    } catch(e5) { console.warn('태그 집계 로드 실패(무시):', e5.message); }
 
     rebuildWeeks();
     const now = new Date().toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -3329,6 +3430,146 @@ function showToast(msg) {
 }
 
 loadStoredData();
+
+// ── TAG TREND TAB
+const TT_CAT_BG   = {"아카데미_":"rgba(129,140,248,.18)","요_":"rgba(96,165,250,.18)","기관_":"rgba(251,191,36,.18)","오류/":"rgba(248,113,113,.18)","일반_":"rgba(251,146,60,.18)","기타":"rgba(107,114,128,.18)"};
+const TT_CAT_TEXT = {"아카데미_":"#818cf8","요_":"#60a5fa","기관_":"#fbbf24","오류/":"#f87171","일반_":"#fb923c","기타":"#9ca3af"};
+const TT_CAT_LABEL= {"아카데미_":"아카데미","요_":"요양보호사","기관_":"기관","오류/":"오류","일반_":"일반","기타":"기타"};
+
+function ttGetCat(tag) {
+  for (const p of ["아카데미_","요_","기관_","오류/","일반_"]) if (tag.startsWith(p)) return p;
+  return "기타";
+}
+
+function ttGetStatus(vals) {
+  const recent3 = vals.slice(-3).reduce((a,b)=>a+b,0);
+  if (recent3 <= 5) return "통합검토";
+  const firstHalf = (vals[0] + vals[1]) / 2;
+  const lastHalf  = (vals[vals.length-2] + vals[vals.length-1]) / 2;
+  if (firstHalf === 0 && lastHalf === 0) return "통합검토";
+  const ratio = firstHalf > 0 ? lastHalf / firstHalf : Infinity;
+  if (ratio >= 1.3) return "분리검토";
+  if (ratio <  0.7) return "통합검토";
+  return "안정";
+}
+
+function ttSparkline(vals) {
+  const last  = vals[vals.length-1];
+  const prev  = vals[vals.length-2];
+  const color = last > prev ? '#f87171' : last < prev ? '#60a5fa' : '#6b6b80';
+  const W=72, H=22, PAD=3;
+  const max=Math.max(...vals); const min=Math.min(...vals);
+  const range=max-min||1; const n=vals.length;
+  const pts=vals.map((v,i)=>[PAD+(i/(n-1))*(W-PAD*2), H-PAD-((v-min)/range)*(H-PAD*2)]);
+  const poly=pts.map(p=>p.map(x=>x.toFixed(1)).join(',')).join(' ');
+  const fill=`${pts[0][0].toFixed(1)},${(H-PAD).toFixed(1)} ${poly} ${pts[n-1][0].toFixed(1)},${(H-PAD).toFixed(1)}`;
+  const dots=pts.map(([x,y],i)=>`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i===n-1?2.5:1.5}" fill="${color}" opacity="${i===n-1?1:0.5}"/>`).join('');
+  return `<svg width="${W}" height="${H}" style="display:block;margin:auto"><polygon points="${fill}" fill="${color}" opacity="0.12"/><polyline points="${poly}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+}
+
+function renderTagTrendTab() {
+  const weeks = reportWeeks;
+  if (!weeks || !weeks.length) {
+    document.getElementById('ttBody').innerHTML = '<tr><td colspan="20" style="text-align:center;padding:40px;color:var(--muted);font-size:11px">데이터가 없어요. 시트를 연결하면 자동으로 불러와요.</td></tr>';
+    return;
+  }
+
+  // 최근 5주만 사용
+  const displayWeeks = weeks.slice(-5);
+
+  // 전체 태그 수집
+  const tagSet = new Set();
+  displayWeeks.forEach(w => Object.keys(w.tags||{}).forEach(t => tagSet.add(t)));
+  const allTags = [...tagSet];
+
+  // 태그별 데이터 계산
+  const tagInfo = allTags.map(tag => {
+    const vals = displayWeeks.map(w => (w.tags||{})[tag] || 0);
+    const status = ttGetStatus(vals);
+    return { tag, vals, status };
+  });
+
+  // 카운트 업데이트
+  ['전체','분리검토','통합검토','안정'].forEach(s => {
+    const el = document.getElementById(`ttCnt-${s}`);
+    if (el) el.textContent = s==='전체' ? tagInfo.length : tagInfo.filter(t=>t.status===s).length;
+  });
+
+  // 필터
+  let filtered = ttStatus==='전체' ? tagInfo : tagInfo.filter(t=>t.status===ttStatus);
+
+  // 정렬
+  if (ttSort==='total')  filtered.sort((a,b)=>b.vals.reduce((x,y)=>x+y,0)-a.vals.reduce((x,y)=>x+y,0));
+  if (ttSort==='latest') filtered.sort((a,b)=>(b.vals[b.vals.length-1]||0)-(a.vals[a.vals.length-1]||0));
+  if (ttSort==='name')   filtered.sort((a,b)=>a.tag.localeCompare(b.tag,'ko'));
+  if (ttSort==='status') {
+    const order={분리검토:0,통합검토:1,안정:2};
+    filtered.sort((a,b)=>(order[a.status]??3)-(order[b.status]??3)||b.vals.reduce((x,y)=>x+y,0)-a.vals.reduce((x,y)=>x+y,0));
+  }
+
+  // 헤더
+  document.getElementById('ttHead').innerHTML = `<tr>
+    <th style="min-width:180px">태그</th>
+    <th class="center" style="min-width:68px">상태</th>
+    ${displayWeeks.slice(0,-1).map(w=>`<th class="num" style="min-width:86px">${w.week}</th>`).join('')}
+    <th class="num tt-latest" style="min-width:86px">${displayWeeks[displayWeeks.length-1].week} ★</th>
+    <th class="num" style="min-width:54px">주평균</th>
+    <th class="center" style="min-width:82px">추이</th>
+  </tr>`;
+
+  // 바디
+  const tbody = document.getElementById('ttBody');
+  tbody.innerHTML = '';
+  filtered.forEach(({tag, vals, status}) => {
+    const cat = ttGetCat(tag);
+    const avg = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
+    const rowClass = status==='분리검토' ? 'tt-row-split' : status==='통합검토' ? 'tt-row-merge' : '';
+    const badgeClass = status==='분리검토' ? 'tt-s-split' : status==='통합검토' ? 'tt-s-merge' : 'tt-s-stable';
+    const badgeText  = status==='분리검토' ? '📈 분리검토' : status==='통합검토' ? '📉 통합검토' : '✅ 안정';
+
+    const tr = document.createElement('tr');
+    tr.className = rowClass;
+    tr.dataset.tag = tag;
+    tr.innerHTML = `
+      <td style="font-size:11px">${tag}
+        <span class="cat-badge" style="margin-left:6px;background:${TT_CAT_BG[cat]};color:${TT_CAT_TEXT[cat]}">${TT_CAT_LABEL[cat]}</span>
+      </td>
+      <td class="center"><span class="tt-status-badge ${badgeClass}">${badgeText}</span></td>
+      ${vals.slice(0,-1).map(v=>`<td class="num${v===0?' b-none':''}">${v||'—'}</td>`).join('')}
+      <td class="num" style="font-weight:600">${vals[vals.length-1]||'—'}</td>
+      <td class="num" style="color:var(--muted)">${avg}</td>
+      <td class="center" style="padding:4px 12px">${ttSparkline(vals)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const statusLabel = {'전체':'전체','분리검토':'📈 분리 검토','통합검토':'📉 통합·삭제 검토','안정':'✅ 안정'};
+  const sub = document.getElementById('ttCardSub');
+  if (sub) sub.textContent = `${statusLabel[ttStatus]} · ${filtered.length}개 태그 · 최근 ${displayWeeks.length}주`;
+  const rc = document.getElementById('ttRowCount');
+  if (rc) rc.textContent = `${filtered.length}개`;
+}
+
+function ttSetStatus(s, btn) {
+  ttStatus = s;
+  document.querySelectorAll('.tt-filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTagTrendTab();
+}
+
+function ttSetSort(val) { ttSort=val; renderTagTrendTab(); }
+
+function ttFilterTable(q) {
+  q=q.toLowerCase();
+  let v=0;
+  document.querySelectorAll('#ttBody tr').forEach(tr=>{
+    const show=!q||tr.dataset.tag?.toLowerCase().includes(q);
+    tr.style.display=show?'':'none';
+    if(show)v++;
+  });
+  const rc=document.getElementById('ttRowCount');
+  if(rc) rc.textContent=`${v}개`;
+}
 </script>
 </body>
 </html>
