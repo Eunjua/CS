@@ -3481,9 +3481,9 @@ function renderTagTrendTab() {
   // 최근 5주만 사용
   const displayWeeks = weeks.slice(-5);
 
-  // 전체 태그 수집
+  // 전체 태그 수집 (모든 주차 기준 — 최근 5주에 없어도 포함)
   const tagSet = new Set();
-  displayWeeks.forEach(w => Object.keys(w.tags||{}).forEach(t => tagSet.add(t)));
+  weeks.forEach(w => Object.keys(w.tags||{}).forEach(t => tagSet.add(t)));
   const allTags = [...tagSet];
 
   // 태그별 데이터 계산
