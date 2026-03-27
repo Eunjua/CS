@@ -3514,7 +3514,9 @@ function renderTagTrendTab() {
   // 전체 태그 수집 (정의 파일 기준 + 모든 주차 실적 태그 합산)
   const tagSet = new Set(TT_ALL_DEFINED_TAGS);
   weeks.forEach(w => Object.keys(w.tags||{}).forEach(t => tagSet.add(t)));
-  const allTags = [...tagSet];
+  // 요_ / 기관_ / 아카데미_ / 일반_ 이외 태그 제외
+  const VALID_PREFIXES = ['요_','기관_','아카데미_','일반_'];
+  const allTags = [...tagSet].filter(t => VALID_PREFIXES.some(p => t.startsWith(p)));
 
   // 태그별 데이터 계산
   const tagInfo = allTags.map(tag => {
