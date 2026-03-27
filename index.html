@@ -1438,8 +1438,12 @@ async function loadFromSheet(isAuto) {
     // ⑤ 주차별 태그 집계 (실패해도 무시)
     reportWeeks = [];
     try {
-      const raw5 = await fetchSheet(baseUrl, 'report');
-      if (raw5 && raw5.weeks) reportWeeks = raw5.weeks;
+      const res5 = await fetch(toApiUrl(baseUrl, 'report'));
+      if (res5.ok) {
+        const json5 = await res5.json();
+        if (json5.weeks) reportWeeks = json5.weeks;
+        else if (json5.data && json5.data.weeks) reportWeeks = json5.data.weeks;
+      }
     } catch(e5) { console.warn('태그 집계 로드 실패(무시):', e5.message); }
 
     rebuildWeeks();
