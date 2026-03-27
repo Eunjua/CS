@@ -22,6 +22,9 @@
 
 ## 기술 스택
 
+## Git 규칙
+작업이 마무리될 때마다 "GitHub에 push할까요? (`cspush`)" 라고 물어볼 것.
+
 ### 프론트엔드
 - HTML / CSS / Vanilla JavaScript (외부 프레임워크 없음)
 - 정적 사이트 — 빌드 과정 없음, index.html 단일 파일
@@ -86,6 +89,7 @@ index.html 대시보드 (GitHub Pages)
 3. 🔁 재문의 고객 — 14일 이내 동일 이슈 재문의 고객 상세
 4. ⭐ 고객 만족도 (CSAT) — 만족도/친절도 추이 (응답률 라인+오른쪽Y축 포함), 채널별 비교, 태그별 히트맵, 채팅/전화 실제 대기시간 구간별 만족도, AI 자유의견 분석
 5. 📈 NPS — NPS 점수 추이 (동적Y축), 응답자 분류, 점수 분포, NPS 의견 (요양/기관 필터)
+6. 🏷️ 태그 추이 — 태그별 최근 5주 주차 집계 테이블 + 상태 자동 분류 + SVG 스파크라인
 
 ## 차트 구현 패턴
 - **이중 Y축**: 주 데이터(왼쪽 y) + 보조 비율(오른쪽 yRight/yRate) — 오른쪽 max는 동적 설정
@@ -101,9 +105,26 @@ index.html 대시보드 (GitHub Pages)
 - `buildWaitSatChart(ch, ...)` — 채널별 대기시간 구간별 만족도 차트 렌더링
 - `calcRecontactRate(week)` — 재문의율 계산 (14일 window, userId+태그 기준)
 - `renderRecontact(week)` — 대시보드 재문의율 KPI 카드 업데이트
+- `renderTagTrendTab()` — 태그 추이 탭 렌더링 (상태 분류 + 스파크라인)
+- `ttGetStatus(vals)` — 5주 건수 배열 → 분리검토/통합검토/안정 분류
+- `ttSparkline(vals)` — 5주 추이 SVG 스파크라인 생성 (상승 빨강, 하락 파랑)
+- `ttSetStatus(s, btn)` — 태그 추이 탭 상태 필터 변경
+- `ttFilterTable(q)` — 태그 추이 탭 검색 필터
+
+## 태그 추이 탭 상세
+- **데이터 소스**: `?sheet=report` → `{ weeks: [{week, tags:{태그명:건수}}] }` 구조
+  - `fetchSheet()`가 `json.data`만 반환하므로 report는 직접 `fetch()`로 호출
+- **표시 태그 범위**: `VOC_태그_정의.md` 기준 전체 태그 (`TT_ALL_DEFINED_TAGS`) + 실적에 있는 태그 합산
+  - `요_ / 기관_ / 아카데미_ / 일반_` 접두어 태그만 표시 (콜백, 오류, 중복, 테스트 등 제외)
+- **상태 자동 분류 기준**:
+  - 📈 분리검토: 후반 2주 평균 ÷ 전반 2주 평균 ≥ 1.3
+  - 📉 통합검토: 최근 3주 합계 ≤ 5, 또는 후반/전반 비율 < 0.7
+  - ✅ 안정: 그 외
+- **스파크라인**: 상승(빨강 #f87171) / 하락(파랑 #60a5fa) / 변동없음(회색)
 
 ## 알려진 버그 수정 이력
 - `renderRecontact()` 가 `render()` 에서 호출 누락 → 대시보드 재문의율 항상 `—` 표시 (수정완료)
+- 태그 추이 탭 데이터 없음 → `fetchSheet()` 대신 직접 `fetch()` 로 report 로딩 (수정완료)
 
 ## GAS 상수 (최신)
 ```javascript
