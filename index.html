@@ -1060,6 +1060,16 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   <div class="card">
     <div class="card-head">
       <div>
+        <div class="card-title">주차별 당일 응대율 추이</div>
+        <div class="card-sub">최근 4주 기준</div>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:220px"><canvas id="cDailyResponseWeek"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
         <div class="card-title">일별 당일 응대율</div>
         <div class="card-sub" id="drCardSub">선택 주차 기준</div>
       </div>
@@ -1126,6 +1136,7 @@ let dailyResponseData = { weeks: [] }; // 당일 응대율 [{week, total, respon
 let drSelectedWeek = null;
 let drExclMissed = false;
 let cDailyResponseChart = null;
+let cDailyResponseWeekChart = null;
 let ttStatus = '전체';
 let ttSort   = 'total';
 let selectedWeek = 'all';
@@ -3728,6 +3739,54 @@ function renderDailyResponseTab() {
     : r >= 60        ? 'rgba(251,191,36,.75)'
     : 'rgba(248,113,113,.75)'
   );
+
+  // ── 주간 추이 차트 (최근 4주)
+  if (cDailyResponseWeekChart) { cDailyResponseWeekChart.destroy(); cDailyResponseWeekChart = null; }
+  const weekCtx = document.getElementById('cDailyResponseWeek');
+  if (weekCtx) {
+    const recent4 = [...data.weeks].slice(0, 4).reverse(); // 오래된 순 정렬
+    const wLabels = recent4.map(w => w.week);
+    const wRates  = recent4.map(w => drExclMissed ? w.rate_excl : w.rate);
+    const wBarColors = wRates.map(r =>
+      r === null       ? 'rgba(107,107,128,.3)'
+      : r >= 80        ? 'rgba(110,231,183,.75)'
+      : r >= 60        ? 'rgba(251,191,36,.75)'
+      : 'rgba(248,113,113,.75)'
+    );
+    cDailyResponseWeekChart = new Chart(weekCtx, {
+      type: 'bar',
+      data: {
+        labels: wLabels,
+        datasets: [{
+          label: '당일 응대율',
+          data: wRates,
+          backgroundColor: wBarColors,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.raw !== null ? `당일 응대율: ${ctx.raw}%` : '데이터 없음'
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#6b6b80', font: { size: 11 } } },
+          y: {
+            grid: { color: 'rgba(255,255,255,.05)' },
+            ticks: { color: '#6b6b80', font: { size: 11 }, callback: v => v + '%' },
+            min: 0, max: 100
+          }
+        }
+      }
+    });
+  }
 
   if (cDailyResponseChart) { cDailyResponseChart.destroy(); cDailyResponseChart = null; }
 
