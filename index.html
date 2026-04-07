@@ -329,6 +329,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <button class="tab-btn" id="tabCsat" onclick="switchTab('csat')">⭐ 고객 만족도</button>
       <button class="tab-btn" id="tabNps" onclick="switchTab('nps')">📈 NPS</button>
       <button class="tab-btn" id="tabTagTrend" onclick="switchTab('tagtrend')">🏷️ 태그 추이</button>
+      <button class="tab-btn" id="tabDailyResponse" onclick="switchTab('dailyresponse')">📅 당일 응대율</button>
     </div>
   </div>
   <div class="header-right">
@@ -1022,6 +1023,51 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   </div>
 </div>
 
+<!-- DAILY RESPONSE TAB -->
+<div class="dash" id="dailyResponseTab" style="display:none">
+  <div class="week-bar">
+    <span class="week-label">주차</span>
+    <select class="week-select" id="drWeekSelect" onchange="drSelectWeek(this.value)"></select>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px;color:var(--muted)">부재중 제외</span>
+      <button id="drMissedToggle" onclick="drToggleMissed()"
+        style="padding:4px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
+        border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);
+        border:1px solid var(--border);transition:all .15s">OFF</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi" style="--c:var(--accent)">
+      <div class="lbl">당일 응대율</div>
+      <div class="val" id="drKpiRate">—</div>
+      <div class="chg" id="drKpiRateSub" style="color:var(--muted)"></div>
+    </div>
+    <div class="kpi" style="--c:var(--accent3)">
+      <div class="lbl">당일 응대 건수</div>
+      <div class="val" id="drKpiResponded">—</div>
+    </div>
+    <div class="kpi" style="--c:var(--accent4)">
+      <div class="lbl">전체 접수 건수</div>
+      <div class="val" id="drKpiTotal">—</div>
+    </div>
+    <div class="kpi" style="--c:var(--red)">
+      <div class="lbl">부재중 건수</div>
+      <div class="val" id="drKpiMissed">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">일별 당일 응대율</div>
+        <div class="card-sub" id="drCardSub">선택 주차 기준</div>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:260px"><canvas id="cDailyResponse"></canvas></div>
+  </div>
+</div>
+
 <!-- SHEET CONNECT PANEL -->
 <div class="settings-overlay" id="sheetOverlay" onclick="closeSheetPanelOnOverlay(event)">
   <div class="settings-panel" style="width:380px">
@@ -1076,6 +1122,10 @@ let npsData  = [];   // { id, userId, date, week, sortKey, score, reason, type }
 let weeks = [];
 let npsWeeks = [];
 let reportWeeks = [];   // report.json 주차별 태그 집계 [{week, tags:{...}}]
+let dailyResponseData = { weeks: [] }; // 당일 응대율 [{week, total, responded, missed, rate, total_excl, rate_excl, days:[]}]
+let drSelectedWeek = null;
+let drExclMissed = false;
+let cDailyResponseChart = null;
 let ttStatus = '전체';
 let ttSort   = 'total';
 let selectedWeek = 'all';
@@ -1228,11 +1278,12 @@ function switchTab(tab) {
   document.getElementById('tabCsat').classList.toggle('active', tab === 'csat');
   document.getElementById('tabNps').classList.toggle('active', tab === 'nps');
   document.getElementById('tabTagTrend').classList.toggle('active', tab === 'tagtrend');
-  ['dash','agentTab','recontactTab','csatTab','npsTab','tagTrendTab'].forEach(id => {
+  document.getElementById('tabDailyResponse').classList.toggle('active', tab === 'dailyresponse');
+  ['dash','agentTab','recontactTab','csatTab','npsTab','tagTrendTab','dailyResponseTab'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : tab === 'tagtrend' ? 'tagTrendTab' : null;
+  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : tab === 'tagtrend' ? 'tagTrendTab' : tab === 'dailyresponse' ? 'dailyResponseTab' : null;
   if (activeId && allData.length) {
     const activeEl = document.getElementById(activeId);
     if (activeEl) activeEl.style.display = 'block';
@@ -1257,6 +1308,9 @@ function switchTab(tab) {
   }
   if (tab === 'tagtrend') {
     renderTagTrendTab();
+  }
+  if (tab === 'dailyresponse') {
+    renderDailyResponseTab();
   }
 }
 
@@ -1445,6 +1499,17 @@ async function loadFromSheet(isAuto) {
         else if (json5.data && json5.data.weeks) reportWeeks = json5.data.weeks;
       }
     } catch(e5) { console.warn('태그 집계 로드 실패(무시):', e5.message); }
+
+    // ⑥ 당일 응대율 (실패해도 무시)
+    dailyResponseData = { weeks: [] };
+    drSelectedWeek = null;
+    try {
+      const res6 = await fetch(toApiUrl(baseUrl, 'daily_response'));
+      if (res6.ok) {
+        const json6 = await res6.json();
+        if (json6.weeks) dailyResponseData = json6;
+      }
+    } catch(e6) { console.warn('당일 응대율 로드 실패(무시):', e6.message); }
 
     rebuildWeeks();
     const now = new Date().toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -3605,6 +3670,128 @@ function ttFilterTable(q) {
   });
   const rc=document.getElementById('ttRowCount');
   if(rc) rc.textContent=`${v}개`;
+}
+
+// ── DAILY RESPONSE TAB
+function renderDailyResponseTab() {
+  const data = dailyResponseData;
+  const sel  = document.getElementById('drWeekSelect');
+
+  if (!data || !data.weeks || !data.weeks.length) {
+    ['drKpiRate','drKpiResponded','drKpiTotal','drKpiMissed'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '—';
+    });
+    if (cDailyResponseChart) { cDailyResponseChart.destroy(); cDailyResponseChart = null; }
+    return;
+  }
+
+  // 주차 선택기 초기화 (처음 한 번만)
+  if (sel && sel.options.length === 0) {
+    data.weeks.forEach(w => {
+      const opt = document.createElement('option');
+      opt.value = w.week; opt.textContent = w.week;
+      sel.appendChild(opt);
+    });
+  }
+
+  // 기본 선택: 가장 최신 주차 (배열 첫 번째, 내림차순 정렬 기준)
+  if (!drSelectedWeek || !data.weeks.find(w => w.week === drSelectedWeek)) {
+    drSelectedWeek = data.weeks[0].week;
+  }
+  if (sel) sel.value = drSelectedWeek;
+
+  const weekData = data.weeks.find(w => w.week === drSelectedWeek);
+  if (!weekData) return;
+
+  // KPI 계산
+  const total     = drExclMissed ? weekData.total_excl : weekData.total;
+  const responded = weekData.responded;
+  const rate      = total > 0 ? Math.round((responded / total) * 1000) / 10 : null;
+
+  const el = id => document.getElementById(id);
+  if (el('drKpiRate'))      el('drKpiRate').textContent      = rate !== null ? `${rate}%` : '—';
+  if (el('drKpiRateSub'))   el('drKpiRateSub').textContent   = drExclMissed ? '부재중 제외' : '전체 기준';
+  if (el('drKpiResponded')) el('drKpiResponded').textContent = responded.toLocaleString();
+  if (el('drKpiTotal'))     el('drKpiTotal').textContent     = total.toLocaleString();
+  if (el('drKpiMissed'))    el('drKpiMissed').textContent    = weekData.missed.toLocaleString();
+  if (el('drCardSub'))      el('drCardSub').textContent      = `${drSelectedWeek} · ${drExclMissed ? '부재중 제외' : '전체 기준'}`;
+
+  // 차트 데이터
+  const days   = weekData.days || [];
+  const labels = days.map(d => d.date);
+  const rates  = days.map(d => drExclMissed ? d.rate_excl : d.rate);
+  const totals = days.map(d => drExclMissed ? d.total_excl : d.total);
+
+  const barColors = rates.map(r =>
+    r === null       ? 'rgba(107,107,128,.3)'
+    : r >= 80        ? 'rgba(110,231,183,.75)'
+    : r >= 60        ? 'rgba(251,191,36,.75)'
+    : 'rgba(248,113,113,.75)'
+  );
+
+  if (cDailyResponseChart) { cDailyResponseChart.destroy(); cDailyResponseChart = null; }
+
+  const ctx = document.getElementById('cDailyResponse');
+  if (!ctx) return;
+
+  cDailyResponseChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '당일 응대율',
+        data: rates,
+        backgroundColor: barColors,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = ctx.raw;
+              const t = totals[ctx.dataIndex];
+              const resp = weekData.days[ctx.dataIndex]?.responded ?? 0;
+              return r !== null ? `당일 응대율: ${r}%  (${resp}/${t}건)` : '데이터 없음';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,.05)' },
+          ticks: { color: '#6b6b80', font: { size: 11, family: "'DM Mono', monospace" } }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,.05)' },
+          ticks: { color: '#6b6b80', font: { size: 11 }, callback: v => v + '%' },
+          min: 0, max: 100
+        }
+      }
+    }
+  });
+}
+
+function drSelectWeek(week) {
+  drSelectedWeek = week;
+  renderDailyResponseTab();
+}
+
+function drToggleMissed() {
+  drExclMissed = !drExclMissed;
+  const btn = document.getElementById('drMissedToggle');
+  if (btn) {
+    btn.textContent    = drExclMissed ? 'ON' : 'OFF';
+    btn.style.background   = drExclMissed ? 'var(--accent)' : 'transparent';
+    btn.style.color        = drExclMissed ? '#0f0f13'       : 'var(--muted)';
+    btn.style.borderColor  = drExclMissed ? 'var(--accent)'  : 'var(--border)';
+  }
+  renderDailyResponseTab();
 }
 </script>
 </body>
