@@ -1025,6 +1025,10 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
 
 <!-- DAILY RESPONSE TAB -->
 <div class="dash" id="dailyResponseTab" style="display:none">
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:11px;color:var(--muted)">
+    <span style="color:var(--accent4)">📌</span>
+    <span>집계 기준: <strong style="color:var(--text)">주말 제외</strong> · <strong style="color:var(--text)">평일 17시 이후 인입건 제외</strong> · <strong style="color:var(--text)">접수 당일 첫 답변</strong> 기준</span>
+  </div>
   <div class="week-bar">
     <span class="week-label">주차</span>
     <select class="week-select" id="drWeekSelect" onchange="drSelectWeek(this.value)"></select>
@@ -3754,15 +3758,22 @@ function renderDailyResponseTab() {
       : 'rgba(248,113,113,.75)'
     );
     cDailyResponseWeekChart = new Chart(weekCtx, {
-      type: 'bar',
+      type: 'line',
       data: {
         labels: wLabels,
         datasets: [{
           label: '당일 응대율',
           data: wRates,
-          backgroundColor: wBarColors,
-          borderRadius: 6,
-          borderSkipped: false,
+          borderColor: 'rgba(110,231,183,.9)',
+          backgroundColor: 'rgba(110,231,183,.1)',
+          pointBackgroundColor: wRates.map(r =>
+            r === null ? 'rgba(107,107,128,.5)' : r >= 80 ? '#6ee7b7' : r >= 60 ? '#fbbf24' : '#f87171'
+          ),
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
         }]
       },
       options: {
@@ -3794,15 +3805,22 @@ function renderDailyResponseTab() {
   if (!ctx) return;
 
   cDailyResponseChart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels,
       datasets: [{
         label: '당일 응대율',
         data: rates,
-        backgroundColor: barColors,
-        borderRadius: 6,
-        borderSkipped: false,
+        borderColor: 'rgba(96,165,250,.9)',
+        backgroundColor: 'rgba(96,165,250,.1)',
+        pointBackgroundColor: rates.map(r =>
+          r === null ? 'rgba(107,107,128,.5)' : r >= 80 ? '#6ee7b7' : r >= 60 ? '#fbbf24' : '#f87171'
+        ),
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
       }]
     },
     options: {
