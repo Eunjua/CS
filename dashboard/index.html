@@ -1407,7 +1407,7 @@ function parseCsvText(text) {
 // 상담 데이터 행 → allData row
 function parseRawRows(rows) {
   return rows.map(r => {
-    const dtRaw = r['openedAt'] || r['firstOpenedAt'] || r['first_opened_at'] || r['상담시작'] || '';
+    const dtRaw = r['firstOpenedAt'] || r['first_opened_at'] || r['openedAt'] || r['상담시작'] || '';
     const d = dtRaw ? new Date(dtRaw) : null;
     const wo = d && !isNaN(d) ? getWeekLabel(d) : null;
     if (!wo) return null;
