@@ -1440,7 +1440,17 @@ function parseCsatRows(rows) {
     // 스크립트 MAPPED_HEADERS 기준: '상담ID'가 id 컬럼
     const id = (r['상담ID'] || r['id'] || '').trim();
     if (!id) return;
-    const toNum = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const SCORE_MAP = {
+      '매우불만족':1,'매우 불만족':1,'불만':2,'보통':3,'만족':4,'매우만족':5,'매우 만족':5,
+      '매우불친절':1,'매우 불친절':1,'불친절':2,'친절':4,'매우친절':5,'매우 친절':5
+    };
+    const toNum = v => {
+      if (!v) return null;
+      const trimmed = String(v).trim();
+      if (trimmed in SCORE_MAP) return SCORE_MAP[trimmed];
+      const n = parseFloat(trimmed);
+      return isNaN(n) ? null : n;
+    };
     map[id] = {
       만족도:   toNum(r['만족도']   || ''),
       친절도:   toNum(r['친절도']   || ''),
