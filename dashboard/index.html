@@ -1452,6 +1452,7 @@ function parseCsatRows(rows) {
       return isNaN(n) ? null : n;
     };
     map[id] = {
+      week:     (r['week'] || '').trim(),
       만족도:   toNum(r['만족도']   || ''),
       친절도:   toNum(r['친절도']   || ''),
       해결여부: (r['해결여부'] || '').trim(),
@@ -2126,8 +2127,9 @@ function getSendCountForWeek(week) {
 }
 
 function getCsatMatchedForWeek(curWeek) {
-  const curIds = allData.filter(r => r.week === curWeek && r.id).map(r => String(r.id));
-  return curIds.map(id => csatData[id] ? { _id: id, ...csatData[id] } : null).filter(Boolean);
+  return Object.entries(csatData)
+    .filter(([, r]) => r.week === curWeek)
+    .map(([id, r]) => ({ _id: id, ...r }));
 }
 
 function renderCsatTab(curWeek) {
