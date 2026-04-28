@@ -1515,11 +1515,11 @@ async function loadFromSheet(isAuto) {
       const raw2 = await fetchSheet(baseUrl, 'csat');
       console.log('[CSAT] API 응답 행 수:', raw2.length);
       if (raw2.length) {
-        console.log('[CSAT] 컬럼명 샘플:', Object.keys(raw2[0]));
+        console.log('[CSAT] 컬럼명 샘플:', Object.keys(raw2[0]).join(', '));
         csatData = parseCsatRows(raw2);
         console.log('[CSAT] 파싱된 레코드 수:', Object.keys(csatData).length);
-        const weekSample = [...new Set(Object.values(csatData).map(r=>r.week).filter(Boolean))].slice(0,3);
-        console.log('[CSAT] week 값 샘플:', weekSample);
+        const weekSample = [...new Set(Object.values(csatData).map(r=>r.week).filter(Boolean))].slice(0,5);
+        console.log('[CSAT] week 값 샘플:', weekSample.join(' / '));
       }
     } catch(e2) { console.warn('[CSAT] 로드 실패:', e2.message); }
 
@@ -2281,6 +2281,7 @@ function renderCsatTab(curWeek) {
   };
 
   const matched = getCsatMatchedForWeek(curWeek);
+  console.log('[CSAT] 선택 주차:', curWeek, '/ matched 건수:', matched.length);
   const curIdx  = weeks.indexOf(curWeek);
   const prevWeek = curIdx > 0 ? weeks[curIdx - 1] : null;
   const prevMatched = prevWeek ? getCsatMatchedForWeek(prevWeek) : [];
