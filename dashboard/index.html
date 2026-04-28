@@ -1513,8 +1513,15 @@ async function loadFromSheet(isAuto) {
     csatData = {};
     try {
       const raw2 = await fetchSheet(baseUrl, 'csat');
-      if (raw2.length) csatData = parseCsatRows(raw2);
-    } catch(e2) { console.warn('CSAT 로드 실패(무시):', e2.message); }
+      console.log('[CSAT] API 응답 행 수:', raw2.length);
+      if (raw2.length) {
+        console.log('[CSAT] 컬럼명 샘플:', Object.keys(raw2[0]));
+        csatData = parseCsatRows(raw2);
+        console.log('[CSAT] 파싱된 레코드 수:', Object.keys(csatData).length);
+        const weekSample = [...new Set(Object.values(csatData).map(r=>r.week).filter(Boolean))].slice(0,3);
+        console.log('[CSAT] week 값 샘플:', weekSample);
+      }
+    } catch(e2) { console.warn('[CSAT] 로드 실패:', e2.message); }
 
     // ③ 만족도 발송건 (실패해도 무시)
     csatSendData = [];
@@ -2233,7 +2240,17 @@ function getCsatMatchedForWeek(curWeek) {
 }
 
 function renderCsatTab(curWeek) {
-  if (!Object.keys(csatData).length) return;
+  if (!Object.keys(csatData).length) {
+    const kpiRow = document.getElementById('csatKpiRow4');
+    if (kpiRow) kpiRow.innerHTML = `
+      <div style="grid-column:1/-1;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted);text-align:center">
+        ⚠️ CSAT 데이터를 불러오지 못했어요.<br>
+        <span style="font-size:10px;margin-top:6px;display:block">
+          브라우저 콘솔(F12 → Console)에서 <code style="background:var(--dim);padding:1px 4px;border-radius:3px">[CSAT]</code> 로그를 확인해주세요.
+        </span>
+      </div>`;
+    return;
+  }
 
   const METRICS = [
     { key: '만족도',   label: '전체 만족도',  color: 'var(--accent)'  },
