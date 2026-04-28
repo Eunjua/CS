@@ -1304,11 +1304,10 @@ function getTagTrend(tag, curCnt, prevCnt, hasPrev, curWeek) {
 
 // ── TAB
 let currentTab = 'dash';
-let extraIssueTags = [];
+let selectedIssueTags = null; // null = 미초기화 (렌더 시 top5로 세팅)
 let issueAllTags = [];
-let issueTop5 = [];
 function switchTab(tab) {
-  if (tab !== 'dash') { extraIssueTags = []; }
+  if (tab !== 'dash') { selectedIssueTags = null; }
   currentTab = tab;
   document.getElementById('tabDash').classList.toggle('active', tab === 'dash');
   document.getElementById('tabAgent').classList.toggle('active', tab === 'agent');
@@ -1811,14 +1810,14 @@ function render(w) {
   });
   const issueTotal = Object.values(issuePrefixCounts).reduce((a, b) => a + b, 0) || 1;
   const top5=Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t])=>t);
-  issueTop5 = top5;
   issueAllTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).map(([t,c])=>({tag:t,count:c}));
-  const extraValid = extraIssueTags.filter(t => !top5.includes(t));
-  const allIssueTags = [...top5, ...extraValid];
+  if (selectedIssueTags === null) selectedIssueTags = [...top5];
+  const allIssueTags = selectedIssueTags;
   if(cIssue)cIssue.destroy();
   cIssue = new Chart(document.getElementById('cIssue'),{
     type:'line', data:{labels:dw, datasets:allIssueTags.map((tag,i)=>{
-      const color = i<5 ? C5[i] : CEXT[(i-5)%CEXT.length];
+      const palette = [...C5, ...CEXT];
+      const color = palette[i % palette.length];
       return {
         label:tag.length>16?tag.slice(0,16)+'…':tag,
         fullLabel:tag,
@@ -1901,8 +1900,10 @@ function renderIssueChips() {
   const wrap = document.getElementById('issueChips');
   if (!wrap) return;
   wrap.innerHTML = '';
-  extraIssueTags.forEach((tag, idx) => {
-    const color = CEXT[idx % CEXT.length];
+  const tags = selectedIssueTags || [];
+  const palette = [...C5, ...CEXT];
+  tags.forEach((tag, idx) => {
+    const color = palette[idx % palette.length];
     const chip = document.createElement('span');
     chip.className = 'issue-chip';
     chip.style.borderColor = color;
@@ -1930,24 +1931,26 @@ function fillIssueTagList(q) {
   const list = document.getElementById('issueTagList');
   if (!list) return;
   list.innerHTML = '';
+  const cur = selectedIssueTags || [];
   issueAllTags.filter(({tag}) => !q || tag.includes(q)).forEach(({tag, count}) => {
-    const isAdded = extraIssueTags.includes(tag);
-    const isTop = issueTop5.includes(tag);
+    const isSelected = cur.includes(tag);
     const div = document.createElement('div');
-    div.className = 'issue-tag-item' + (isAdded || isTop ? ' selected' : '');
-    div.textContent = isTop ? `${tag} (기본)` : isAdded ? `${tag} ✓` : `${tag} (${count}건)`;
-    if (!isAdded && !isTop) div.onclick = () => addIssueTag(tag);
+    div.className = 'issue-tag-item' + (isSelected ? ' selected' : '');
+    div.textContent = isSelected ? `${tag} ✓` : `${tag} (${count}건)`;
+    if (!isSelected) div.onclick = () => addIssueTag(tag);
     list.appendChild(div);
   });
 }
 function addIssueTag(tag) {
-  if (extraIssueTags.includes(tag) || issueTop5.includes(tag)) return;
-  extraIssueTags.push(tag);
+  if (!selectedIssueTags) selectedIssueTags = [];
+  if (selectedIssueTags.includes(tag)) return;
+  selectedIssueTags.push(tag);
   document.getElementById('issueDropdown').style.display = 'none';
   render(selectedWeek);
 }
 function removeIssueTag(tag) {
-  extraIssueTags = extraIssueTags.filter(t => t !== tag);
+  if (!selectedIssueTags) return;
+  selectedIssueTags = selectedIssueTags.filter(t => t !== tag);
   render(selectedWeek);
 }
 document.addEventListener('click', e => {
