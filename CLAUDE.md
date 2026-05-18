@@ -16,6 +16,8 @@
 - dashboard/              : VOC 대시보드 (GitHub Pages)
 - certification/          : 민간자격 규정 문서 생성
 - completion-certificates/: 이수증·확인서 발급
+- gas/                    : Google Apps Script 파일 (WeeklyReport.gs, Categorizer.gs)
+- 주간 리포트는 Google Sheets [▶ 리포트 생성] 버튼 사용 (백업: /voc-report 명령어)
 
 # 작업 환경
 - 비개발자 (기술 용어는 쉽게 설명할 것)
