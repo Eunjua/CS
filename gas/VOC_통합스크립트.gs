@@ -1004,12 +1004,12 @@ function readCsatFromSheet_(ss, weekLabel) {
   if (data.length < 2) return result;
 
   var headers    = data[0].map(function(h) { return String(h).trim(); });
-  var dateCol    = headers.indexOf('상담일시');
+  var dateCol    = headers.indexOf('week');
   var csatCol    = headers.indexOf('만족도');
-  var channelCol = headers.indexOf('채널');
+  var channelCol = headers.indexOf('mediumType');
 
   if (dateCol < 0 || csatCol < 0) {
-    Logger.log('⚠️ 매핑결과 헤더 인식 실패 (상담일시, 만족도 컬럼 필요)');
+    Logger.log('⚠️ 매핑결과 헤더 인식 실패 (week, 만족도 컬럼 필요) — 실제 헤더: ' + headers.join(', '));
     return result;
   }
 
@@ -1070,7 +1070,7 @@ function getLatestWeekFromMapped_(ss) {
   var data = sh.getDataRange().getValues();
   if (data.length < 2) return null;
   var headers = data[0].map(function(h) { return String(h).trim(); });
-  var dateCol = headers.indexOf('상담일시');
+  var dateCol = headers.indexOf('week');
   if (dateCol < 0) return null;
 
   var latestDate = null;
