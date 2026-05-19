@@ -947,21 +947,23 @@ function generateWeeklyReport() {
       return;
     }
 
-    var weekLabel = reportData.weeks[0].week;
+    var weekLabel = getLatestWeekFromMapped_(ss) || reportData.weeks[0].week;
     var csatData  = readCsatFromSheet_(ss, weekLabel);
     var dailyRate = readDailyResponseFromSheet_(ss, weekLabel);
     Logger.log('[1/4] 완료 — 주차: ' + weekLabel);
-    Logger.log('[2/4] CSAT 채팅 ' + csatData.chatAvg + '점 / 전화 ' + csatData.phoneAvg + '점 / 당일응대율 ' + dailyRate + '%');
+    Logger.log('[2/4] CSAT 채팅 ' + csatData.chatAvg + '점(' + csatData.chatCount + '건) / 전화 ' + csatData.phoneAvg + '점(' + csatData.phoneCount + '건) / 당일응대율 ' + dailyRate + '%');
 
     var inputs = {
       week              : weekLabel,
       chatAvg           : csatData.chatAvg,
+      chatCount         : csatData.chatCount,
       chat1             : csatData.chat1,
       chat2             : csatData.chat2,
       chat3             : csatData.chat3,
       chat4             : csatData.chat4,
       chat5             : csatData.chat5,
       phoneAvg          : csatData.phoneAvg,
+      phoneCount        : csatData.phoneCount,
       phone1            : csatData.phone1,
       phone2            : csatData.phone2,
       phone3            : csatData.phone3,
@@ -991,8 +993,8 @@ function generateWeeklyReport() {
 // 매핑결과 시트에서 지정 주차의 CSAT 자동 계산 (채팅/전화 분리)
 function readCsatFromSheet_(ss, weekLabel) {
   var result = {
-    chatAvg: 0, chat1: 0, chat2: 0, chat3: 0, chat4: 0, chat5: 0,
-    phoneAvg: 0, phone1: 0, phone2: 0, phone3: 0, phone4: 0, phone5: 0,
+    chatAvg: 0, chatCount: 0, chat1: 0, chat2: 0, chat3: 0, chat4: 0, chat5: 0,
+    phoneAvg: 0, phoneCount: 0, phone1: 0, phone2: 0, phone3: 0, phone4: 0, phone5: 0,
   };
 
   var mappedSh = ss.getSheetByName(SHEET_MAPPED);
@@ -1032,8 +1034,10 @@ function readCsatFromSheet_(ss, weekLabel) {
     }
   });
 
-  result.chatAvg  = chatCount  > 0 ? Math.round(chatSum  / chatCount  * 10) / 10 : 0;
-  result.phoneAvg = phoneCount > 0 ? Math.round(phoneSum / phoneCount * 10) / 10 : 0;
+  result.chatAvg   = chatCount  > 0 ? Math.round(chatSum  / chatCount  * 10) / 10 : 0;
+  result.chatCount = chatCount;
+  result.phoneAvg   = phoneCount > 0 ? Math.round(phoneSum / phoneCount * 10) / 10 : 0;
+  result.phoneCount = phoneCount;
   result.chat1  = chatDist[0];  result.chat2  = chatDist[1];  result.chat3  = chatDist[2];
   result.chat4  = chatDist[3];  result.chat5  = chatDist[4];
   result.phone1 = phoneDist[0]; result.phone2 = phoneDist[1]; result.phone3 = phoneDist[2];
@@ -1057,6 +1061,28 @@ function readDailyResponseFromSheet_(ss, weekLabel) {
   }
   Logger.log('[당일응대율] ' + weekLabel + ' — 해당 주차 없음 (0%)');
   return 0;
+}
+
+// 매핑결과 시트에서 가장 최신 주차 레이블 반환
+function getLatestWeekFromMapped_(ss) {
+  var sh = ss.getSheetByName(SHEET_MAPPED);
+  if (!sh) return null;
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return null;
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+  var dateCol = headers.indexOf('상담일시');
+  if (dateCol < 0) return null;
+
+  var latestDate = null;
+  data.slice(1).forEach(function(row) {
+    var d = toDate(row[dateCol]);
+    if (!d || isNaN(d.getTime())) return;
+    if (!latestDate || d > latestDate) latestDate = d;
+  });
+
+  var label = latestDate ? toWeekLabel(latestDate) : null;
+  Logger.log('[주차 결정] 매핑결과 최신 주차: ' + label);
+  return label;
 }
 
 function readOkrTargets_(ss) {
@@ -1097,10 +1123,16 @@ function buildReportBlocks_(inputs, okr, reportData, config) {
   var thisWeek = reportData.weeks[0];
   var lastWeek = reportData.weeks[1];
 
+  // ── 데이터 기간 표시
+  blocks.push(paragraph_('📅 데이터 기간: ' + inputs.week + ' (이번 주) / ' + lastWeek.week + ' (지난 주)'));
+
   // ── OKR 지표
   blocks.push(heading2_('📊 OKR 지표'));
 
-  var combinedCsat  = ((inputs.chatAvg + inputs.phoneAvg) / 2).toFixed(2);
+  var totalCsatCount = (inputs.chatCount || 0) + (inputs.phoneCount || 0);
+  var combinedCsat   = totalCsatCount > 0
+    ? (((inputs.chatAvg * (inputs.chatCount || 0)) + (inputs.phoneAvg * (inputs.phoneCount || 0))) / totalCsatCount).toFixed(2)
+    : '0.00';
   var recontact     = thisWeek.recontact_rate || 0;
   var prevRecontact = lastWeek.recontact_rate || 0;
   var totalVoc      = thisWeek.total_voc      || 0;
