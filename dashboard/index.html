@@ -2355,6 +2355,33 @@ function renderCsatTab(curWeek) {
           <div style="font-size:9px;color:var(--muted);margin-top:4px">응답 ${matched.filter(r=>r[m.key]!==null).length}건 · 5점 만점</div>
         </div>`;
     });
+
+    // 해결율 카드 — 가장 오른쪽 ('네, 해결됐어요' ÷ 전체 해결여부 응답)
+    const resolveResp = matched.map(r => (r['해결여부'] || '').trim()).filter(Boolean);
+    const solvedCnt   = resolveResp.filter(t => t.includes('네, 해결됐어요')).length;
+    const resolveRate = resolveResp.length ? (solvedCnt / resolveResp.length * 100) : null;
+    const prevResolveResp = prevMatched.map(r => (r['해결여부'] || '').trim()).filter(Boolean);
+    const prevResolveRate = (prevWeek && prevResolveResp.length)
+      ? (prevResolveResp.filter(t => t.includes('네, 해결됐어요')).length / prevResolveResp.length * 100)
+      : null;
+    const resolvePct = resolveRate !== null ? resolveRate.toFixed(1) : null;
+    let resolveChgHtml = '<div class="chg flat">—</div>';
+    if (resolveRate !== null && prevResolveRate !== null) {
+      const diff = (resolveRate - prevResolveRate).toFixed(1);
+      const cls  = diff > 0 ? 'up' : diff < 0 ? 'dn' : 'flat';
+      const sign = diff > 0 ? '+' : '';
+      resolveChgHtml = `<div class="chg ${cls}">${sign}${diff}%p 전주 대비</div>`;
+    }
+    kpiRow.innerHTML += `
+      <div class="kpi" style="--c:#a78bfa">
+        <div class="lbl">해결율</div>
+        <div class="val" style="font-size:28px">${resolvePct !== null ? resolvePct + '%' : '—'}</div>
+        ${resolveChgHtml}
+        <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
+          <div style="width:${resolveRate !== null ? resolveRate.toFixed(0) : 0}%;height:100%;background:#a78bfa;border-radius:2px;transition:width .4s"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);margin-top:4px">해결여부 ${resolveResp.length}건 중 ${solvedCnt}건 완전 해결</div>
+      </div>`;
   }
 
   // ③ 주차별 트렌드 차트
@@ -2394,9 +2421,21 @@ function renderCsatTab(curWeek) {
     return tot > 0 ? parseFloat((wMatched.length / tot * 100).toFixed(1)) : null;
   });
   const validRates = respRateData.filter(v => v !== null);
-  // 최대값의 150%, 10 단위 올림, 최소 20% 확보
-  const yRightMax = validRates.length
-    ? Math.max(20, Math.ceil(Math.max(...validRates) * 1.5 / 10) * 10)
+
+  // 해결율 데이터 계산 ('네, 해결됐어요' ÷ 전체 해결여부 응답 × 100)
+  const resolveRateData = trendLabels.map(w => {
+    const resp = getCsatMatchedForWeek(w)
+      .map(r => (r['해결여부'] || '').trim())
+      .filter(Boolean);
+    if (!resp.length) return null;
+    const solved = resp.filter(t => t.includes('네, 해결됐어요')).length;
+    return parseFloat((solved / resp.length * 100).toFixed(1));
+  });
+  const validResolve = resolveRateData.filter(v => v !== null);
+
+  // 최대값의 150%, 10 단위 올림, 최소 20%·최대 100% — 응답률·해결율 함께 고려
+  const yRightMax = (validRates.length || validResolve.length)
+    ? Math.min(100, Math.max(20, Math.ceil(Math.max(...validRates, ...validResolve) * 1.5 / 10) * 10))
     : 100;
 
   // 응답률 dataset 추가
@@ -2405,6 +2444,21 @@ function renderCsatTab(curWeek) {
     data: respRateData,
     borderColor: '#fbbf24',
     backgroundColor: '#fbbf2422',
+    borderWidth: 2,
+    borderDash: [5, 3],
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.3,
+    spanGaps: true,
+    yAxisID: 'yRight',
+  });
+
+  // 해결율 dataset 추가 (오른쪽 Y축)
+  datasets.push({
+    label: '해결율',
+    data: resolveRateData,
+    borderColor: '#a78bfa',
+    backgroundColor: '#a78bfa22',
     borderWidth: 2,
     borderDash: [5, 3],
     pointRadius: 4,
@@ -2462,6 +2516,10 @@ function renderCsatTab(curWeek) {
         `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
           <span style="width:12px;height:2px;background:#fbbf24;display:inline-block;border-radius:1px;border-top:2px dashed #fbbf24"></span>
           응답률
+        </span>`,
+        `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
+          <span style="width:12px;height:2px;background:#a78bfa;display:inline-block;border-radius:1px;border-top:2px dashed #a78bfa"></span>
+          해결율
         </span>`,
       ].join('');
     }
