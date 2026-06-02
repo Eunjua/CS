@@ -775,6 +775,37 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     </div>
   </div>
 
+  <!-- 섹션2.5: 평균 대기시간 추이 (최근 4주) -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-head">
+      <div>
+        <div class="card-title">평균 대기시간 추이</div>
+        <div class="card-sub" id="avgWaitTrendSub">최근 4주 · 설문 응답 고객 기준 · 통합/채팅/전화</div>
+      </div>
+      <!-- 상단 토글: 전체 / 해결여부별 / 적절성별 -->
+      <div id="avgWaitModeBtns" style="display:flex;gap:6px;align-items:center">
+        <button class="awt-mode-btn active" data-mode="all" onclick="setAvgWaitMode('all')"
+          style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+          background:var(--surface2);color:var(--text);border:1px solid var(--border);font-family:'Noto Sans KR',sans-serif">전체</button>
+        <button class="awt-mode-btn" data-mode="resolve" onclick="setAvgWaitMode('resolve')"
+          style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+          background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-family:'Noto Sans KR',sans-serif">해결여부별</button>
+        <button class="awt-mode-btn" data-mode="wait" onclick="setAvgWaitMode('wait')"
+          style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+          background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-family:'Noto Sans KR',sans-serif">적절성별</button>
+      </div>
+    </div>
+    <!-- 하위 토글: 카테고리 (해결여부별/적절성별 선택 시 표시) -->
+    <div id="avgWaitCatBtns" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px"></div>
+    <!-- 범례 -->
+    <div style="display:flex;gap:14px;align-items:center;font-size:10px;color:var(--muted);margin-bottom:6px">
+      <span style="display:flex;gap:5px;align-items:center"><span style="width:16px;height:2px;background:#e2e8f0;display:inline-block"></span>통합</span>
+      <span style="display:flex;gap:5px;align-items:center"><span style="width:16px;height:2px;background:#60a5fa;display:inline-block"></span>채팅</span>
+      <span style="display:flex;gap:5px;align-items:center"><span style="width:16px;height:2px;background:#f472b6;display:inline-block"></span>전화</span>
+    </div>
+    <div class="chart-wrap" style="height:220px"><canvas id="cAvgWaitTrend"></canvas></div>
+  </div>
+
   <!-- 섹션3: 상관분석 + 태그별 만족도 히트맵 — 2열 -->
   <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px">
 
@@ -2160,6 +2191,11 @@ let cCsatTrendChart = null;
 let cCsatChannelChart = null;
 let cChatWaitSatChart = null;
 let cPhoneWaitSatChart = null;
+let cAvgWaitTrendChart = null;
+// ── 평균 대기시간 추이 상태
+let avgWaitMode    = 'all';    // 'all' | 'resolve' | 'wait'
+let avgWaitCatIdx  = 0;        // 선택된 카테고리 인덱스
+let avgWaitCurWeek = null;     // 마지막 렌더 주차 (토글 시 재렌더용)
 // ── 히트맵 상태
 let hmSortLow      = true;
 let hmSelectedTag  = null;
@@ -2808,10 +2844,141 @@ function renderCsatTab(curWeek) {
   cChatWaitSatChart = chatWaitRef.chart;
   cPhoneWaitSatChart = phoneWaitRef.chart;
 
+  // ⑥-b 평균 대기시간 추이 (최근 4주)
+  avgWaitCurWeek = curWeek;
+  renderAvgWaitTrend(curWeek);
+
   // ⑦ 자유의견 (AI 분석 결과 또는 기본 리스트)
   renderCsatComments(curWeek);
 
 
+}
+
+// ── 평균 대기시간 추이 (최근 4주, 설문 응답 고객 기준)
+const AWT_RESOLVE_OPTS = [
+  { text: '✅ 네, 해결됐어요',        label: '✅ 해결',  color: '#6ee7b7' },
+  { text: '🔶 일부만 해결됐어요',      label: '🔶 일부',  color: '#fbbf24' },
+  { text: '❌ 아직 해결되지 않았어요', label: '❌ 미해결', color: '#f87171' },
+];
+const AWT_WAIT_OPTS = [
+  { text: '😊 빠르게 연결됐어요',          label: '😊 빠름', color: '#6ee7b7' },
+  { text: '🙂 조금 기다렸지만 괜찮았어요', label: '🙂 보통', color: '#fbbf24' },
+  { text: '😞 너무 오래 기다렸어요',       label: '😞 오래', color: '#f87171' },
+];
+
+function setAvgWaitMode(mode) {
+  avgWaitMode = mode;
+  avgWaitCatIdx = 0;
+  document.querySelectorAll('.awt-mode-btn').forEach(b => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('active', on);
+    b.style.color = on ? 'var(--text)' : 'var(--muted)';
+    b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+  });
+  if (avgWaitCurWeek) renderAvgWaitTrend(avgWaitCurWeek);
+}
+
+function setAvgWaitCat(idx) {
+  avgWaitCatIdx = idx;
+  if (avgWaitCurWeek) renderAvgWaitTrend(avgWaitCurWeek);
+}
+
+function renderAvgWaitTrend(curWeek) {
+  const ctx = document.getElementById('cAvgWaitTrend');
+  if (!ctx) return;
+
+  // 최근 4주 (선택 주차 포함, 과거→현재)
+  const curIdx = weeks.indexOf(curWeek);
+  const baseIdx = curIdx < 0 ? weeks.length - 1 : curIdx;
+  const recentWeeks = weeks.slice(Math.max(0, baseIdx - 3), baseIdx + 1);
+
+  // 상담ID → {waitMin, ch}
+  const idToWait = {};
+  allData.forEach(row => {
+    if (row.id && row.waitMin !== null) idToWait[String(row.id)] = { waitMin: row.waitMin, ch: row.ch };
+  });
+
+  // 카테고리 버튼 렌더 + 현재 필터 결정
+  const catBtns = document.getElementById('avgWaitCatBtns');
+  let catFilter = null, opts = null, fieldKey = null;
+  if (avgWaitMode === 'resolve') { opts = AWT_RESOLVE_OPTS; fieldKey = '해결여부'; }
+  else if (avgWaitMode === 'wait') { opts = AWT_WAIT_OPTS; fieldKey = '대기시간'; }
+
+  if (opts) {
+    if (avgWaitCatIdx >= opts.length) avgWaitCatIdx = 0;
+    if (catBtns) {
+      catBtns.style.display = 'flex';
+      catBtns.innerHTML = opts.map((o, i) => {
+        const on = i === avgWaitCatIdx;
+        return `<button onclick="setAvgWaitCat(${i})"
+          style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
+          background:${on ? o.color + '22' : 'var(--surface2)'};color:${on ? o.color : 'var(--muted)'};
+          border:1px solid ${on ? o.color + '88' : 'var(--border)'};font-family:'Noto Sans KR',sans-serif">${o.label}</button>`;
+      }).join('');
+    }
+    const sel = opts[avgWaitCatIdx];
+    const core = sel.text.replace(/[\u{1F300}-\u{1FFFF}✅🔶❌😊🙂😞]/gu, '').trim();
+    catFilter = v => { const t = (v || '').trim(); return t === sel.text || t.includes(core); };
+  } else if (catBtns) {
+    catBtns.style.display = 'none';
+    catBtns.innerHTML = '';
+  }
+
+  const avgMin = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+
+  // 주차별 통합/채팅/전화 평균 대기분
+  const series = { 통합: [], 채팅: [], 전화: [] };
+  const counts = [];
+  recentWeeks.forEach(wk => {
+    let rows = getCsatMatchedForWeek(wk);
+    if (catFilter) rows = rows.filter(r => catFilter(r[fieldKey]));
+    const waits = rows.map(r => idToWait[r._id]).filter(Boolean);
+    const all   = waits.map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+    const chat  = waits.filter(w => w.ch === '채팅').map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+    const phone = waits.filter(w => w.ch === '전화').map(w => w.waitMin).filter(v => v !== null && !isNaN(v));
+    series.통합.push(avgMin(all));
+    series.채팅.push(avgMin(chat));
+    series.전화.push(avgMin(phone));
+    counts.push({ 통합: all.length, 채팅: chat.length, 전화: phone.length });
+  });
+
+  const sub = document.getElementById('avgWaitTrendSub');
+  if (sub) {
+    const modeLabel = avgWaitMode === 'resolve' ? `해결여부별 · ${AWT_RESOLVE_OPTS[avgWaitCatIdx].label}`
+      : avgWaitMode === 'wait' ? `적절성별 · ${AWT_WAIT_OPTS[avgWaitCatIdx].label}`
+      : '전체';
+    sub.textContent = `최근 ${recentWeeks.length}주 · 설문 응답 고객 기준 · ${modeLabel}`;
+  }
+
+  const mkDataset = (label, color) => ({
+    label, data: series[label], borderColor: color,
+    backgroundColor: color, pointBackgroundColor: color,
+    borderWidth: 2, pointRadius: 3, tension: .3, spanGaps: true,
+  });
+
+  if (cAvgWaitTrendChart) cAvgWaitTrendChart.destroy();
+  cAvgWaitTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: recentWeeks,
+      datasets: [ mkDataset('통합', '#e2e8f0'), mkDataset('채팅', '#60a5fa'), mkDataset('전화', '#f472b6') ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const v = c.parsed.y;
+          const cnt = counts[c.dataIndex]?.[c.dataset.label] ?? 0;
+          return ` ${c.dataset.label}: ${v === null || v === undefined ? '—' : v + '분'} (${cnt}건)`;
+        }}}
+      },
+      scales: {
+        x: { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
+        y: { beginAtZero: true, ticks: { color: '#6b6b80', font: { size: 10 }, callback: v => v + '분' }, grid: { color: '#2a2a38' } }
+      }
+    }
+  });
 }
 
 // ── 히트맵 유틸
