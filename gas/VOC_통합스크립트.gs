@@ -773,6 +773,7 @@ function calcDailyResponseData_(ss) {
   var iRepliedAt     = headers.indexOf('repliedAt');
   var iState         = headers.indexOf('state');
   var iTags          = headers.indexOf('tags');
+  var iAssignee      = headers.indexOf('assigneeId');
 
   function sameDay(a, b) {
     if (!a || !b) return false;
@@ -808,9 +809,13 @@ function calcDailyResponseData_(ss) {
     var repliedAt       = iRepliedAt     >= 0 ? row[iRepliedAt]     : '';
     var state           = iState         >= 0 ? String(row[iState] || '').trim().toLowerCase() : '';
     var tags            = iTags          >= 0 ? String(row[iTags]  || '').trim() : '';
+    var assigneeId      = iAssignee      >= 0 ? String(row[iAssignee] || '').trim() : '';
     var tagList         = tags.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
 
+    // missed 상담은 임의로 담당자를 배정한 경우라도 무조건 제외
     if (state === 'missed') return;
+    // 담당자(assigneeId)가 없으면 고객이 스스로 종료한 것으로 보고 집계에서 제외
+    if (!assigneeId) return;
     if (tagList.length === 1 && tagList[0] === '운영시간외전화인입') return;
 
     var hasReplied  = repliedAt && String(repliedAt).trim() !== '';
