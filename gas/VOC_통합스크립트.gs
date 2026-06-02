@@ -24,9 +24,9 @@
 //    - 매주 월요일 데이터 등록 후 메뉴 → 📤 GitHub 업데이트 클릭
 //
 //  [Notion 주간 리포트]
-//    - 메뉴 → 📝 VOC 주간 리포트 생성 클릭 (수동 입력 불필요, 시트에서 자동 계산)
-//    - CSAT: 매핑결과 시트 최신 주차 자동 계산 (채팅/전화 분리)
-//    - 당일응대율: 상담데이터 시트 최신 주차 자동 계산
+//    - 메뉴 → 📝 VOC 주간 리포트 생성 클릭 → 팝업에서 주차 입력
+//      · 비우고 확인 = 가장 최신 주차 / "05/25" 입력 = 그 주차로 생성
+//      · CSAT·당일응대율·태그 모두 선택한 주차 기준으로 자동 계산 (채팅/전화 분리)
 //    - 필요한 시트: OKR목표, 설정
 //    - 필요한 스크립트 속성: NOTION_TOKEN
 //      (Apps Script 에디터 > 프로젝트 설정 > 스크립트 속성 > NOTION_TOKEN 추가)
@@ -110,6 +110,8 @@ function onOpen() {
     .addItem('📤 GitHub 업데이트', 'pushToGitHub')
     .addSeparator()
     .addItem('📝 VOC 주간 리포트 생성', 'generateWeeklyReport')
+    .addSeparator()
+    .addItem('🔍 CSAT 집계 진단', 'diagnoseCsat_')
     .addToUi();
 }
 
@@ -117,6 +119,16 @@ function onOpen() {
 // ============================================================
 //  SCRIPT 1: CSAT 매핑
 // ============================================================
+
+// 설문 시트에서 상담 id 컬럼 찾기 (폼 질문 제목이 'id' 또는 '제목 없는 질문'일 수 있음)
+function findFormIdCol_(fHead) {
+  var candidates = ['id', '제목 없는 질문'];
+  for (var i = 0; i < candidates.length; i++) {
+    var idx = fHead.indexOf(candidates[i]);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
 
 function csatToScore(val) {
     const map = {
@@ -166,7 +178,7 @@ function runCsatMapping() {
   const fHead = formData[0].map(h => String(h).trim());
   const fIdx  = {
     timestamp : fHead.indexOf(FORM_HEADERS.timestamp),
-    id        : fHead.indexOf(FORM_HEADERS.id),
+    id        : findFormIdCol_(fHead),
     csat      : fHead.indexOf(FORM_HEADERS.csat),
     kindness  : fHead.indexOf(FORM_HEADERS.kindness),
     resolved  : fHead.indexOf(FORM_HEADERS.resolved),
@@ -569,7 +581,7 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
 
   if (mappedValues.length > 1) {
     const mHeaders    = mappedValues[0].map(h => String(h).trim());
-    const mDateCol    = mHeaders.indexOf('상담일시');
+    const mDateCol    = mHeaders.indexOf('week');
     const mCsatCol    = mHeaders.indexOf('만족도');
     const mCommentCol = mHeaders.indexOf('자유의견');
 
@@ -947,7 +959,49 @@ function generateWeeklyReport() {
       return;
     }
 
-    var weekLabel = getLatestWeekFromMapped_(ss) || reportData.weeks[0].week;
+    var ui = SpreadsheetApp.getUi();
+
+    // ── 주차 선택 팝업 (비우면 가장 최신 주차)
+    var resp = ui.prompt(
+      'VOC 주간 리포트',
+      '어느 주차를 만들까요?\n예: 05/25  (비우면 가장 최신 주차로 생성)',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (resp.getSelectedButton() !== ui.Button.OK) {
+      Logger.log('사용자 취소');
+      return;
+    }
+    var rawWeek = String(resp.getResponseText() || '').trim();
+
+    // ── 주차 라벨 결정
+    var weekLabel;
+    if (!rawWeek) {
+      weekLabel = getLatestWeekFromMapped_(ss) || reportData.weeks[0].week;
+    } else {
+      weekLabel = resolveWeekLabel_(rawWeek);
+      if (!weekLabel) {
+        ui.alert('❓ "' + rawWeek + '" 주차를 알아듣지 못했어요.\n예: 05/25 또는 05/25~05/31 형식으로 입력해주세요.');
+        return;
+      }
+    }
+
+    // ── report.json에서 선택 주차 위치 찾기 (그 주 = 이번 주, 바로 앞 주 = 전주)
+    var weekIdx = -1;
+    for (var wi = 0; wi < reportData.weeks.length; wi++) {
+      if (reportData.weeks[wi].week === weekLabel) { weekIdx = wi; break; }
+    }
+    if (weekIdx < 0) {
+      ui.alert(
+        '❌ "' + weekLabel + '" 주차 데이터가 없어요.\n\n가능한 주차:\n' +
+        reportData.weeks.map(function(w) { return '· ' + w.week; }).join('\n')
+      );
+      return;
+    }
+    if (weekIdx + 1 >= reportData.weeks.length) {
+      ui.alert('❌ "' + weekLabel + '"의 전주 데이터가 없어 비교 리포트를 만들 수 없어요.\n한 주 뒤 주차를 선택해주세요.');
+      return;
+    }
+
     var csatData  = readCsatFromSheet_(ss, weekLabel);
     var dailyRate = readDailyResponseFromSheet_(ss, weekLabel);
     Logger.log('[1/4] 완료 — 주차: ' + weekLabel);
@@ -970,13 +1024,16 @@ function generateWeeklyReport() {
       phone4            : csatData.phone4,
       phone5            : csatData.phone5,
       dailyResponseRate : dailyRate,
+      tagCsat           : csatData.tagCsat || [],      // CSAT 원인 분석용
+      lowComments       : csatData.lowComments || [],
+      subQuestions      : csatData.subQuestions || [],
     };
 
     Logger.log('[3/4] 리포트 블록 빌드');
-    var blocks = buildReportBlocks_(inputs, okr, reportData, config);
+    var blocks = buildReportBlocks_(inputs, okr, reportData, config, weekIdx);
 
     Logger.log('[4/4] Notion 업로드');
-    var title = buildTitle_();
+    var title = buildTitle_(weekLabel);
     var url   = uploadToNotion_(title, blocks, config);
 
     Logger.log('✅ 완료: ' + url);
@@ -990,11 +1047,125 @@ function generateWeeklyReport() {
   }
 }
 
+// 🔍 CSAT 집계 진단 — 매핑결과 시트가 제대로 읽히는지 한눈에 확인
+function diagnoseCsat_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var sh = ss.getSheetByName(SHEET_MAPPED);
+  if (!sh) { ui.alert('❌ 매핑결과 시트를 찾을 수 없어요.'); return; }
+
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) { ui.alert('❌ 매핑결과 시트에 데이터가 없어요.'); return; }
+
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+  var dateCol = headers.indexOf('week');
+  var csatCol = headers.indexOf('만족도');
+  var chCol   = headers.indexOf('mediumType');
+
+  if (dateCol < 0 || csatCol < 0) {
+    ui.alert('❌ 컬럼을 못 찾았어요.\n필요: week, 만족도\n실제 헤더: ' + headers.join(', '));
+    return;
+  }
+
+  var total = data.length - 1;
+  var parseFail = 0;       // 날짜 변환 실패 행
+  var csatInvalid = 0;     // 만족도가 1~5 숫자가 아닌 행
+  var weekCount = {};      // 주차별 (만족도 유효) 응답 수
+  var samples = [];        // 처음 3개 원본→주차 변환 샘플
+
+  for (var i = 1; i < data.length; i++) {
+    var raw  = data[i][dateCol];
+    var wl   = toWeekLabel(raw);
+    var sc   = parseFloat(data[i][csatCol]);
+    var okSc = !isNaN(sc) && sc >= 1 && sc <= 5;
+
+    if (i <= 3) samples.push('· "' + raw + '" → ' + (wl || '(변환실패)'));
+    if (!wl) parseFail++;
+    if (!okSc) csatInvalid++;
+    if (wl && okSc) weekCount[wl] = (weekCount[wl] || 0) + 1;
+  }
+
+  var lastVals = data[data.length - 1].map(function(v) { return String(v); });
+  var lines = [
+    '📋 매핑결과 진단',
+    '──────────────',
+    '컬럼(' + headers.length + '개): ' + headers.join(' | '),
+    '마지막 행: ' + lastVals.join(' | '),
+    '',
+    '총 ' + total + '행',
+    '날짜(week) 변환 실패: ' + parseFail + '행',
+    '만족도 숫자 아님: ' + csatInvalid + '행',
+    'mediumType 컬럼: ' + (chCol >= 0 ? '있음' : '없음'),
+    '',
+    '날짜 변환 샘플:',
+    samples.join('\n'),
+    '',
+    '주차별 CSAT 응답 수:'
+  ];
+  var ws = Object.keys(weekCount).sort();
+  if (ws.length === 0) lines.push('  (집계된 응답 없음)');
+  else ws.forEach(function(w) { lines.push('  ' + w + ' : ' + weekCount[w] + '건'); });
+
+  // ── 설문 응답 시트(응답일 기준) + 상담데이터 조인 가능 여부 ──
+  var formSh = ss.getSheetByName(SHEET_FORM);
+  var rawSh  = ss.getSheetByName(SHEET_RAW);
+  if (formSh && rawSh) {
+    var fData = formSh.getDataRange().getValues();
+    var rData = rawSh.getDataRange().getValues();
+    if (fData.length > 1 && rData.length > 1) {
+      var fHead = fData[0].map(function(h) { return String(h).trim(); });
+      var rHead = rData[0].map(function(h) { return String(h).trim(); });
+      var fTs = fHead.indexOf(FORM_HEADERS.timestamp);
+      var fId = findFormIdCol_(fHead);
+      var rId = rHead.indexOf(RAW_HEADERS.id);
+
+      if (fTs >= 0 && fId >= 0 && rId >= 0) {
+        var rawIds = {};
+        for (var r = 1; r < rData.length; r++) {
+          var rid = String(rData[r][rId]).trim();
+          if (rid) rawIds[rid] = true;
+        }
+
+        var formWeek = {};   // 응답일 기준 주차별 응답 수
+        var noMatch  = {};   // 그 중 상담데이터에 id 없는 수 (조인 실패)
+        for (var f = 1; f < fData.length; f++) {
+          var fwl = toWeekLabel(fData[f][fTs]);
+          if (!fwl) continue;
+          formWeek[fwl] = (formWeek[fwl] || 0) + 1;
+          var fid = String(fData[f][fId] || '').trim();
+          if (!fid || !rawIds[fid]) noMatch[fwl] = (noMatch[fwl] || 0) + 1;
+        }
+
+        lines.push('');
+        lines.push('── 설문응답(응답일 기준) / 상담데이터 미매칭 ──');
+        var fws = Object.keys(formWeek).sort();
+        if (fws.length === 0) lines.push('  (응답 없음)');
+        else fws.forEach(function(w) {
+          lines.push('  ' + w + ' : 응답 ' + formWeek[w] + '건 · 미매칭 ' + (noMatch[w] || 0) + '건');
+        });
+      } else {
+        lines.push('');
+        lines.push('── 컬럼 인식 실패 (찾는 이름과 실제 헤더가 다름) ──');
+        lines.push('찾는 이름 → 타임스탬프:"' + FORM_HEADERS.timestamp + '"(위치 ' + fTs + ') / id(위치 ' + fId + ') / 상담데이터 id(위치 ' + rId + ')');
+        lines.push('');
+        lines.push('설문 시트 실제 헤더:');
+        lines.push('  ' + fHead.join(' | '));
+        lines.push('');
+        lines.push('상담데이터 실제 헤더:');
+        lines.push('  ' + rHead.join(' | '));
+      }
+    }
+  }
+
+  ui.alert(lines.join('\n'));
+}
+
 // 매핑결과 시트에서 지정 주차의 CSAT 자동 계산 (채팅/전화 분리)
 function readCsatFromSheet_(ss, weekLabel) {
   var result = {
     chatAvg: 0, chatCount: 0, chat1: 0, chat2: 0, chat3: 0, chat4: 0, chat5: 0,
     phoneAvg: 0, phoneCount: 0, phone1: 0, phone2: 0, phone3: 0, phone4: 0, phone5: 0,
+    tagCsat: [], lowComments: [], subQuestions: [],   // ← CSAT 원인 분석용: 태그별 평균 / 저점수 코멘트 / 세부 문항(친절·해결·속도)
   };
 
   var mappedSh = ss.getSheetByName(SHEET_MAPPED);
@@ -1007,16 +1178,31 @@ function readCsatFromSheet_(ss, weekLabel) {
   var dateCol    = headers.indexOf('week');
   var csatCol    = headers.indexOf('만족도');
   var channelCol = headers.indexOf('mediumType');
+  // 태그·코멘트 컬럼은 시트마다 한글/영문이 섞여 있어 후보를 순서대로 시도
+  var tagCol     = firstHeaderIdx_(headers, ['태그', 'tags']);
+  var commentCol = firstHeaderIdx_(headers, ['자유의견', 'comment', '코멘트']);
+  // 세부 문항: 친절도=점수(1~5), 해결여부·대기시간=텍스트(긍/중/부정)
+  var subDefs = [
+    { key: '친절도',   type: 'score', col: firstHeaderIdx_(headers, ['친절도', 'kindness']) },
+    { key: '해결여부', type: 'text',  col: firstHeaderIdx_(headers, ['해결여부', 'resolved']) },
+    { key: '대기시간', type: 'text',  col: firstHeaderIdx_(headers, ['대기시간', 'waiting']) },
+  ];
 
   if (dateCol < 0 || csatCol < 0) {
     Logger.log('⚠️ 매핑결과 헤더 인식 실패 (week, 만족도 컬럼 필요) — 실제 헤더: ' + headers.join(', '));
     return result;
   }
+  if (tagCol < 0) Logger.log('ℹ️ 매핑결과에 태그 컬럼(태그/tags)이 없어 CSAT 원인 분석은 건너뜁니다.');
 
   var chatSum = 0, chatCount = 0;
   var phoneSum = 0, phoneCount = 0;
   var chatDist  = [0, 0, 0, 0, 0];
   var phoneDist = [0, 0, 0, 0, 0];
+  var tagAgg     = {};   // { 태그명: { sum, count } }
+  var lowComments = [];  // { tag, score, comment } — 3점 이하
+  var subAgg = { '친절도': { neg: 0, total: 0, dist: {} },
+                 '해결여부': { neg: 0, total: 0, dist: {} },
+                 '대기시간': { neg: 0, total: 0, dist: {} } };
 
   data.slice(1).forEach(function(row) {
     if (toWeekLabel(row[dateCol]) !== weekLabel) return;
@@ -1032,6 +1218,39 @@ function readCsatFromSheet_(ss, weekLabel) {
     } else {
       chatSum  += score; chatCount++;  chatDist[bucket]++;
     }
+
+    // ── 태그별 만족도 누적 (한 행에 태그가 여러 개면 각 태그에 점수 귀속)
+    if (tagCol >= 0) {
+      var rawTags = String(row[tagCol] || '').trim();
+      var tagList = rawTags ? rawTags.split(',').map(function(t) { return t.trim(); }).filter(Boolean) : [];
+      tagList.forEach(function(t) {
+        if (!tagAgg[t]) tagAgg[t] = { sum: 0, count: 0 };
+        tagAgg[t].sum   += score;
+        tagAgg[t].count += 1;
+      });
+
+      // ── 저점수(3점 이하) 코멘트 수집
+      if (score <= 3 && commentCol >= 0) {
+        var c = String(row[commentCol] || '').trim();
+        if (c) lowComments.push({ tag: tagList[0] || '(태그없음)', score: score, comment: c });
+      }
+    }
+
+    // ── 세부 문항(친절/해결/속도) 부정 응답 누적
+    subDefs.forEach(function(d) {
+      if (d.col < 0) return;
+      var raw = String(row[d.col] || '').trim();
+      if (!raw) return;
+      var a = subAgg[d.key];
+      a.total++;
+      a.dist[raw] = (a.dist[raw] || 0) + 1;
+      if (d.type === 'score') {
+        var sc = parseFloat(raw);
+        if (!isNaN(sc) && sc <= 3) a.neg++;       // 친절도 3점 이하 = 부정
+      } else if (isNegativeAnswer_(raw)) {
+        a.neg++;                                   // 해결/대기 부정 응답
+      }
+    });
   });
 
   result.chatAvg   = chatCount  > 0 ? Math.round(chatSum  / chatCount  * 10) / 10 : 0;
@@ -1043,8 +1262,43 @@ function readCsatFromSheet_(ss, weekLabel) {
   result.phone1 = phoneDist[0]; result.phone2 = phoneDist[1]; result.phone3 = phoneDist[2];
   result.phone4 = phoneDist[3]; result.phone5 = phoneDist[4];
 
-  Logger.log('[CSAT] ' + weekLabel + ' — 채팅 ' + chatCount + '건(' + result.chatAvg + '점) / 전화 ' + phoneCount + '건(' + result.phoneAvg + '점)');
+  // ── 태그별 평균 만족도 정리 (평균 낮은 순)
+  result.tagCsat = Object.keys(tagAgg).map(function(t) {
+    return { tag: t, avg: Math.round(tagAgg[t].sum / tagAgg[t].count * 10) / 10, count: tagAgg[t].count };
+  }).sort(function(a, b) { return a.avg - b.avg; });
+  result.lowComments = lowComments;
+
+  // ── 세부 문항: 부정 응답 비율(%) 정리 + 분포 로그(자동 판정 검증용)
+  result.subQuestions = subDefs.filter(function(d) { return d.col >= 0; }).map(function(d) {
+    var a     = subAgg[d.key];
+    var ratio = a.total > 0 ? Math.round(a.neg / a.total * 1000) / 10 : 0;
+    Logger.log('[세부문항] ' + d.key + ' 부정비율 ' + ratio + '% (부정 ' + a.neg + '/' + a.total + ') 분포: ' + JSON.stringify(a.dist));
+    return { key: d.key, type: d.type, negRatio: ratio, neg: a.neg, total: a.total };
+  });
+
+  Logger.log('[CSAT] ' + weekLabel + ' — 채팅 ' + chatCount + '건(' + result.chatAvg + '점) / 전화 ' + phoneCount + '건(' + result.phoneAvg + '점) / 태그 ' + result.tagCsat.length + '종 / 저점수 코멘트 ' + lowComments.length + '건');
   return result;
+}
+
+// 헤더 후보 중 처음 발견되는 컬럼 인덱스 (없으면 -1)
+function firstHeaderIdx_(headers, candidates) {
+  for (var i = 0; i < candidates.length; i++) {
+    var idx = headers.indexOf(candidates[i]);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+// 3단계(긍/중/부정) 텍스트 답변에서 '부정' 판정 (키워드 기반 — 분포 로그로 검증 가능)
+function isNegativeAnswer_(val) {
+  var s = String(val).trim();
+  if (!s) return false;
+  var NEG = ['않', '아니', '못', '미해결', '별로', '불만', '불친절',
+             '길었', '오래', '느', '부적', '부족', '그렇지', '매우 불', '전혀'];
+  for (var i = 0; i < NEG.length; i++) {
+    if (s.indexOf(NEG[i]) >= 0) return true;
+  }
+  return false;
 }
 
 // 상담데이터 시트에서 지정 주차의 당일응대율(%) 반환
@@ -1085,6 +1339,27 @@ function getLatestWeekFromMapped_(ss) {
   return label;
 }
 
+// 사용자가 팝업에 입력한 주차 텍스트를 report.json 주차 라벨(MM/DD~MM/DD)로 변환
+//   허용 형식: "05/25", "5/25", "05/25~05/31", "2026-05-25", "2026. 5. 25" 등
+//   (어느 형식이든 그 날이 속한 월~일 주차로 변환됨)
+function resolveWeekLabel_(raw) {
+  raw = String(raw || '').trim();
+  if (!raw) return null;
+
+  // "05/25~05/31"처럼 범위로 적은 경우 → 시작일만 사용
+  var left = raw.split('~')[0].trim();
+
+  // "MM/DD" 또는 "M/D" (연도 없음) → 올해 기준으로 해석
+  var md = left.match(/^(\d{1,2})\s*[\/.\-]\s*(\d{1,2})$/);
+  if (md) {
+    var y = new Date().getFullYear();
+    return toWeekLabel(new Date(y, Number(md[1]) - 1, Number(md[2])));
+  }
+
+  // 그 외(ISO, "2026. 5. 25" 등)는 기존 날짜 파서에 위임
+  return toWeekLabel(left);
+}
+
 function readOkrTargets_(ss) {
   var s = ss.getSheetByName('OKR목표');
   return {
@@ -1118,10 +1393,11 @@ function readReportJson_() {
 }
 
 
-function buildReportBlocks_(inputs, okr, reportData, config) {
+function buildReportBlocks_(inputs, okr, reportData, config, weekIdx) {
+  weekIdx = weekIdx || 0;
   var blocks   = [];
-  var thisWeek = reportData.weeks[0];
-  var lastWeek = reportData.weeks[1];
+  var thisWeek = reportData.weeks[weekIdx];
+  var lastWeek = reportData.weeks[weekIdx + 1];
 
   // ── 데이터 기간 표시
   blocks.push(paragraph_('📅 데이터 기간: ' + inputs.week + ' (이번 주) / ' + lastWeek.week + ' (지난 주)'));
@@ -1159,28 +1435,11 @@ function buildReportBlocks_(inputs, okr, reportData, config) {
   blocks.push(paragraph_('전화 CSAT — 평균 ' + inputs.phoneAvg + '점'));
   blocks.push(paragraph_('점수 분포: ' + formatDist_(inputs, 'phone')));
 
-  // ── 카테고리별 현황
-  blocks.push(heading2_('🏷️ 카테고리별 현황'));
-  var catSummary = buildCategorySummary_(thisWeek.tags, lastWeek.tags);
-  blocks.push(tableBlock_(
-    ['카테고리', '이번 주', '지난 주', '증감'],
-    catSummary.map(function(r) {
-      var sign = r.change >= 0 ? '+' : '';
-      return [r.category, r.curr + '건', r.prev + '건', sign + r.change];
-    })
-  ));
+  // ── CSAT 원인 분석 (하이브리드: 숫자=코드 집계, 해석=Claude AI)
+  concatInto_(blocks, buildCsatCauseBlocks_(inputs, okr));
 
-  // ── TOP 5 태그
-  blocks.push(heading2_('🔝 TOP 5 태그 (이번 주)'));
-  ['아카데미', '기관', '요양'].forEach(function(cat) {
-    var top5 = getTop5_(thisWeek.tags, cat);
-    if (top5.length === 0) return;
-    blocks.push(heading3_('▶ ' + cat));
-    blocks.push(tableBlock_(
-      ['순위', '태그', '건수'],
-      top5.map(function(item, i) { return [i + 1, item.tag, item.count + '건']; })
-    ));
-  });
+  // ── 카테고리 집계 (표는 제거했지만 아래 '한 줄 인사이트'가 사용하므로 계산은 유지)
+  var catSummary = buildCategorySummary_(thisWeek.tags, lastWeek.tags);
 
   // ── 이상 태그 알림
   blocks.push(heading2_('⚠️ 이상 태그 알림'));
@@ -1205,6 +1464,179 @@ function buildReportBlocks_(inputs, okr, reportData, config) {
   }
 
   return blocks;
+}
+
+// ── CSAT 원인 분석 설정
+var CSAT_CAUSE_MIN_COUNT = 3;                       // 소표본 noise 방지: 최소 응답 건수
+var CLAUDE_MODEL         = 'claude-haiku-4-5-20251001'; // 비용 우선. 품질 우선 시 'claude-sonnet-4-6'
+
+// CSAT 원인 분석 섹션 블록 생성
+//  - 숫자(태그 주범·세부문항 주범)=코드 집계, 해석(불릿 5줄)=Claude AI, 실패 시 규칙 기반 폴백
+//  - 구성: AI 해석 불릿 / 🏷️ 태그별 만족도 표 / 🎯 세부 문항 주범 표 / 💬 주범 태그 코멘트 목록
+function buildCsatCauseBlocks_(inputs, okr) {
+  var blocks  = [];
+  var target  = Number(okr && okr.csatTarget) || 4.2;
+  var tagCsat = inputs.tagCsat || [];
+  var subQ    = inputs.subQuestions || [];
+
+  blocks.push(heading2_('💬 CSAT 원인 분석'));
+
+  if (!tagCsat.length && !subQ.length) {
+    blocks.push(paragraph_('이번 주는 태그·세부 문항이 연결된 만족도 응답이 부족해 원인 분석을 생략합니다.'));
+    return blocks;
+  }
+
+  // ── 주범 산출 (코드)
+  var culprits   = pickCsatCulprits_(tagCsat, target, CSAT_CAUSE_MIN_COUNT);
+  var topCulprit = culprits.length ? culprits[0] : null;       // 주범 태그
+  var subCulprit = pickSubCulprit_(subQ);                       // 주범 세부 요소
+
+  // ── 주범 태그 저점수 코멘트 (최대 3개)
+  var related = (inputs.lowComments || []).filter(function(c) {
+    return topCulprit && c.tag === topCulprit.tag;
+  }).slice(0, 3);
+  if (related.length === 0) related = (inputs.lowComments || []).slice(0, 3);
+
+  // ── 해석 불릿: AI 우선, 실패 시 규칙 기반
+  var insightLines;
+  if (topCulprit || subCulprit) {
+    try {
+      insightLines = toBullets_(callClaudeForCsatInsight_(topCulprit, subCulprit, related, target));
+    } catch (e) {
+      Logger.log('⚠️ Claude 호출 실패 → 규칙 기반 폴백: ' + e.message);
+      insightLines = ruleBasedCsatInsight_(topCulprit, subCulprit, target);
+    }
+  } else {
+    insightLines = ['이번 주 목표(' + target + '점) 미달 태그(최소 ' + CSAT_CAUSE_MIN_COUNT + '건 이상)는 없습니다. 만족도 양호.'];
+  }
+  insightLines.forEach(function(line) { blocks.push(bullet_(line)); });
+
+  // ── 🏷️ 태그별 만족도 표 (평균 낮은 순, 최대 10개) — 목표 미달 🔴
+  if (tagCsat.length) {
+    blocks.push(heading3_('🏷️ 태그별 만족도 (낮은 순)'));
+    blocks.push(tableBlock_(
+      ['태그 / 카테고리', '평균 만족도', '응답 건수'],
+      tagCsat.slice(0, 10).map(function(t) {
+        return [(t.avg < target ? '🔴 ' : '') + t.tag, t.avg + '점', t.count + '건'];
+      })
+    ));
+  }
+
+  // ── 🎯 세부 문항 주범 표 (친절/해결/속도)
+  if (subQ.length) {
+    blocks.push(heading3_('🎯 세부 문항 (친절·해결·속도)'));
+    blocks.push(tableBlock_(
+      ['요소', '부정 응답 비율', '응답 수'],
+      subQ.map(function(s) {
+        var isWorst = subCulprit && s.key === subCulprit.key;
+        var label   = s.key === '친절도' ? '친절도(3점 이하)' : s.key + '(부정)';
+        return [(isWorst ? '🔴 ' : '') + label, s.negRatio + '%', s.total + '건'];
+      })
+    ));
+  }
+
+  // ── 💬 주범 태그 저점수 코멘트 목록
+  if (related.length) {
+    var who = topCulprit ? '주범 태그 "' + topCulprit.tag + '"' : '저점수';
+    blocks.push(heading3_('💬 ' + who + ' 코멘트'));
+    related.forEach(function(c) {
+      blocks.push(bullet_('(' + c.score + '점) ' + c.comment));
+    });
+  }
+
+  return blocks;
+}
+
+// 주범 태그 추출: 최소 건수 이상 + 목표 미달 (tagCsat는 이미 평균 오름차순)
+function pickCsatCulprits_(tagCsat, target, minCount) {
+  return (tagCsat || []).filter(function(t) {
+    return t.count >= minCount && t.avg < target;
+  });
+}
+
+// 주범 세부 요소: 부정 응답 비율이 가장 높은 항목 (응답 있고 비율>0)
+function pickSubCulprit_(subQ) {
+  var worst = null;
+  (subQ || []).forEach(function(s) {
+    if (s.total > 0 && s.negRatio > 0 && (!worst || s.negRatio > worst.negRatio)) worst = s;
+  });
+  return worst;
+}
+
+// AI 텍스트를 불릿 줄 배열로 (선두 기호 제거, 빈 줄 제외, 최대 5줄)
+function toBullets_(text) {
+  var lines = String(text).split('\n').map(function(l) {
+    return l.replace(/^\s*[-•*·▪◦]\s*/, '').trim();
+  }).filter(function(l) { return l.length > 0; });
+  return lines.slice(0, 5);
+}
+
+// 규칙 기반 해석 불릿 (AI 폴백용)
+function ruleBasedCsatInsight_(culprit, subCulprit, target) {
+  var lines = [];
+  if (culprit) {
+    lines.push('만족도 하락 주범 태그: "' + culprit.tag + '" (평균 ' + culprit.avg + '점 / ' + culprit.count + '건, 목표 ' + target + '점 미달)');
+  }
+  if (subCulprit) {
+    var lbl = subCulprit.key === '친절도' ? '친절도 3점 이하' : subCulprit.key + ' 부정';
+    lines.push('세부 문항 주범: ' + subCulprit.key + ' (' + lbl + ' ' + subCulprit.negRatio + '%)');
+  }
+  if (!lines.length) lines.push('이번 주 만족도는 양호합니다.');
+  return lines;
+}
+
+// Claude API로 5줄 이내 불릿 해석 생성 (UrlFetchApp)
+function callClaudeForCsatInsight_(culprit, subCulprit, related, target) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 스크립트 속성이 없습니다.');
+
+  var tagText = culprit
+    ? culprit.tag + ' (평균 ' + culprit.avg + '점, ' + culprit.count + '건, 목표 ' + target + '점 미달)'
+    : '(목표 미달 태그 없음)';
+  var subText = subCulprit
+    ? subCulprit.key + ' (부정 응답 비율 ' + subCulprit.negRatio + '%)'
+    : '(두드러진 세부 문항 없음)';
+  var commentText = related.length
+    ? related.map(function(c) { return '- (' + c.score + '점) ' + c.comment; }).join('\n')
+    : '(코멘트 없음)';
+
+  var prompt =
+    '너는 고객경험(CX) 분석가야. 아래는 이번 주 VOC 만족도(CSAT) 데이터야.\n\n' +
+    '주범 태그: ' + tagText + '\n' +
+    '주범 세부 문항(친절/해결/속도 중): ' + subText + '\n' +
+    '저점수 고객 코멘트:\n' + commentText + '\n\n' +
+    '요구사항:\n' +
+    '1) 주범 태그의 만족도가 왜 낮은지, 세부 문항(친절/해결/속도) 주범과 엮어 해석.\n' +
+    '2) 주목할 고객 코멘트 1~2개를 짧게 인용.\n' +
+    '3) 한국어로, 가독성 좋게 각 줄을 "- "로 시작하는 불릿으로, 전체 5줄 이내.\n' +
+    '4) 권장 액션·제안은 쓰지 말 것.\n' +
+    '불릿만 바로 출력해.';
+
+  var payload = {
+    model: CLAUDE_MODEL,
+    max_tokens: 600,
+    messages: [{ role: 'user', content: prompt }]
+  };
+
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var code = res.getResponseCode();
+  var body = res.getContentText();
+  if (code !== 200) throw new Error('Claude API ' + code + ': ' + body);
+
+  var json = JSON.parse(body);
+  var text = (json.content && json.content[0] && json.content[0].text) ? json.content[0].text.trim() : '';
+  if (!text) throw new Error('Claude 응답에서 텍스트를 찾지 못함: ' + body);
+  return text;
 }
 
 function buildCategorySummary_(thisTags, lastTags) {
@@ -1283,8 +1715,22 @@ function uploadToNotion_(title, blocks, config) {
   return body.url || ('https://notion.so/' + body.id.replace(/-/g, ''));
 }
 
-function buildTitle_() {
-  var tz  = 'Asia/Seoul';
+function buildTitle_(weekLabel) {
+  var tz = 'Asia/Seoul';
+
+  // 선택한 주차가 있으면 "25년 5월 25일~31일 VOC 리포트" 형식
+  if (weekLabel && weekLabel.indexOf('~') >= 0) {
+    var yy    = Utilities.formatDate(new Date(), tz, 'yy');
+    var parts = weekLabel.split('~');
+    var s     = parts[0].split('/'); // [MM, DD]
+    var e     = parts[1].split('/');
+    var endStr = (s[0] === e[0])
+      ? Number(e[1]) + '일'
+      : Number(e[0]) + '월 ' + Number(e[1]) + '일';   // 월을 넘기는 주차
+    return yy + '년 ' + Number(s[0]) + '월 ' + Number(s[1]) + '일~' + endStr + ' VOC 리포트';
+  }
+
+  // 폴백: 오늘 날짜
   var now = new Date();
   return Utilities.formatDate(now, tz, 'yy') + '년 '
        + Utilities.formatDate(now, tz, 'M') + '월 '
