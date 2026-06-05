@@ -202,7 +202,9 @@ function updateDeliveryKorean() {
     }
 
     // key → 송장번호가 빈 정산집계 행 인덱스 "배열" (합배송 대응)
-    function buildSummaryMap(keyFn) {
+    // allowedTypes: 포함할 자격증 종류 배열 (미지정 시 현재 type만)
+    function buildSummaryMap(keyFn, allowedTypes) {
+      var allowed = allowedTypes || [type];
       var map = {};
       for (var r = 1; r < summaryData.length; r++) {
         var sRow   = summaryData[r];
@@ -211,7 +213,7 @@ function updateDeliveryKorean() {
 
         var certName = sRow[sIdx['자격증']] ? sRow[sIdx['자격증']].toString().trim() : '';
         var certType = getCertType(certName);
-        if (certType !== type) continue;
+        if (allowed.indexOf(certType) === -1) continue;
 
         var key = keyFn(sRow);
         if (key) {
@@ -283,13 +285,14 @@ function updateDeliveryKorean() {
         return;
       }
 
+      // NCS 배송리스트에 한국검정평가원 자격증 송장이 섞여 오므로 둘 다 후보로 포함
       var ncsMap = buildSummaryMap(function(sRow) {
         var sDate   = normalizeDate(sRow[sIdx['배송일']]);
         var sName   = sRow[sIdx['이름']] ? sRow[sIdx['이름']].toString().trim() : '';
         var sPhone7 = normalizePhone(sRow[sIdx['전화번호']]).substring(0, 7);
         if (!sDate || !sName || sPhone7.length !== 7) return null;
         return sDate + '|' + sName + '|' + sPhone7;
-      });
+      }, ['ncs', 'korean']);
 
       var ncsData = deliveryNcsSheet.getDataRange().getValues();
       var ncsRows = ncsData.slice(1).filter(function(row) {
@@ -505,6 +508,7 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
     sheet.getRange(rowNum, 8).setValue(remark);
   });
 
+  highlightDuplicates(sheet, rows.length + 1, 2, 4);   // 이름(2)+전화번호(4) 같으면 이름열 색칠
   sheet.autoResizeColumns(1, headers.length);
   moveFileTofolder(newSS.getId(), folder);
 }
