@@ -938,9 +938,14 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
   <div class="week-bar" id="ptWeekBar">
     <span class="week-label">주차</span>
     <select class="week-select" id="ptWeekSelect" onchange="selectPtWeek(this.value)"></select>
+    <span id="ptRangeSelectWrap" style="display:none;align-items:center;gap:5px">
+      <select class="week-select" id="ptRangeStartSelect" onchange="selectPtRangeStart(this.value)"></select>
+      <span style="font-size:11px;color:var(--muted)">~</span>
+      <select class="week-select" id="ptRangeEndSelect" onchange="selectPtRangeEnd(this.value)"></select>
+    </span>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-left:10px">
       <input type="checkbox" id="ptCumulativeToggle" onchange="togglePtCumulative(this.checked)" style="cursor:pointer">
-      최근 4주 누적
+      기간 누적
     </label>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-left:10px">
       <input type="checkbox" id="ptHideSmallToggle" onchange="togglePtHideSmall(this.checked)" style="cursor:pointer">
@@ -1133,7 +1138,9 @@ let ttStatus = '전체';
 let ttSort   = 'total';
 let selectedWeek = 'all';
 let ptSelectedWeek = null;   // 문제 태그 진단 탭: 선택 주차
-let ptCumulative = false;    // false=주차 1주 기준, true=최근 4주 누적
+let ptCumulative = false;    // false=주차 1주 기준, true=기간 누적
+let ptRangeStart = null;     // 누적 모드: 시작 주차(week 라벨)
+let ptRangeEnd   = null;     // 누적 모드: 끝 주차(week 라벨)
 let ptHideSmall = false;     // true=만족도 응답 3건 이하 태그 숨김
 
 const SHEET_URL_KEY = 'voc_sheet_url';   // Apps Script 웹앱 URL
@@ -3520,7 +3527,26 @@ function buildPtWeekBar() {
     ptSelectedWeek = weeks[weeks.length - 1] || null;
   }
   sel.value = ptSelectedWeek;
-  sel.disabled = ptCumulative;
+
+  // 시작/끝 주차 드롭다운 채우기 (기본값: 최근 4주)
+  const startSel = document.getElementById('ptRangeStartSelect');
+  const endSel   = document.getElementById('ptRangeEndSelect');
+  if (startSel && endSel) {
+    const optsHtml = [...weeks].reverse()
+      .map(w => `<option value="${w}">${w.replace(/^20\d\d-/, '')}</option>`).join('');
+    startSel.innerHTML = optsHtml;
+    endSel.innerHTML   = optsHtml;
+    if (!ptRangeStart || !weeks.includes(ptRangeStart)) ptRangeStart = weeks[Math.max(0, weeks.length - 4)] || null;
+    if (!ptRangeEnd   || !weeks.includes(ptRangeEnd))   ptRangeEnd   = weeks[weeks.length - 1] || null;
+    startSel.value = ptRangeStart;
+    endSel.value   = ptRangeEnd;
+  }
+
+  // 모드별 표시: 단일(주차 1주) vs 누적(시작~끝 범위)
+  sel.style.display = ptCumulative ? 'none' : '';
+  const rangeWrap = document.getElementById('ptRangeSelectWrap');
+  if (rangeWrap) rangeWrap.style.display = ptCumulative ? 'inline-flex' : 'none';
+
   const tgl = document.getElementById('ptCumulativeToggle');
   if (tgl) tgl.checked = ptCumulative;
   const tgl2 = document.getElementById('ptHideSmallToggle');
@@ -3540,7 +3566,32 @@ function selectPtWeek(w) {
 function togglePtCumulative(checked) {
   ptCumulative = checked;
   const sel = document.getElementById('ptWeekSelect');
-  if (sel) sel.disabled = checked;
+  if (sel) sel.style.display = checked ? 'none' : '';
+  const rangeWrap = document.getElementById('ptRangeSelectWrap');
+  if (rangeWrap) rangeWrap.style.display = checked ? 'inline-flex' : 'none';
+  renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
+}
+
+// 누적 모드: 시작 주차가 끝보다 뒤면 자동 보정(맞바꿈)
+function ptFixRangeOrder() {
+  if (weeks.indexOf(ptRangeStart) > weeks.indexOf(ptRangeEnd)) {
+    const t = ptRangeStart; ptRangeStart = ptRangeEnd; ptRangeEnd = t;
+    const startSel = document.getElementById('ptRangeStartSelect');
+    const endSel   = document.getElementById('ptRangeEndSelect');
+    if (startSel) startSel.value = ptRangeStart;
+    if (endSel)   endSel.value   = ptRangeEnd;
+  }
+}
+
+function selectPtRangeStart(w) {
+  ptRangeStart = w;
+  ptFixRangeOrder();
+  renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
+}
+
+function selectPtRangeEnd(w) {
+  ptRangeEnd = w;
+  ptFixRangeOrder();
   renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
 }
 
@@ -3597,10 +3648,16 @@ function renderProblemTagTab(curWeek) {
   const curIdx = weeks.indexOf(curWeek);
   let weekList, prevList;
   if (ptCumulative) {
-    weekList = weeks.slice(Math.max(0, weeks.length - 4));  // 최근 4주(가용 만큼)
+    // 선택한 시작~끝 주차 범위(없으면 최근 4주)
+    let si = weeks.indexOf(ptRangeStart);
+    let ei = weeks.indexOf(ptRangeEnd);
+    if (si < 0 || ei < 0) { si = Math.max(0, weeks.length - 4); ei = weeks.length - 1; }
+    if (si > ei) { const t = si; si = ei; ei = t; }
+    weekList = weeks.slice(si, ei + 1);
     prevList = null;
-    if (infoEl) infoEl.textContent = `최근 ${weekList.length}주 누적`;
-    if (subEl)  subEl.textContent  = `최근 ${weekList.length}주 누적 · 만족도 50% · 해결율 40% · 대기 10%`;
+    const rangeLabel = `${(weeks[si]||'').replace(/^20\d\d-/,'')}~${(weeks[ei]||'').replace(/^20\d\d-/,'')}`;
+    if (infoEl) infoEl.textContent = `${rangeLabel} 누적 (${weekList.length}주)`;
+    if (subEl)  subEl.textContent  = `${weekList.length}주 누적 · 만족도 50% · 해결율 40% · 대기 10%`;
   } else {
     weekList = [curWeek];
     prevList = curIdx > 0 ? [weeks[curIdx - 1]] : null;
