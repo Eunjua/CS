@@ -3663,7 +3663,8 @@ function renderProblemTagTab(curWeek) {
         arrow = `<span title="전주 데이터 부족" style="color:var(--muted);font-size:9px">—</span>`;
       }
       const warn = lowSample
-        ? `<span title="응답 표본이 적어 신뢰도가 낮아요 (만족도 ${m.n}건)" style="color:#fbbf24;font-size:9px;margin-left:5px">⚠n=${m.n}</span>` : '';
+        ? `<span title="응답 표본이 적어 신뢰도가 낮아요" style="color:#fbbf24;font-size:9px;margin-left:4px">⚠</span>` : '';
+      const cntBadge = `<span style="font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;margin-left:4px">(${m.n}건)</span>`;
       const prefix = (VALID_PREFIXES.find(p => it.tag.startsWith(p)) || '').replace('_','');
       const detail = m.comments.length
         ? m.comments.map(c => `<div style="font-size:10px;color:var(--text);padding:7px 12px;background:var(--surface2);border-left:2px solid #f87171;border-radius:0 5px 5px 0;margin:4px 0 4px 30px;line-height:1.6">${c.text} <span style="color:#f87171;font-family:'DM Mono',monospace;font-size:9px">${c.score}점</span></div>`).join('')
@@ -3672,7 +3673,7 @@ function renderProblemTagTab(curWeek) {
       <div onclick="ptToggleDetail(${i})"
         style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid var(--border);cursor:pointer;font-size:11px">
         <span style="width:22px;font-family:'DM Mono',monospace;color:var(--muted);font-weight:700">${i+1}</span>
-        <span style="flex:1;color:var(--text)"><span style="font-size:8px;color:var(--muted)">${prefix} </span>${it.tag.replace(/^[^_]+_/,'')}${warn}</span>
+        <span style="flex:1;color:var(--text)"><span style="font-size:8px;color:var(--muted)">${prefix} </span>${it.tag.replace(/^[^_]+_/,'')}${cntBadge}${warn}</span>
         <span style="width:118px;display:flex;align-items:center;gap:5px;justify-content:flex-end">
           ${arrow}
           <span style="font-family:'DM Mono',monospace;font-weight:700;color:${barColor};width:22px;text-align:right">${it.score.toFixed(0)}</span>
