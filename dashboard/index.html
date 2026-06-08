@@ -334,7 +334,7 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <button class="tab-btn" id="tabAgent" onclick="switchTab('agent')">👤 상담사</button>
       <button class="tab-btn" id="tabRecontact" onclick="switchTab('recontact')">🔁 재문의 고객</button>
       <button class="tab-btn" id="tabCsat" onclick="switchTab('csat')">⭐ 고객 만족도</button>
-      <button class="tab-btn" id="tabNps" onclick="switchTab('nps')">📈 NPS</button>
+      <button class="tab-btn" id="tabProblemTag" onclick="switchTab('problemtag')">🚨 문제 태그</button>
       <button class="tab-btn" id="tabTagTrend" onclick="switchTab('tagtrend')">🏷️ 태그 추이</button>
       <button class="tab-btn" id="tabDailyResponse" onclick="switchTab('dailyresponse')">📅 당일 응대율</button>
     </div>
@@ -933,89 +933,30 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
 
 </div>
 
-<!-- NPS TAB -->
-<div class="dash" id="npsTab" style="display:none">
-  <div class="week-bar" id="npsWeekBar">
+<!-- PROBLEM TAG TAB -->
+<div class="dash" id="problemTagTab" style="display:none">
+  <div class="week-bar" id="ptWeekBar">
     <span class="week-label">주차</span>
-    <select class="week-select" id="npsWeekSelect" onchange="selectNpsWeek(this.value)"></select>
-    <span class="week-range-info" id="npsWeekRangeInfo"></span>
-  </div>
-
-  <!-- 서비스 필터 -->
-  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <span style="font-size:10px;color:var(--muted)">서비스</span>
-    <button id="npsFilter_전체" onclick="toggleNpsFilter('전체')"
-      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
-      background:var(--surface2);color:var(--text);border:1px solid var(--accent);
-      font-family:'Noto Sans KR',sans-serif">전체</button>
-    <button id="npsFilter_요양" onclick="toggleNpsFilter('요양')"
-      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
-      background:var(--surface2);color:var(--muted);border:1px solid var(--border);
-      font-family:'Noto Sans KR',sans-serif">요양</button>
-    <button id="npsFilter_기관" onclick="toggleNpsFilter('기관')"
-      style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;
-      background:var(--surface2);color:var(--muted);border:1px solid var(--border);
-      font-family:'Noto Sans KR',sans-serif">기관</button>
-  </div>
-
-  <div class="kpi-row" id="npsKpiRow"></div>
-
-  <div class="card">
-    <div class="card-head">
-      <div>
-        <div class="card-title">주차별 NPS 추이</div>
-        <div class="card-sub">최근 4주 · NPS 점수(좌) / 평균 평점(우)</div>
-      </div>
-    </div>
-    <div class="chart-wrap" style="height:220px"><canvas id="cNpsTrend"></canvas></div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">응답자 분류</div>
-          <div class="card-sub" id="npsDistSub">선택 주차 기준</div>
-        </div>
-      </div>
-      <div id="npsDistBar" style="padding:4px 0"></div>
-    </div>
-    <div class="card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">점수 분포</div>
-          <div class="card-sub">선택 주차 · 0~10점</div>
-        </div>
-      </div>
-      <div class="chart-wrap" style="height:160px"><canvas id="cNpsScoreDist"></canvas></div>
-    </div>
+    <select class="week-select" id="ptWeekSelect" onchange="selectPtWeek(this.value)"></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-left:10px">
+      <input type="checkbox" id="ptCumulativeToggle" onchange="togglePtCumulative(this.checked)" style="cursor:pointer">
+      최근 4주 누적
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-left:10px">
+      <input type="checkbox" id="ptHideSmallToggle" onchange="togglePtHideSmall(this.checked)" style="cursor:pointer">
+      응답 3건 이하 숨기기
+    </label>
+    <span class="week-range-info" id="ptWeekRangeInfo"></span>
   </div>
 
   <div class="card">
     <div class="card-head">
       <div>
-        <div class="card-title">NPS 의견</div>
-        <div class="card-sub" id="npsCommentSub">추천자 / 중립 / 비추천 분류</div>
-      </div>
-      <div style="display:flex;gap:4px;align-items:center">
-        <button id="npsComment_pro" onclick="switchNpsCommentTab('pro')"
-          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
-          border-radius:6px;cursor:pointer;background:var(--accent);color:#0f0f13;border:none">
-          😊 추천
-        </button>
-        <button id="npsComment_pas" onclick="switchNpsCommentTab('pas')"
-          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
-          border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid var(--border)">
-          😐 중립
-        </button>
-        <button id="npsComment_det" onclick="switchNpsCommentTab('det')"
-          style="padding:5px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
-          border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);border:1px solid var(--border)">
-          😞 비추천
-        </button>
+        <div class="card-title">🚨 문제 태그 진단</div>
+        <div class="card-sub" id="ptSubLabel">만족도 50% · 해결율 40% · 대기 10% 가중합 문제점수 순</div>
       </div>
     </div>
-    <div id="npsCommentList" style="margin-top:8px;max-height:480px;overflow-y:auto;padding-right:4px"></div>
+    <div id="ptList" style="margin-top:4px"></div>
   </div>
 </div>
 
@@ -1181,9 +1122,7 @@ let cVol, cCh, cIssue;
 let allData  = [];   // { id, week, sortKey, ch, tags, state, assigneeId }
 let csatData = {};   // { [상담id]: { 만족도, 친절도, 해결여부, 대기시간, 자유의견 } }
 let csatSendData = []; // 만족도 발송건 시트 [{날짜, 건수}]
-let npsData  = [];   // { id, userId, date, week, sortKey, score, reason, type }
 let weeks = [];
-let npsWeeks = [];
 let reportWeeks = [];   // report.json 주차별 태그 집계 [{week, tags:{...}}]
 let dailyResponseData = { weeks: [] }; // 당일 응대율 [{week, total, responded, missed, rate, total_excl, rate_excl, days:[]}]
 let drSelectedWeek = null;
@@ -1193,11 +1132,9 @@ let cDailyResponseWeekChart = null;
 let ttStatus = '전체';
 let ttSort   = 'total';
 let selectedWeek = 'all';
-let npsSelectedWeek = null;
-let cNpsTrendChart = null;
-let cNpsScoreDistChart = null;
-let npsCommentMode = 'pro';
-let npsSourceFilter = '전체';  // '전체' | '요양' | '기관'
+let ptSelectedWeek = null;   // 문제 태그 진단 탭: 선택 주차
+let ptCumulative = false;    // false=주차 1주 기준, true=최근 4주 누적
+let ptHideSmall = false;     // true=만족도 응답 3건 이하 태그 숨김
 
 const SHEET_URL_KEY = 'voc_sheet_url';   // Apps Script 웹앱 URL
 const LAST_SYNC_KEY = 'voc_last_sync';
@@ -1344,14 +1281,14 @@ function switchTab(tab) {
   document.getElementById('tabAgent').classList.toggle('active', tab === 'agent');
   document.getElementById('tabRecontact').classList.toggle('active', tab === 'recontact');
   document.getElementById('tabCsat').classList.toggle('active', tab === 'csat');
-  document.getElementById('tabNps').classList.toggle('active', tab === 'nps');
+  document.getElementById('tabProblemTag').classList.toggle('active', tab === 'problemtag');
   document.getElementById('tabTagTrend').classList.toggle('active', tab === 'tagtrend');
   document.getElementById('tabDailyResponse').classList.toggle('active', tab === 'dailyresponse');
-  ['dash','agentTab','recontactTab','csatTab','npsTab','tagTrendTab','dailyResponseTab'].forEach(id => {
+  ['dash','agentTab','recontactTab','csatTab','problemTagTab','tagTrendTab','dailyResponseTab'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'nps' ? 'npsTab' : tab === 'tagtrend' ? 'tagTrendTab' : tab === 'dailyresponse' ? 'dailyResponseTab' : null;
+  const activeId = tab === 'dash' ? 'dash' : tab === 'agent' ? 'agentTab' : tab === 'recontact' ? 'recontactTab' : tab === 'csat' ? 'csatTab' : tab === 'problemtag' ? 'problemTagTab' : tab === 'tagtrend' ? 'tagTrendTab' : tab === 'dailyresponse' ? 'dailyResponseTab' : null;
   if (activeId && allData.length) {
     const activeEl = document.getElementById(activeId);
     if (activeEl) activeEl.style.display = 'block';
@@ -1371,8 +1308,9 @@ function switchTab(tab) {
     if (s) s.value = selectedWeek;
     renderCsatTab(selectedWeek);
   }
-  if (tab === 'nps') {
-    renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
+  if (tab === 'problemtag') {
+    buildPtWeekBar();
+    renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
   }
   if (tab === 'tagtrend') {
     renderTagTrendTab();
@@ -1567,20 +1505,6 @@ async function loadFromSheet(isAuto) {
       const rawSend = await fetchSheet(baseUrl, 'csat_send');
       if (rawSend.length) csatSendData = rawSend;
     } catch(e3) { console.warn('발송건 로드 실패(무시):', e3.message); }
-
-    // ④ NPS 요양 + 기관 (실패해도 무시)
-    npsData = [];
-    try {
-      const [raw3a, raw3b] = await Promise.allSettled([
-        fetchSheet(baseUrl, 'nps_요양'),
-        fetchSheet(baseUrl, 'nps_기관'),
-      ]);
-      if (raw3a.status === 'fulfilled' && raw3a.value.length)
-        npsData.push(...parseNpsRows(raw3a.value, '요양'));
-      if (raw3b.status === 'fulfilled' && raw3b.value.length)
-        npsData.push(...parseNpsRows(raw3b.value, '기관'));
-      if (npsData.length) { rebuildNpsWeeks(); buildNpsWeekBar(); }
-    } catch(e3) { console.warn('NPS 로드 실패(무시):', e3.message); }
 
     // ⑤ 주차별 태그 집계 (실패해도 무시)
     reportWeeks = [];
@@ -3574,293 +3498,194 @@ function updateFilterBadge() {
   }
 }
 
-// ── NPS
+// ── 문제 태그 진단
+// 데이터: allData(태그 보유) ⋈ csatData(by id) — 히트맵 hmTagWeekScore와 동일 조인 패턴
+const PT_WEIGHTS    = { 만족도: 0.5, 해결율: 0.4, 대기: 0.1 };  // 가중치(합 1.0)
+const PT_MIN_SAMPLE = 5;                  // 표본 경고 임계 (만족도 응답 수)
+const PT_RESOLVE_OK = '네, 해결됐어요';     // 해결 긍정(✅) 핵심 텍스트 — CSAT 탭과 동일
+const PT_WAIT_NEG   = '너무 오래 기다렸어요'; // 대기 부정(😞) 핵심 텍스트 — CSAT 탭과 동일
+const ptClamp = v => Math.max(0, Math.min(100, v));
 
-function getFilteredNpsData() {
-  if (npsSourceFilter === '전체') return npsData;
-  return npsData.filter(r => r.source === npsSourceFilter);
-}
-
-function toggleNpsFilter(source) {
-  npsSourceFilter = source;
-  ['전체','요양','기관'].forEach(s => {
-    const btn = document.getElementById('npsFilter_' + s);
-    if (!btn) return;
-    const isActive = s === source;
-    btn.style.borderColor = isActive ? 'var(--accent)' : 'var(--border)';
-    btn.style.color       = isActive ? 'var(--text)'   : 'var(--muted)';
-  });
-  npsSelectedWeek = null;
-  rebuildNpsWeeks();
-  buildNpsWeekBar();
-  renderNpsTab(npsSelectedWeek || npsWeeks[npsWeeks.length - 1]);
-}
-
-function parseKoreanDate(s) {
-  // "2026. 2. 5" 또는 ISO 형식 모두 처리
-  const m = String(s).match(/(\d{4})[.\s/-]+(\d{1,2})[.\s/-]+(\d{1,2})/);
-  if (!m) return null;
-  const d = new Date(+m[1], +m[2] - 1, +m[3]);
-  return isNaN(d) ? null : d;
-}
-
-function parseNpsRows(rows, source) {
-  return rows.map(r => {
-    const dtRaw = r['created_at'] || r['createdAt'] || '';
-    const d = parseKoreanDate(dtRaw) || (dtRaw ? new Date(dtRaw) : null);
-    const wo = d && !isNaN(d) ? getWeekLabel(d) : null;
-    if (!wo) return null;
-    const score = parseInt(r['score']);
-    if (isNaN(score)) return null;
-    return {
-      id:     r['id'] || null,
-      userId: r['user_id'] || r['business_id'] || null,
-      date: d, week: wo.label, sortKey: wo.sortKey,
-      score,
-      source: source || '전체',   // '요양' | '기관'
-      type: score >= 9 ? 'pro' : score >= 7 ? 'pas' : 'det',
-      reason: (r['reason'] || '').trim(),
-    };
-  }).filter(Boolean);
-}
-
-function rebuildNpsWeeks() {
-  const map = {};
-  getFilteredNpsData().forEach(r => { map[r.week] = r.sortKey; });
-  npsWeeks = Object.keys(map).sort((a, b) => map[a].localeCompare(map[b]));
-}
-
-function buildNpsWeekBar() {
-  const sel = document.getElementById('npsWeekSelect');
+function buildPtWeekBar() {
+  const sel = document.getElementById('ptWeekSelect');
   if (!sel) return;
   sel.innerHTML = '';
-  [...npsWeeks].reverse().forEach(w => {
+  [...weeks].reverse().forEach(w => {
     const opt = document.createElement('option');
     opt.value = w;
-    opt.textContent = `${w}  (${npsData.filter(r => r.week === w).length}건)`;
+    opt.textContent = w.replace(/^20\d\d-/, '');
     sel.appendChild(opt);
   });
-  if (!npsSelectedWeek || !npsWeeks.includes(npsSelectedWeek)) {
-    npsSelectedWeek = npsWeeks[npsWeeks.length - 1] || null;
+  if (!ptSelectedWeek || !weeks.includes(ptSelectedWeek)) {
+    ptSelectedWeek = weeks[weeks.length - 1] || null;
   }
-  sel.value = npsSelectedWeek;
-  const info = document.getElementById('npsWeekRangeInfo');
-  if (info) info.textContent = `총 ${npsWeeks.length}주차 데이터`;
+  sel.value = ptSelectedWeek;
+  sel.disabled = ptCumulative;
+  const tgl = document.getElementById('ptCumulativeToggle');
+  if (tgl) tgl.checked = ptCumulative;
+  const tgl2 = document.getElementById('ptHideSmallToggle');
+  if (tgl2) tgl2.checked = ptHideSmall;
 }
 
-function selectNpsWeek(w) {
-  npsSelectedWeek = w;
-  const info = document.getElementById('npsWeekRangeInfo');
-  if (info) {
-    const idx = npsWeeks.indexOf(w);
-    const range = npsWeeks.slice(Math.max(0, idx - 3), idx + 1);
-    info.textContent = `${range.length}주 표시 중`;
-  }
-  renderNpsTab(w);
+function togglePtHideSmall(checked) {
+  ptHideSmall = checked;
+  renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
 }
 
-function calcNpsForWeek(w) {
-  const base = getFilteredNpsData();
-  const data = w ? base.filter(r => r.week === w) : base;
-  const total = data.length;
-  if (!total) return { nps: null, proRate: 0, pasRate: 0, detRate: 0, total: 0, pro: 0, pas: 0, det: 0, avgScore: null };
-  const pro = data.filter(r => r.type === 'pro').length;
-  const pas = data.filter(r => r.type === 'pas').length;
-  const det = data.filter(r => r.type === 'det').length;
-  const nps = Math.round((pro / total - det / total) * 100);
-  const avg = parseFloat((data.reduce((s, r) => s + r.score, 0) / total).toFixed(1));
-  return { nps, proRate: Math.round(pro/total*100), pasRate: Math.round(pas/total*100),
-           detRate: Math.round(det/total*100), total, pro, pas, det, avgScore: avg };
+function selectPtWeek(w) {
+  ptSelectedWeek = w;
+  renderProblemTagTab(w);
 }
 
-function switchNpsCommentTab(mode) {
-  npsCommentMode = mode;
-  const colors = { pro: 'var(--accent)', pas: 'var(--muted)', det: 'var(--red)' };
-  ['pro','pas','det'].forEach(m => {
-    const btn = document.getElementById('npsComment_' + m);
-    if (!btn) return;
-    const isActive = m === mode;
-    btn.style.background = isActive ? colors[m] : 'transparent';
-    btn.style.color      = isActive ? '#0f0f13' : 'var(--muted)';
-    btn.style.border     = isActive ? 'none' : '1px solid var(--border)';
-  });
-  renderNpsComments(npsSelectedWeek);
+function togglePtCumulative(checked) {
+  ptCumulative = checked;
+  const sel = document.getElementById('ptWeekSelect');
+  if (sel) sel.disabled = checked;
+  renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
 }
 
-function renderNpsComments(curWeek) {
-  const listEl = document.getElementById('npsCommentList');
-  const subEl  = document.getElementById('npsCommentSub');
+// 태그 × 주차목록 → CSAT 설문 응답 집계
+function ptGetTagMetrics(tag, weekList) {
+  const rows = allData.filter(r => r.id && weekList.includes(r.week) && r.tags.includes(tag));
+  const cs = rows.map(r => csatData[String(r.id)]).filter(Boolean);
+  // 만족도(1~5 평균)
+  const satVals = cs.map(c => c['만족도']).filter(v => v !== null);
+  const sat = satVals.length ? satVals.reduce((a,b) => a+b, 0) / satVals.length : null;
+  // 해결율(✅ 긍정 비율) — CSAT 탭 매칭 로직 차용, 접근만 csatData 객체로
+  const resolveResp = cs.map(c => (c['해결여부'] || '').trim()).filter(Boolean);
+  const resolveRate = resolveResp.length
+    ? resolveResp.filter(t => t.includes(PT_RESOLVE_OK)).length / resolveResp.length * 100 : null;
+  // 대기 부정 비율(😞)
+  const waitResp = cs.map(c => (c['대기시간'] || '').trim()).filter(Boolean);
+  const waitNegRate = waitResp.length
+    ? waitResp.filter(t => t.includes(PT_WAIT_NEG)).length / waitResp.length * 100 : null;
+  // 저점수(≤3) 자유의견 — 행 클릭 상세
+  const comments = cs.filter(c => c['만족도'] !== null && c['만족도'] <= 3 && c['자유의견'])
+    .map(c => ({ score: c['만족도'], text: c['자유의견'] }));
+  return { n: satVals.length, sat, resolveRate, resolveN: resolveResp.length,
+           waitNegRate, waitN: waitResp.length, comments };
+}
+
+// 문제점수(0~100): 응답 있는 지표만 가중치 재정규화해 합산. 높을수록 문제.
+function ptScore(m) {
+  const parts = [];
+  if (m.sat !== null)         parts.push({ w: PT_WEIGHTS.만족도, v: ptClamp((5 - m.sat) / 4 * 100) });
+  if (m.resolveRate !== null) parts.push({ w: PT_WEIGHTS.해결율, v: ptClamp(100 - m.resolveRate) });
+  if (m.waitNegRate !== null) parts.push({ w: PT_WEIGHTS.대기,   v: ptClamp(m.waitNegRate) });
+  if (!parts.length) return null;
+  const wSum = parts.reduce((a, p) => a + p.w, 0);
+  return parts.reduce((a, p) => a + p.v * (p.w / wSum), 0);
+}
+
+function ptToggleDetail(idx) {
+  const el = document.getElementById('ptDetail_' + idx);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function renderProblemTagTab(curWeek) {
+  const listEl = document.getElementById('ptList');
+  const subEl  = document.getElementById('ptSubLabel');
+  const infoEl = document.getElementById('ptWeekRangeInfo');
   if (!listEl) return;
-  const base = getFilteredNpsData();
-  const data = curWeek ? base.filter(r => r.week === curWeek) : base;
-  const filtered = data.filter(r => r.type === npsCommentMode && r.reason && r.reason.length > 1);
-  const label    = npsCommentMode === 'pro' ? '추천자' : npsCommentMode === 'det' ? '비추천자' : '중립';
-  if (subEl) subEl.textContent = `${label} 의견 ${filtered.length}건`;
-  const borderColor = npsCommentMode === 'pro' ? 'var(--accent)' : npsCommentMode === 'det' ? 'var(--red)' : 'var(--muted)';
-  if (!filtered.length) {
-    listEl.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:16px 0;text-align:center">${label} 의견이 없어요.</div>`;
+
+  if (!Object.keys(csatData).length || !allData.length) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:40px;text-align:center">CSAT 데이터가 없어요.</div>`;
     return;
   }
-  listEl.innerHTML = [...filtered].reverse().map(r => `
-    <div style="font-size:11px;color:var(--text);padding:10px 14px;
-      background:var(--surface2);border-left:2px solid ${borderColor};
-      border-radius:0 6px 6px 0;margin-bottom:6px;line-height:1.7">
-      ${r.reason}
-      <span style="font-size:9px;color:${borderColor};font-family:'DM Mono',monospace;margin-left:6px">${r.score}점</span>
-    </div>`).join('');
-}
 
-function renderNpsTab(curWeek) {
-  if (!getFilteredNpsData().length) {
-    document.getElementById('npsKpiRow').innerHTML =
-      `<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:40px;text-align:center">
-        NPS 데이터가 없어요. Apps Script에서 <code>nps</code> 시트를 연결해주세요.</div>`;
-    return;
+  // 집계 기간 결정
+  const curIdx = weeks.indexOf(curWeek);
+  let weekList, prevList;
+  if (ptCumulative) {
+    weekList = weeks.slice(Math.max(0, weeks.length - 4));  // 최근 4주(가용 만큼)
+    prevList = null;
+    if (infoEl) infoEl.textContent = `최근 ${weekList.length}주 누적`;
+    if (subEl)  subEl.textContent  = `최근 ${weekList.length}주 누적 · 만족도 50% · 해결율 40% · 대기 10%`;
+  } else {
+    weekList = [curWeek];
+    prevList = curIdx > 0 ? [weeks[curIdx - 1]] : null;
+    if (infoEl) infoEl.textContent = `${(curWeek||'').replace(/^20\d\d-/,'')} 기준`;
+    if (subEl)  subEl.textContent  = `만족도 50% · 해결율 40% · 대기 10% 가중합 문제점수 순`;
   }
-  const curIdx   = npsWeeks.indexOf(curWeek);
-  const prevWeek = curIdx > 0 ? npsWeeks[curIdx - 1] : null;
-  const cur  = calcNpsForWeek(curWeek);
-  const prev = prevWeek ? calcNpsForWeek(prevWeek) : null;
 
-  // ① KPI
-  const kpiRow = document.getElementById('npsKpiRow');
-  if (kpiRow) {
-    const npsColor = cur.nps === null ? 'var(--muted)' : cur.nps >= 50 ? '#6ee7b7' : cur.nps >= 0 ? '#fbbf24' : '#f87171';
-    let npsChg = '<div class="chg flat">—</div>';
-    if (cur.nps !== null && prev && prev.nps !== null) {
-      const d = cur.nps - prev.nps;
-      const cls = d > 0 ? 'dn' : d < 0 ? 'up' : 'flat';
-      npsChg = `<div class="chg ${cls}">${d > 0 ? '+' : ''}${d}p 전주 대비</div>`;
+  // 후보 태그 (전역 VALID_PREFIXES 기준)
+  const tagSet = new Set();
+  allData.forEach(r => {
+    if (!r.id || !weekList.includes(r.week) || !csatData[String(r.id)]) return;
+    r.tags.forEach(t => { if (VALID_PREFIXES.some(p => t.startsWith(p))) tagSet.add(t); });
+  });
+
+  // 집계 + 점수
+  const items = [];
+  tagSet.forEach(tag => {
+    const m = ptGetTagMetrics(tag, weekList);
+    if (ptHideSmall && m.n <= 3) return;   // 응답 3건 이하 숨기기
+    const score = ptScore(m);
+    if (score === null) return;
+    let prevScore = null;
+    if (prevList) {
+      const pm = ptGetTagMetrics(tag, prevList);
+      if (pm.n >= PT_MIN_SAMPLE) prevScore = ptScore(pm);  // 전주 표본 가드
     }
-    kpiRow.innerHTML = `
-      <div class="kpi" style="--c:var(--accent3)">
-        <div class="lbl">NPS 점수</div>
-        <div class="val" style="font-size:28px;color:${npsColor}">${cur.nps !== null ? cur.nps : '—'}</div>
-        ${npsChg}
-        <div style="font-size:9px;color:var(--muted);margin-top:4px">-100 ~ +100 범위</div>
-      </div>
-      <div class="kpi" style="--c:var(--accent)">
-        <div class="lbl">추천자 비율</div>
-        <div class="val" style="font-size:28px">${cur.total ? cur.proRate + '%' : '—'}</div>
-        <div class="chg flat">${cur.pro}명 · 9~10점</div>
-        <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
-          <div style="width:${cur.proRate}%;height:100%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
-        </div>
-      </div>
-      <div class="kpi" style="--c:var(--red)">
-        <div class="lbl">비추천자 비율</div>
-        <div class="val" style="font-size:28px">${cur.total ? cur.detRate + '%' : '—'}</div>
-        <div class="chg flat">${cur.det}명 · 0~6점</div>
-        <div style="margin-top:8px;height:3px;background:var(--dim);border-radius:2px">
-          <div style="width:${cur.detRate}%;height:100%;background:var(--red);border-radius:2px;transition:width .4s"></div>
-        </div>
-      </div>
-      <div class="kpi" style="--c:var(--accent4)">
-        <div class="lbl">총 응답</div>
-        <div class="val" style="font-size:28px">${cur.total || '—'}</div>
-        <div class="chg flat">평균 ${cur.avgScore !== null ? cur.avgScore + '점' : '—'} · 10점 만점</div>
-      </div>`;
+    items.push({ tag, m, score, prevScore });
+  });
+  items.sort((a, b) => b.score - a.score);
+
+  if (!items.length) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:40px;text-align:center">표시할 태그가 없어요.</div>`;
+    return;
   }
 
-  // ② NPS 추이 차트
-  const trendWeeks = npsWeeks.slice(Math.max(0, curIdx - 3), curIdx + 1);
-  const npsVals  = trendWeeks.map(w => calcNpsForWeek(w).nps);
-  const avgVals  = trendWeeks.map(w => calcNpsForWeek(w).avgScore);
+  const maxScore = items[0].score || 1;
+  const fmt = (v, suf) => v === null ? '—' : (suf === '점' ? v.toFixed(2) : v.toFixed(0)) + suf;
 
-  // NPS Y축 동적 범위 (-100~100 안에서 데이터 기반)
-  const validNps = npsVals.filter(v => v !== null);
-  const npsMin = validNps.length ? Math.max(-100, Math.floor(Math.min(...validNps) / 10) * 10 - 10) : -100;
-  const npsMax = validNps.length ? Math.min(100,  Math.ceil(Math.max(...validNps)  / 10) * 10 + 10) : 100;
-  // 평균 점수 Y축 동적 범위 (0~10 안에서 데이터 기반)
-  const validAvg = avgVals.filter(v => v !== null);
-  const avgMax = validAvg.length ? Math.min(10, Math.ceil(Math.max(...validAvg) * 2) / 2 + 1) : 10;
-  const trendCtx = document.getElementById('cNpsTrend');
-  if (trendCtx) {
-    if (cNpsTrendChart) cNpsTrendChart.destroy();
-    cNpsTrendChart = new Chart(trendCtx, {
-      type: 'line',
-      data: {
-        labels: trendWeeks,
-        datasets: [
-          { label: 'NPS 점수', data: npsVals, borderColor: '#60a5fa', backgroundColor: '#60a5fa18',
-            borderWidth: 2, pointRadius: 4, tension: 0.3, fill: true, yAxisID: 'yNps', spanGaps: true },
-          { label: '평균 평점', data: avgVals, borderColor: '#fbbf24', backgroundColor: 'transparent',
-            borderWidth: 2, pointRadius: 4, tension: 0.3, borderDash: [4,4], fill: false, yAxisID: 'yAvg', spanGaps: true },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: '#6b6b80', font: { size: 10 }, boxWidth: 14, padding: 12 } },
-          tooltip: { mode: 'index', intersect: false, callbacks: {
-            label: ctx => ctx.datasetIndex === 0
-              ? ` NPS: ${ctx.raw !== null ? ctx.raw : '—'}`
-              : ` 평균: ${ctx.raw !== null ? ctx.raw + '점' : '—'}`
-          }}
-        },
-        scales: {
-          x:    { ticks: { color: '#6b6b80', font: { size: 10 } }, grid: { color: '#2a2a38' } },
-          yNps: { position: 'left',  min: npsMin, max: npsMax,
-                  ticks: { color: '#60a5fa', font: { size: 9 } }, grid: { color: '#2a2a38' },
-                  title: { display: true, text: 'NPS', color: '#60a5fa', font: { size: 9 } } },
-          yAvg: { position: 'right', min: 0, max: avgMax,
-                  ticks: { color: '#fbbf24', font: { size: 9 } }, grid: { display: false },
-                  title: { display: true, text: '평균 점수', color: '#fbbf24', font: { size: 9 } } }
-        }
+  listEl.innerHTML = `
+    <div style="display:flex;align-items:center;font-size:9px;color:var(--muted);padding:0 10px 6px;gap:8px">
+      <span style="width:22px">#</span>
+      <span style="flex:1">태그</span>
+      <span style="width:118px;text-align:right">문제점수</span>
+      <span style="width:56px;text-align:right">만족도</span>
+      <span style="width:56px;text-align:right">해결율</span>
+      <span style="width:56px;text-align:right">대기불만</span>
+    </div>` +
+    items.map((it, i) => {
+      const m = it.m;
+      const lowSample = m.n < PT_MIN_SAMPLE;
+      const barColor = it.score >= 60 ? '#f87171' : it.score >= 35 ? '#fb923c' : '#fbbf24';
+      const barW = Math.max(4, (it.score / maxScore) * 100);
+      let arrow = '';
+      if (it.prevScore !== null) {
+        const d = it.score - it.prevScore;
+        if (d > 0.5)       arrow = `<span title="전주 대비 악화" style="color:#f87171;font-size:9px">▲${d.toFixed(0)}</span>`;
+        else if (d < -0.5) arrow = `<span title="전주 대비 개선" style="color:#60a5fa;font-size:9px">▼${Math.abs(d).toFixed(0)}</span>`;
+        else               arrow = `<span style="color:var(--muted);font-size:9px">—</span>`;
+      } else if (!ptCumulative) {
+        arrow = `<span title="전주 데이터 부족" style="color:var(--muted);font-size:9px">—</span>`;
       }
-    });
-  }
-
-  // ③ 응답자 분류 분포 바
-  const distEl = document.getElementById('npsDistBar');
-  if (distEl) {
-    const subEl = document.getElementById('npsDistSub');
-    if (subEl) subEl.textContent = `선택 주차 기준 · 응답 ${cur.total}건`;
-    distEl.innerHTML = [
-      { label: '😊 추천자 (9~10점)', color: '#6ee7b7', pct: cur.proRate, cnt: cur.pro },
-      { label: '😐 중립  (7~8점)',   color: '#fbbf24', pct: cur.pasRate, cnt: cur.pas },
-      { label: '😞 비추천 (0~6점)',  color: '#f87171', pct: cur.detRate, cnt: cur.det },
-    ].map(o => `
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:11px;color:var(--text)">${o.label}</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted)">${o.pct}% · ${o.cnt}명</span>
-        </div>
-        <div style="height:6px;background:var(--dim);border-radius:3px;overflow:hidden">
-          <div style="width:${o.pct}%;height:100%;background:${o.color};border-radius:3px;transition:width .4s ease"></div>
-        </div>
-      </div>`).join('');
-  }
-
-  // ④ 점수 분포 차트
-  const scoreCtx = document.getElementById('cNpsScoreDist');
-  if (scoreCtx) {
-    const curNpsData = getFilteredNpsData().filter(r => r.week === curWeek);
-    const scoreCounts = Array.from({ length: 11 }, (_, i) => curNpsData.filter(r => r.score === i).length);
-    const bgColors     = scoreCounts.map((_, i) => i >= 9 ? '#6ee7b770' : i >= 7 ? '#fbbf2470' : '#f8717170');
-    const borderColors = bgColors.map(c => c.replace('70', 'cc'));
-    if (cNpsScoreDistChart) cNpsScoreDistChart.destroy();
-    cNpsScoreDistChart = new Chart(scoreCtx, {
-      type: 'bar',
-      data: {
-        labels: ['0','1','2','3','4','5','6','7','8','9','10'],
-        datasets: [{ data: scoreCounts, backgroundColor: bgColors, borderColor: borderColors,
-                     borderWidth: 1, borderRadius: 3 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false },
-                   tooltip: { callbacks: { label: c => ` ${c.raw}명` } } },
-        scales: {
-          x: { ticks: { color: '#6b6b80', font: { size: 9 } }, grid: { display: false } },
-          y: { ticks: { color: '#6b6b80', font: { size: 9 }, stepSize: 1 }, grid: { color: '#2a2a38' } }
-        }
-      }
-    });
-  }
-
-  // ⑤ 자유의견
-  renderNpsComments(curWeek);
+      const warn = lowSample
+        ? `<span title="응답 표본이 적어 신뢰도가 낮아요 (만족도 ${m.n}건)" style="color:#fbbf24;font-size:9px;margin-left:5px">⚠n=${m.n}</span>` : '';
+      const prefix = (VALID_PREFIXES.find(p => it.tag.startsWith(p)) || '').replace('_','');
+      const detail = m.comments.length
+        ? m.comments.map(c => `<div style="font-size:10px;color:var(--text);padding:7px 12px;background:var(--surface2);border-left:2px solid #f87171;border-radius:0 5px 5px 0;margin:4px 0 4px 30px;line-height:1.6">${c.text} <span style="color:#f87171;font-family:'DM Mono',monospace;font-size:9px">${c.score}점</span></div>`).join('')
+        : `<div style="font-size:10px;color:var(--muted);padding:8px 0 8px 30px">저점수(3점 이하) 자유의견이 없어요.</div>`;
+      return `
+      <div onclick="ptToggleDetail(${i})"
+        style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid var(--border);cursor:pointer;font-size:11px">
+        <span style="width:22px;font-family:'DM Mono',monospace;color:var(--muted);font-weight:700">${i+1}</span>
+        <span style="flex:1;color:var(--text)"><span style="font-size:8px;color:var(--muted)">${prefix} </span>${it.tag.replace(/^[^_]+_/,'')}${warn}</span>
+        <span style="width:118px;display:flex;align-items:center;gap:5px;justify-content:flex-end">
+          ${arrow}
+          <span style="font-family:'DM Mono',monospace;font-weight:700;color:${barColor};width:22px;text-align:right">${it.score.toFixed(0)}</span>
+          <span style="width:46px;height:6px;background:var(--dim);border-radius:3px;overflow:hidden;display:inline-block">
+            <span style="display:block;width:${barW}%;height:100%;background:${barColor}"></span>
+          </span>
+        </span>
+        <span style="width:56px;text-align:right;font-family:'DM Mono',monospace;color:${m.sat!==null&&m.sat<3?'#f87171':'var(--muted)'}">${fmt(m.sat,'점')}</span>
+        <span style="width:56px;text-align:right;font-family:'DM Mono',monospace;color:${m.resolveRate!==null&&m.resolveRate<70?'#f87171':'var(--muted)'}">${fmt(m.resolveRate,'%')}</span>
+        <span style="width:56px;text-align:right;font-family:'DM Mono',monospace;color:${m.waitNegRate!==null&&m.waitNegRate>20?'#f87171':'var(--muted)'}">${fmt(m.waitNegRate,'%')}</span>
+      </div>
+      <div id="ptDetail_${i}" style="display:none;padding:4px 0 8px">${detail}</div>`;
+    }).join('');
 }
 
 // ── TOAST
