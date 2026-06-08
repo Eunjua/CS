@@ -951,6 +951,15 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <input type="checkbox" id="ptHideSmallToggle" onchange="togglePtHideSmall(this.checked)" style="cursor:pointer">
       응답 3건 이하 숨기기
     </label>
+    <span style="display:flex;align-items:center;gap:6px;margin-left:auto">
+      <span style="font-size:10px;color:var(--muted)">정렬</span>
+      <select class="week-select" id="ptSortSelect" style="min-width:130px" onchange="setPtSort(this.value)">
+        <option value="score">문제점수 높은 순</option>
+        <option value="sat">만족도 낮은 순</option>
+        <option value="resolve">해결율 낮은 순</option>
+        <option value="wait">대기불만 높은 순</option>
+      </select>
+    </span>
     <span class="week-range-info" id="ptWeekRangeInfo"></span>
   </div>
 
@@ -1142,6 +1151,7 @@ let ptCumulative = false;    // false=주차 1주 기준, true=기간 누적
 let ptRangeStart = null;     // 누적 모드: 시작 주차(week 라벨)
 let ptRangeEnd   = null;     // 누적 모드: 끝 주차(week 라벨)
 let ptHideSmall = false;     // true=만족도 응답 3건 이하 태그 숨김
+let ptSortBy = 'score';      // 정렬 기준: score=문제점수 / sat=만족도 / resolve=해결율 / wait=대기불만
 
 const SHEET_URL_KEY = 'voc_sheet_url';   // Apps Script 웹앱 URL
 const LAST_SYNC_KEY = 'voc_last_sync';
@@ -3551,10 +3561,17 @@ function buildPtWeekBar() {
   if (tgl) tgl.checked = ptCumulative;
   const tgl2 = document.getElementById('ptHideSmallToggle');
   if (tgl2) tgl2.checked = ptHideSmall;
+  const sortSel = document.getElementById('ptSortSelect');
+  if (sortSel) sortSel.value = ptSortBy;
 }
 
 function togglePtHideSmall(checked) {
   ptHideSmall = checked;
+  renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
+}
+
+function setPtSort(v) {
+  ptSortBy = v;
   renderProblemTagTab(ptSelectedWeek || weeks[weeks.length - 1]);
 }
 
@@ -3686,14 +3703,28 @@ function renderProblemTagTab(curWeek) {
     }
     items.push({ tag, m, score, prevScore });
   });
-  items.sort((a, b) => b.score - a.score);
+  // 정렬: 어떤 기준이든 '문제가 큰' 태그가 위로 오게 방향을 맞춤. 값 없는(null) 태그는 항상 맨 아래.
+  const ptSortVal = (it) => {
+    if (ptSortBy === 'sat')     return it.m.sat;          // 낮을수록 문제
+    if (ptSortBy === 'resolve') return it.m.resolveRate;  // 낮을수록 문제
+    if (ptSortBy === 'wait')    return it.m.waitNegRate;  // 높을수록 문제
+    return it.score;                                      // 문제점수: 높을수록 문제
+  };
+  const ptAsc = (ptSortBy === 'sat' || ptSortBy === 'resolve'); // 낮은 순 = 오름차순
+  items.sort((a, b) => {
+    const va = ptSortVal(a), vb = ptSortVal(b);
+    if (va === null && vb === null) return b.score - a.score;
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    return ptAsc ? va - vb : vb - va;
+  });
 
   if (!items.length) {
     listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:40px;text-align:center">표시할 태그가 없어요.</div>`;
     return;
   }
 
-  const maxScore = items[0].score || 1;
+  const maxScore = Math.max(...items.map(it => it.score), 1);  // 막대 폭 기준 (정렬 무관하게 최고 문제점수)
   const fmt = (v, suf) => v === null ? '—' : (suf === '점' ? v.toFixed(2) : v.toFixed(0)) + suf;
 
   listEl.innerHTML = `
