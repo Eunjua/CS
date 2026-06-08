@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"node --check gas/VOC_통합스크립트.gs && echo \\\"✅ 문법 OK\\\"\",\"description\":\"Syntax check the edited GAS file\"}",
+  "error": "Exit code 1\nnode:internal/modules/esm/get_format:236\n  throw new ERR_UNKNOWN_FILE_EXTENSION(ext, filepath);\n        ^\n\nTypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".gs\" for /Users/eunju/CS/gas/VOC_통합스크립트.gs\n    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:236:9)\n    at defaultGetFormat (node:internal/modules/esm/get_format:262:36)\n    at checkSyntax (node:internal/main/check_syntax:67:20) {\n  code: 'ERR_UNKNOWN_FILE_EXTENSION'\n}\n\nNode....",
+  "timestamp": "2026-06-08T04:16:37.232Z",
+  "retry_count": 2
+}

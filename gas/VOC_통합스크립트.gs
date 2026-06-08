@@ -584,6 +584,7 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
     const mDateCol    = mHeaders.indexOf('week');
     const mCsatCol    = mHeaders.indexOf('만족도');
     const mCommentCol = mHeaders.indexOf('자유의견');
+    const mResolveCol = mHeaders.indexOf('해결여부');
 
     if (mDateCol >= 0 && mCsatCol >= 0) {
       mappedValues.slice(1).forEach(row => {
@@ -593,10 +594,20 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
         const weekLabel = toWeekLabel(rawDate);
         if (!weekLabel) return;
 
+        // 해결여부 집계: 만족도와 무관하게 응답이 있으면 누적 (대시보드와 동일 공식)
+        if (mResolveCol >= 0) {
+          const resolveResp = String(row[mResolveCol] || '').trim();
+          if (resolveResp) {
+            if (!csatWeekMap[weekLabel]) csatWeekMap[weekLabel] = { sum: 0, count: 0, comments: [], resolveTotal: 0, resolveSolved: 0 };
+            csatWeekMap[weekLabel].resolveTotal += 1;
+            if (resolveResp.indexOf('네, 해결됐어요') >= 0) csatWeekMap[weekLabel].resolveSolved += 1;
+          }
+        }
+
         const csatVal = parseFloat(row[mCsatCol]);
         if (isNaN(csatVal) || csatVal < 1 || csatVal > 5) return;
 
-        if (!csatWeekMap[weekLabel]) csatWeekMap[weekLabel] = { sum: 0, count: 0, comments: [] };
+        if (!csatWeekMap[weekLabel]) csatWeekMap[weekLabel] = { sum: 0, count: 0, comments: [], resolveTotal: 0, resolveSolved: 0 };
         csatWeekMap[weekLabel].sum   += csatVal;
         csatWeekMap[weekLabel].count += 1;
 
@@ -675,6 +686,12 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
       : null;
     const topVoc = csatData ? csatData.comments.slice(0, 5) : [];
 
+    // 해결율: '네, 해결됐어요' ÷ 전체 해결여부 응답 × 100 (대시보드와 동일)
+    const resolveTotal = csatData ? (csatData.resolveTotal || 0) : 0;
+    const resolveRate  = resolveTotal > 0
+      ? Math.round((csatData.resolveSolved / resolveTotal) * 1000) / 10
+      : null;
+
     const nps요양 = calcNps(npsWeekMap요양[week]);
     const nps기관 = calcNps(npsWeekMap기관[week]);
 
@@ -690,6 +707,9 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
       recontact_total     : recontact ? recontact.total     : null,
       csat_avg            : csatAvg,
       csat_count          : csatData ? csatData.count : null,
+      resolve_rate        : resolveRate,
+      resolve_solved      : csatData ? (csatData.resolveSolved || 0) : null,
+      resolve_total       : resolveTotal || null,
       nps_요양            : nps요양.nps,
       nps_요양_promoter   : nps요양.promoter,
       nps_요양_passive    : nps요양.passive,
@@ -1423,12 +1443,21 @@ function buildReportBlocks_(inputs, okr, reportData, config, weekIdx) {
     : '0.0';
   var vocSign = Number(vocChangePct) >= 0 ? '+' : '';
 
+  // 해결율 ('네, 해결됐어요' 비율) — 실적만 표시 + 전주 대비
+  var resolveRate     = thisWeek.resolve_rate;
+  var prevResolveRate = lastWeek.resolve_rate;
+  var resolveCell = resolveRate !== null && resolveRate !== undefined ? resolveRate + '%' : '-';
+  var resolvePrevCell = prevResolveRate !== null && prevResolveRate !== undefined
+    ? prevResolveRate + '%'
+    : '-';
+
   blocks.push(tableBlock_(
     ['지표', '실적 / 목표', '전주'],
     [
       ['상담만족도',   combinedCsat + '점 / ' + okr.csatTarget + '점',                   '-'],
       ['재문의율',     recontact + '% / ' + okr.recontactTarget + '%',                   prevRecontact + '%'],
       ['당일응대율',   inputs.dailyResponseRate + '% / ' + okr.dailyResponseTarget + '%', '-'],
+      ['해결율',       resolveCell,       resolvePrevCell],
       ['처리건수',     totalVoc + '건',   prevTotalVoc + '건 (' + vocSign + vocChangePct + '%)'],
     ]
   ));

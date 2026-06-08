@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780891929145,
+  "projectRoot": "/Users/eunju/CS",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "cert": {
+      "path": "cert",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1780891929134,
+      "keyFiles": [
+        "index.html",
+        "stamp.png"
+      ]
+    },
+    "certification": {
+      "path": "certification",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1780891929136,
+      "keyFiles": [
+        "SKILL.md",
+        "certification-writing-guide.pdf",
+        "generate_pdf.py",
+        "review-criteria.md",
+        "review_draft.py"
+      ]
+    },
+    "completion-certificates ": {
+      "path": "completion-certificates ",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780891929136,
+      "keyFiles": [
+        "edu-certificate.md",
+        "exam-confirm.md",
+        "확인서_유경자.pdf"
+      ]
+    },
+    "dashboard": {
+      "path": "dashboard",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780891929136,
+      "keyFiles": [
+        "CLAUDE.md",
+        "VOC_태그_정의.md",
+        "index.html",
+        "report.json"
+      ]
+    },
+    "gas": {
+      "path": "gas",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780891929136,
+      "keyFiles": [
+        "Categorizer.gs",
+        "VOC_통합스크립트.gs",
+        "자격증발급스크립트.gs"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "gas/VOC_통합스크립트.gs",
+      "accessCount": 65,
+      "lastAccessed": 1780892122937,
+      "type": "file"
+    },
+    {
+      "path": "dashboard/index.html",
+      "accessCount": 27,
+      "lastAccessed": 1780385306699,
+      "type": "file"
+    },
+    {
+      "path": "gas/자격증발급스크립트.gs",
+      "accessCount": 13,
+      "lastAccessed": 1780626485811,
+      "type": "file"
+    },
+    {
+      "path": ".claude/commands/weekly-report.md",
+      "accessCount": 3,
+      "lastAccessed": 1780892188277,
+      "type": "file"
+    },
+    {
+      "path": "certification/2603 신청자격증/학교안전지도사-운영규정.md",
+      "accessCount": 2,
+      "lastAccessed": 1780034234404,
+      "type": "file"
+    },
+    {
+      "path": "gas/WeeklyReport.gs",
+      "accessCount": 2,
+      "lastAccessed": 1780288981044,
+      "type": "file"
+    },
+    {
+      "path": "dashboard/report.json",
+      "accessCount": 2,
+      "lastAccessed": 1780301649387,
+      "type": "file"
+    },
+    {
+      "path": "CLAUDE.md",
+      "accessCount": 2,
+      "lastAccessed": 1780892365538,
+      "type": "file"
+    },
+    {
+      "path": "certification/template.md",
+      "accessCount": 1,
+      "lastAccessed": 1780032404668,
+      "type": "file"
+    },
+    {
+      "path": "certification/certification-samples/sample-노인생활지원사.pdf",
+      "accessCount": 1,
+      "lastAccessed": 1780032405183,
+      "type": "file"
+    },
+    {
+      "path": "certification/certification-samples/sample-병원동행매니저.pdf",
+      "accessCount": 1,
+      "lastAccessed": 1780032405457,
+      "type": "file"
+    },
+    {
+      "path": "certification/generate_pdf.py",
+      "accessCount": 1,
+      "lastAccessed": 1780034118371,
+      "type": "file"
+    },
+    {
+      "path": "report.json",
+      "accessCount": 1,
+      "lastAccessed": 1780301649268,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
