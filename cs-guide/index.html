@@ -98,7 +98,7 @@
   .type.질문 { color: var(--ask); background: var(--ask-soft); }
   .type.조회 { color: var(--look); background: var(--look-soft); }
   .type.안내 { color: var(--tell); background: var(--tell-soft); }
-  .node .text { font-size: 15px; }
+  .node .text { font-size: 15px; white-space: pre-line; }
   .node .link {
     display: inline-flex; align-items: center; gap: 5px; margin-top: 9px;
     font-size: 13px; font-weight: 600; color: var(--brand); text-decoration: none;
@@ -125,7 +125,7 @@
   details.sheet summary::marker { color: var(--brand); }
   .sheet-hint { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
   table.sheet-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.sheet-tbl th, table.sheet-tbl td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+  table.sheet-tbl th, table.sheet-tbl td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; white-space: pre-line; }
   table.sheet-tbl th { background: #f7f9fc; color: var(--muted); font-weight: 600; white-space: nowrap; }
   table.sheet-tbl td.id { text-align: center; font-weight: 700; color: var(--brand); }
   table.sheet-tbl td.cond { font-weight: 600; }
