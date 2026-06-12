@@ -31,7 +31,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
     line-height: 1.55;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 18px 80px; }
+  .wrap { max-width: 1480px; margin: 0 auto; padding: 24px 18px 80px; }
 
   header.top h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.3px; }
   header.top p { margin: 0; color: var(--muted); font-size: 14px; }
@@ -84,11 +84,11 @@
   .tbtn:hover { border-color: var(--brand); color: var(--brand); }
 
   /* 흐름도 노드 */
-  .flow { display: flex; flex-direction: column; align-items: stretch; }
+  .flow { display: flex; flex-direction: column; align-items: safe center; overflow-x: auto; padding-bottom: 12px; }
   .node-wrap { display: flex; flex-direction: column; align-items: center; }
   .connector { width: 2px; height: 18px; background: var(--line); }
   .node {
-    width: 100%; max-width: 560px; border: 1px solid var(--line); border-radius: 13px;
+    width: 300px; border: 1px solid var(--line); border-radius: 13px;
     padding: 13px 15px; background: #fff; position: relative;
   }
   .node .type {
@@ -107,8 +107,15 @@
   .node .link:hover { text-decoration: underline; }
 
   /* 분기 */
-  .branches { display: flex; gap: 16px; width: 100%; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
-  .branch-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 240px; max-width: 300px; }
+  .branches { display: inline-flex; gap: 16px; justify-content: safe center; align-items: flex-start; flex-wrap: nowrap; margin-top: 0; }
+  .branch-col { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; position: relative; padding-top: 22px; }
+  /* 가로 가로대(같은 부모에서 갈라짐을 잇는 선) */
+  .branch-col::after { content: ""; position: absolute; top: 0; left: -8px; right: -8px; height: 2px; background: var(--line); }
+  .branch-col:first-child::after { left: 50%; }
+  .branch-col:last-child::after { right: 50%; }
+  .branch-col:only-child::after { display: none; }
+  /* 가로대에서 각 갈래로 내려가는 짧은 세로선 */
+  .branch-col::before { content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 22px; background: var(--line); }
   .cond-chip {
     font-size: 12px; font-weight: 700; padding: 4px 13px; border-radius: 999px; margin-bottom: 2px;
     border: 1.5px solid;
