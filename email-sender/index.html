@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이메일 발송 도구 — 보살핌 케어아카데미</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    padding: 32px 20px 60px;
+    color: #222;
+  }
+
+  /* ── 상단 제목 ── */
+  .page-title {
+    max-width: 1100px;
+    margin: 0 auto 24px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .page-title .sub {
+    font-size: 13px;
+    font-weight: 400;
+    color: #888;
+  }
+
+  /* ── 메인 레이아웃 (왼쪽 입력 + 오른쪽 미리보기) ── */
+  .page-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* ── 입력 폼 ── */
+  .form-panel {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 28px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.08);
+  }
+
+  .form-panel h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    color: #1a1a2e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-panel h2::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 20px;
+    background: #3b7dd8;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 6px;
+    margin-top: 18px;
+  }
+
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], input[type="email"], input[type="password"], select, textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #dde1e7;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #222;
+    transition: border-color .2s;
+    outline: none;
+    background: #fff;
+  }
+
+  textarea {
+    min-height: 200px;
+    resize: vertical;
+    line-height: 1.7;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: #3b7dd8;
+    box-shadow: 0 0 0 3px rgba(59,125,216,.12);
+  }
+
+  input[type="file"] {
+    width: 100%;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 0;
+  }
+
+  .hint {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* ── 발신자 고정 표시 ── */
+  .fixed-sender {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #f5f7fa;
+    border: 1.5px solid #e3e7ee;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #555;
+  }
+
+  .fixed-sender .lock { font-size: 13px; }
+
+  /* ── 발송 버튼 ── */
+  .btn-send {
+    margin-top: 28px;
+    width: 100%;
+    padding: 13px;
+    background: #3b7dd8;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, transform .1s;
+  }
+
+  .btn-send:hover { background: #2e67be; }
+  .btn-send:active { transform: scale(.98); }
+  .btn-send:disabled { background: #b9c6da; cursor: not-allowed; transform: none; }
+
+  /* ── 결과 메시지 ── */
+  .result-msg {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    display: none;
+  }
+  .result-msg.show { display: block; }
+  .result-msg.ok  { background: #e9f7ef; color: #1e7e44; border: 1px solid #b8e3c9; }
+  .result-msg.err { background: #fdecec; color: #c0392b; border: 1px solid #f3c4c0; }
+  .result-msg.loading { background: #eef4fd; color: #2e67be; border: 1px solid #cfe0f7; }
+
+  /* ── 미리보기 ── */
+  .preview-wrap {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.08);
+    position: sticky;
+    top: 32px;
+  }
+
+  .preview-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  /* ── 메일 카드(실제 메일처럼 보이는 미리보기) ── */
+  .mail-card {
+    border: 1px solid #e0e4ea;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .mail-head {
+    padding: 18px 22px;
+    border-bottom: 1px solid #eef0f3;
+    background: #fafbfc;
+  }
+
+  .mail-head .row {
+    display: flex;
+    font-size: 13px;
+    line-height: 1.9;
+    color: #333;
+  }
+
+  .mail-head .row .k {
+    width: 70px;
+    flex-shrink: 0;
+    color: #999;
+  }
+
+  .mail-head .row .v { font-weight: 500; word-break: break-all; }
+
+  .mail-subject {
+    padding: 18px 22px 8px;
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a2e;
+  }
+
+  .mail-body {
+    padding: 8px 22px 22px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #333;
+    white-space: pre-wrap;     /* 줄바꿈 그대로 보존 */
+    word-break: break-word;
+    min-height: 120px;
+  }
+
+  .mail-body.placeholder { color: #bbb; }
+
+  .mail-attach {
+    padding: 14px 22px;
+    border-top: 1px solid #eef0f3;
+    background: #fafbfc;
+  }
+
+  .mail-attach .label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+  }
+
+  .attach-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin: 0 6px 6px 0;
+    background: #fff;
+    border: 1px solid #dde1e7;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #555;
+  }
+
+  @media (max-width: 880px) {
+    .page-wrap { grid-template-columns: 1fr; }
+    .preview-wrap { position: static; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  📧 이메일 발송 도구
+  <span class="sub">보살핌 케어아카데미 · CS 상담원용</span>
+</div>
+
+<div class="page-wrap">
+
+  <!-- ═══ 왼쪽: 입력 폼 ═══ -->
+  <aside class="form-panel">
+    <h2>메일 작성</h2>
+
+    <!-- 상황 템플릿 드롭다운 -->
+    <label for="tpl">상황 템플릿</label>
+    <select id="tpl" onchange="applyTemplate()">
+      <option value="">(직접 작성)</option>
+      <option value="book">교재 발송 안내</option>
+      <option value="cert">이수증·확인서 첨부</option>
+      <option value="receipt">결제 영수증 전달</option>
+    </select>
+    <p class="hint">상황을 고르면 제목·본문이 자동으로 채워집니다. 채워진 뒤 자유롭게 고쳐도 됩니다.</p>
+
+    <!-- 발신자(고정) -->
+    <label>보내는 사람</label>
+    <div class="fixed-sender">
+      <span class="lock">🔒</span>
+      보살핌 케어아카데미 &lt;eju@bosalpim.co.kr&gt;
+    </div>
+    <p class="hint">발신 주소는 고정되어 변경할 수 없습니다.</p>
+
+    <!-- 받는사람 -->
+    <label for="to">받는 사람 이메일</label>
+    <input type="email" id="to" placeholder="customer@example.com" oninput="renderPreview()">
+
+    <!-- 제목 -->
+    <label for="subject">제목</label>
+    <input type="text" id="subject" placeholder="메일 제목을 입력하세요" oninput="renderPreview()">
+
+    <!-- 본문 -->
+    <label for="body">본문</label>
+    <textarea id="body" placeholder="메일 내용을 입력하세요. 줄바꿈은 그대로 메일에 반영됩니다." oninput="renderPreview()"></textarea>
+
+    <!-- 첨부파일 -->
+    <label for="files">첨부파일 (PC에서 선택)</label>
+    <input type="file" id="files" multiple onchange="renderPreview()">
+    <p class="hint">이수증·영수증 등 PDF를 첨부할 수 있습니다. 첨부 합계는 약 25MB 이내로 해주세요.</p>
+
+    <!-- 공용 PIN -->
+    <label for="pin">발송 PIN</label>
+    <input type="password" id="pin" placeholder="공용 PIN 입력" autocomplete="off">
+    <p class="hint">상담원이 공유하는 공용 PIN을 입력해야 발송됩니다.</p>
+
+    <!-- 발송 버튼 -->
+    <button class="btn-send" id="sendBtn" onclick="sendMail()">✉️ 발송하기</button>
+
+    <!-- 결과 메시지 -->
+    <div class="result-msg" id="result"></div>
+  </aside>
+
+  <!-- ═══ 오른쪽: 미리보기 ═══ -->
+  <main class="preview-wrap">
+    <div class="preview-title">보낼 메일 미리보기</div>
+
+    <div class="mail-card">
+      <div class="mail-head">
+        <div class="row"><span class="k">보낸사람</span><span class="v">보살핌 케어아카데미 &lt;eju@bosalpim.co.kr&gt;</span></div>
+        <div class="row"><span class="k">받는사람</span><span class="v" id="pv-to">—</span></div>
+      </div>
+      <div class="mail-subject" id="pv-subject">(제목 없음)</div>
+      <div class="mail-body placeholder" id="pv-body">본문 미리보기가 여기에 표시됩니다.</div>
+      <div class="mail-attach" id="pv-attach-wrap" style="display:none;">
+        <div class="label">첨부파일</div>
+        <div id="pv-attach"></div>
+      </div>
+    </div>
+  </main>
+
+</div><!-- /page-wrap -->
+
+<script>
+  /* ─────────────────────────────────────────────────────────────
+     GAS 웹앱 URL
+     ── 배포 후 여기에 URL을 붙여넣으세요 ──
+     (Apps Script에서 EmailSender.gs 배포 → 발급된 웹앱 URL 복사 → 아래 따옴표 안에 붙여넣기)
+  ───────────────────────────────────────────────────────────── */
+  const GAS_URL = "여기에_배포후_URL_붙여넣기";
+
+  /* 발신 주소는 코드에서 고정(화면에서 변경 불가) */
+  const SENDER_NAME  = "보살핌 케어아카데미";
+  const SENDER_EMAIL = "eju@bosalpim.co.kr";
+
+  /* ── 상황 템플릿 3종 (제목/본문 초안) ──
+     [고객명] 같은 자리표시자를 상담원이 채워 보냅니다. 끝에는 서명 포함. */
+  const TEMPLATES = {
+    book: {
+      subject: "[보살핌 케어아카데미] 교재 발송 안내",
+      body:
+"안녕하세요 [고객명]님,\n" +
+"보살핌 케어아카데미입니다.\n\n" +
+"요청해 주신 교재 발송 안내드립니다.\n" +
+"교재는 [발송일] 출고되어, 보통 [예상 도착일] 사이에 도착할 예정입니다.\n" +
+"받으실 주소: [배송지 주소]\n\n" +
+"배송 관련하여 궁금한 점이 있으시면 언제든 편하게 문의해 주세요.\n" +
+"감사합니다.\n\n" +
+"보살핌 케어아카데미 드림"
+    },
+    cert: {
+      subject: "[보살핌 케어아카데미] 요청하신 증명 서류 첨부 안내",
+      body:
+"안녕하세요 [고객명]님,\n" +
+"보살핌 케어아카데미입니다.\n\n" +
+"요청해 주신 [서류명(이수증/확인서)]을(를) 메일에 첨부하여 보내드립니다.\n" +
+"첨부된 PDF 파일을 확인해 주세요.\n\n" +
+"내용에 수정이 필요하거나 추가로 필요하신 서류가 있으면 알려 주세요.\n" +
+"감사합니다.\n\n" +
+"보살핌 케어아카데미 드림"
+    },
+    receipt: {
+      subject: "[보살핌 케어아카데미] 결제 영수증 전달",
+      body:
+"안녕하세요 [고객명]님,\n" +
+"보살핌 케어아카데미입니다.\n\n" +
+"요청해 주신 결제 영수증을 메일에 첨부하여 보내드립니다.\n" +
+"첨부된 파일에서 결제 내역을 확인하실 수 있습니다.\n\n" +
+"영수증 관련하여 궁금한 점이 있으시면 편하게 문의해 주세요.\n" +
+"감사합니다.\n\n" +
+"보살핌 케어아카데미 드림"
+    }
+  };
+
+  /* ── 템플릿 선택 시 제목·본문 자동 입력 ── */
+  function applyTemplate() {
+    const key = document.getElementById('tpl').value;
+    if (!key) return;                       // (직접 작성)이면 그대로 둠
+    const t = TEMPLATES[key];
+    if (!t) return;
+
+    const subjectEl = document.getElementById('subject');
+    const bodyEl    = document.getElementById('body');
+
+    // 이미 작성 중인 내용이 있으면 덮어쓰기 전 확인
+    if ((subjectEl.value.trim() || bodyEl.value.trim()) &&
+        !confirm('현재 작성한 제목/본문을 템플릿으로 바꿀까요?')) {
+      return;
+    }
+    subjectEl.value = t.subject;
+    bodyEl.value    = t.body;
+    renderPreview();
+  }
+
+  /* ── 미리보기 갱신 ── */
+  function renderPreview() {
+    const to      = document.getElementById('to').value.trim();
+    const subject = document.getElementById('subject').value.trim();
+    const body    = document.getElementById('body').value;
+    const files   = document.getElementById('files').files;
+
+    document.getElementById('pv-to').textContent = to || '—';
+
+    document.getElementById('pv-subject').textContent = subject || '(제목 없음)';
+
+    const bodyEl = document.getElementById('pv-body');
+    if (body.trim()) {
+      bodyEl.textContent = body;            // white-space:pre-wrap 로 줄바꿈 보존
+      bodyEl.classList.remove('placeholder');
+    } else {
+      bodyEl.textContent = '본문 미리보기가 여기에 표시됩니다.';
+      bodyEl.classList.add('placeholder');
+    }
+
+    // 첨부 파일명 목록
+    const wrap   = document.getElementById('pv-attach-wrap');
+    const attach = document.getElementById('pv-attach');
+    if (files && files.length) {
+      attach.innerHTML = '';
+      for (let i = 0; i < files.length; i++) {
+        const chip = document.createElement('span');
+        chip.className = 'attach-chip';
+        chip.textContent = '📎 ' + files[i].name + ' (' + fmtSize(files[i].size) + ')';
+        attach.appendChild(chip);
+      }
+      wrap.style.display = 'block';
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
+
+  /* ── 파일 크기 보기 좋게 ── */
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + 'B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + 'KB';
+    return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+  }
+
+  /* ── 이메일 형식 검증 ── */
+  function isValidEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
+  /* ── 파일 → base64(dataURL의 base64 부분만) ── */
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // 결과는 "data:mime;base64,XXXX" 형태 → 쉼표 뒤 base64만 사용
+        const dataUrl = String(reader.result);
+        const base64  = dataUrl.split(',')[1] || '';
+        resolve({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64: base64 });
+      };
+      reader.onerror = () => reject(new Error(file.name + ' 파일을 읽지 못했습니다.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ── 결과 메시지 표시 ── */
+  function showResult(type, msg) {
+    const el = document.getElementById('result');
+    el.className = 'result-msg show ' + type;
+    el.textContent = msg;
+  }
+
+  /* ── 발송 ── */
+  async function sendMail() {
+    const to      = document.getElementById('to').value.trim();
+    const subject = document.getElementById('subject').value.trim();
+    const body    = document.getElementById('body').value;
+    const pin     = document.getElementById('pin').value.trim();
+    const files   = document.getElementById('files').files;
+    const btn     = document.getElementById('sendBtn');
+
+    // ── 입력 검증 ──
+    if (!to)             return showResult('err', '❌ 받는 사람 이메일을 입력해 주세요.');
+    if (!isValidEmail(to)) return showResult('err', '❌ 받는 사람 이메일 형식이 올바르지 않습니다.');
+    if (!subject)        return showResult('err', '❌ 제목을 입력해 주세요.');
+    if (!body.trim())    return showResult('err', '❌ 본문을 입력해 주세요.');
+    if (!pin)            return showResult('err', '❌ 발송 PIN을 입력해 주세요.');
+    if (GAS_URL === "여기에_배포후_URL_붙여넣기" || !GAS_URL) {
+      return showResult('err', '❌ 아직 GAS 웹앱 URL이 설정되지 않았습니다. (index.html의 GAS_URL 확인)');
+    }
+
+    btn.disabled = true;
+    showResult('loading', '⏳ 첨부파일을 준비하고 메일을 보내는 중입니다…');
+
+    try {
+      // 첨부파일 base64 변환
+      const attachments = [];
+      for (let i = 0; i < files.length; i++) {
+        attachments.push(await fileToBase64(files[i]));
+      }
+
+      const payload = { to, subject, body, pin, attachments };
+
+      // CORS preflight를 피하기 위해 text/plain 으로 JSON 문자열을 전송
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        showResult('ok', '✅ 발송 완료! ' + to + ' 님에게 메일을 보냈습니다.');
+        // 받는사람/PIN만 비우고, 제목·본문은 재사용 편의를 위해 유지
+        document.getElementById('to').value = '';
+        document.getElementById('pin').value = '';
+        document.getElementById('files').value = '';
+        renderPreview();
+      } else {
+        showResult('err', '❌ 발송 실패: ' + (data.error || '알 수 없는 오류입니다.'));
+      }
+    } catch (err) {
+      showResult('err', '❌ 발송 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ── 초기 렌더 ── */
+  renderPreview();
+</script>
+</body>
+</html>
