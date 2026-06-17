@@ -683,5 +683,244 @@ function onOpen() {
       .addItem('베이비시터',     'updateDeliveryBaby')
       .addItem('NCS',           'updateDeliveryNCS')
       .addItem('한국검정평가원', 'updateDeliveryKorean'))
+    .addItem('💰 정산표 생성', 'createSettlementTable')
     .addToUi();
+}
+
+// ============================================================
+//  정산표 생성 (반월정산)
+//  - 원본: 지금 보고 있는 활성 탭(정산집계 또는 그 사본)에서 읽음
+//  - 결과: '정산' 탭에 생성 (기존 내용은 두고 아래에 추가, 중복 방지)
+//  - 단가: 전부 하드코딩 (아래 상수만 고치면 됨)
+//  ※ NCS 구간 단가의 "반월 vs 월 전체" 기준은 협의 전 → [보류] 주석 참고
+// ============================================================
+
+var OUTPUT_SHEET_NAME = '정산';
+var VAT_RATE = 0.1;
+
+// ----- 수수료 설정 (단가 바뀌면 여기만 수정) -----
+var NCS_TIER = [
+  { min: 0,     max: 500,   sangjang: 20000, cardAdd: 3000 },
+  { min: 501,   max: 1000,  sangjang: 12000, cardAdd: 3000 },
+  { min: 1001,  max: 1300,  sangjang: 11000, cardAdd: 2500 },
+  { min: 1301,  max: 2000,  sangjang: 10000, cardAdd: 2000 },
+  { min: 2001,  max: 5000,  sangjang: 10000, cardAdd: 2000 },
+  { min: 5001,  max: 7500,  sangjang: 8500,  cardAdd: 2000 },
+  { min: 7501,  max: 10000, sangjang: 8000,  cardAdd: 2000 },
+  { min: 10001, max: 15000, sangjang: 7500,  cardAdd: 2000 },
+  { min: 15001, max: 20000, sangjang: 7000,  cardAdd: 2000 }
+];
+var FIXED_NORMAL_FEE = 22000;  // 한국검정평가원·베이비시터 신규 고정
+var SHIPPING_FEE     = 3000;   // 배송 단가 (송장 1건당, 고정)
+var REISSUE_NCS_ONE  = 10000;  // 재발급 NCS 상장 또는 카드
+var REISSUE_NCS_BOTH = 15000;  // 재발급 NCS 상장+카드
+var REISSUE_FIXED    = 15000;  // 재발급 한국검정평가원·베이비시터 고정
+
+// type_code → 분류
+function classifyType(raw) {
+  var code = (raw || '').toString().split('|')[0].trim();
+  if (code === '01') return 'sangjang';
+  if (code === '02') return 'card';
+  if (code === '03') return 'both';
+  return 'sangjang';
+}
+
+// 구간 단가 조회
+function lookupNcsTier(count) {
+  for (var i = 0; i < NCS_TIER.length; i++) {
+    if (count >= NCS_TIER[i].min && count <= NCS_TIER[i].max) return NCS_TIER[i];
+  }
+  return NCS_TIER[NCS_TIER.length - 1];
+}
+
+// 날짜 파싱
+function parseDateObj(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  var s = raw.toString().trim();
+  var mm = s.match(/(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/);
+  if (mm) return new Date(parseInt(mm[1]), parseInt(mm[2]) - 1, parseInt(mm[3]));
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// 재발급 여부: 재발급 컬럼에 "값이 있으면" 재발급
+function isReissueRow(v) {
+  return (v == null ? '' : v).toString().trim() !== '';
+}
+
+// 기관 판정: 자격증분류 컬럼 우선 → 자격증매핑 보완 → 기본 ncs
+function resolveAgency(row, idx, certMapping) {
+  if (idx['자격증분류'] !== undefined) {
+    var c = (row[idx['자격증분류']] || '').toString().trim().toLowerCase();
+    if (c === 'baby' || c === 'korean' || c === 'ncs') return c;
+  }
+  var name = (row[idx['자격증']] || '').toString().trim();
+  return certMapping[name] || 'ncs';
+}
+
+// ===== 메인 (활성 탭에서 실행) =====
+function createSettlementTable() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var sheet = ss.getActiveSheet();
+
+  if (sheet.getName() === OUTPUT_SHEET_NAME) {
+    ui.alert('여기는 결과 탭입니다.\n원본 데이터 탭(정산집계 등)을 연 상태에서 실행해주세요.');
+    return;
+  }
+
+  var certMapping = loadCertMapping(ss) || {};   // 기존 함수 재사용(없으면 빈 맵)
+
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) { ui.alert('데이터가 없습니다.'); return; }
+  var idx = {};
+  values[0].forEach(function(h, i) { idx[h.toString().trim()] = i; });
+
+  var need = ['배송일', '자격증', 'type_code', '송장번호', '재발급'];
+  for (var c = 0; c < need.length; c++) {
+    if (idx[need[c]] === undefined) {
+      ui.alert('이 탭에 "' + need[c] + '" 컬럼이 없습니다.\n원본 데이터 탭에서 실행해주세요.');
+      return;
+    }
+  }
+
+  // 송장 입력된 행만, 배송일 일자로 반월 분리
+  var firstHalf = [], secondHalf = [];
+  values.slice(1).forEach(function(row) {
+    if (!(row[idx['송장번호']] || '').toString().trim()) return;
+    var d = parseDateObj(row[idx['배송일']]);
+    if (!d) return;
+    (d.getDate() <= 15 ? firstHalf : secondHalf).push(row);
+  });
+
+  // ★[보류] NCS 구간 단가 = "이 탭 전체 NCS 건수" 기준.
+  //   반월별로 바꾸려면 monthNcsCount 대신 각 half 건수를 lookupNcsTier에 넣으세요.
+  function countNcs(rows) {
+    var n = 0;
+    rows.forEach(function(r) { if (resolveAgency(r, idx, certMapping) === 'ncs') n++; });
+    return n;
+  }
+  var monthNcsCount = countNcs(firstHalf) + countNcs(secondHalf);
+  var tier = lookupNcsTier(monthNcsCount);
+
+  // 결과 '정산' 탭: 기존 내용은 그대로 두고 "아래에만 추가"
+  var out = ss.getSheetByName(OUTPUT_SHEET_NAME) || ss.insertSheet(OUTPUT_SHEET_NAME);
+
+  // 이미 만들어진 반월 표는 다시 안 그림(중복 방지) — 제목으로 판단
+  var existingTitles = [];
+  if (out.getLastRow() > 0) {
+    existingTitles = out.getRange(1, 1, out.getLastRow(), 1).getValues()
+      .map(function(r) { return (r[0] || '').toString(); });
+  }
+  function alreadyHas(prefix) {
+    return existingTitles.some(function(s) { return s.indexOf(prefix) === 0; });
+  }
+
+  var HALF1 = '1일 ~ 15일 배송분';
+  var HALF2 = '16일 ~ 말일 배송분';
+  var startRow = out.getLastRow() > 0 ? out.getLastRow() + 2 : 1;  // 마지막 내용 아래
+  var added = [];
+
+  if (firstHalf.length > 0 && !alreadyHas(HALF1)) {
+    startRow = writeHalfTable(out, startRow, HALF1 + ' (NCS 건수 ' + monthNcsCount + ')', firstHalf, idx, certMapping, tier) + 1;
+    added.push(HALF1);
+  }
+  if (secondHalf.length > 0 && !alreadyHas(HALF2)) {
+    startRow = writeHalfTable(out, startRow, HALF2 + ' (NCS 건수 ' + monthNcsCount + ')', secondHalf, idx, certMapping, tier) + 1;
+    added.push(HALF2);
+  }
+
+  out.autoResizeColumns(1, 6);
+  if (added.length === 0) {
+    ui.alert('추가할 새 표가 없습니다.\n(이미 생성됐거나, 해당 반월 데이터가 없습니다)\n\n처음부터 다시 만들려면 "정산" 탭을 삭제 후 실행하세요.');
+  } else {
+    ui.alert('"' + OUTPUT_SHEET_NAME + '" 탭 아래에 추가했습니다:\n· ' + added.join('\n· '));
+  }
+}
+
+// 반월 1개분 작성 → 다음 시작행 반환
+function writeHalfTable(out, startRow, title, rows, idx, certMapping, tier) {
+  var agg = aggregateSettlement(rows, idx, certMapping, tier);
+
+  out.getRange(startRow, 1).setValue(title).setFontWeight('bold').setFontSize(12);
+  startRow++;
+
+  startRow = writeSettlementSection(out, startRow, '일반 발급', agg.normalLines);
+  startRow = writeSettlementSection(out, startRow, '재발급', agg.reissueLines);
+
+  var s = 0, v = 0, t = 0;
+  agg.normalLines.concat(agg.reissueLines).forEach(function(l) { s += l.supply; v += l.vat; t += l.total; });
+  out.getRange(startRow, 1, 1, 6).setValues([['총계', '', '', s, v, t]])
+     .setFontWeight('bold').setBackground('#FFF2CC');
+  out.getRange(startRow, 4, 1, 3).setNumberFormat('₩#,##0');
+  return startRow + 1;
+}
+
+// 집계
+function aggregateSettlement(rows, idx, certMapping, tier) {
+  var cN = { sang: 0, both: 0, korean: 0, baby: 0 };
+  var cR = { sang: 0, card: 0, both: 0, korean: 0, baby: 0 };
+  var shipN = {}, shipR = {};   // 송장: 일반 행에 등장 / 재발급 행에 등장
+
+  rows.forEach(function(r) {
+    var ag = resolveAgency(r, idx, certMapping);
+    var ty = classifyType(r[idx['type_code']]);
+    var reissue = isReissueRow(r[idx['재발급']]);
+    var track = (r[idx['송장번호']] || '').toString().trim();
+
+    if (reissue) {
+      if (ag === 'korean') cR.korean++;
+      else if (ag === 'baby') cR.baby++;
+      else if (ty === 'both') cR.both++;
+      else if (ty === 'card') cR.card++;
+      else cR.sang++;
+      if (track) shipR[track] = true;
+    } else {
+      if (ag === 'korean') cN.korean++;
+      else if (ag === 'baby') cN.baby++;
+      else if (ty === 'both') cN.both++;
+      else cN.sang++;  // 일반은 카드단독 없음 → 상장 취급
+      if (track) shipN[track] = true;
+    }
+  });
+
+  // 배송 건수: 합배송으로 일반·재발급이 섞인 송장은 "일반"으로만 카운트
+  var shipNormalCount  = Object.keys(shipN).length;
+  var shipReissueCount = Object.keys(shipR).filter(function(t) { return !shipN[t]; }).length;
+
+  function line(label, count, unit) {
+    var supply = count * unit, vat = Math.round(supply * VAT_RATE);
+    return { label: label, count: count, unit: unit, supply: supply, vat: vat, total: supply + vat };
+  }
+
+  return {
+    normalLines: [
+      line('상장', cN.sang, tier.sangjang),
+      line('상장+카드형', cN.both, tier.sangjang + tier.cardAdd),
+      line('한국검정평가원', cN.korean, FIXED_NORMAL_FEE),
+      line('베이비시터', cN.baby, FIXED_NORMAL_FEE),
+      line('배송', shipNormalCount, SHIPPING_FEE)
+    ],
+    reissueLines: [
+      line('상장', cR.sang, REISSUE_NCS_ONE),
+      line('카드', cR.card, REISSUE_NCS_ONE),
+      line('상장+카드형', cR.both, REISSUE_NCS_BOTH),
+      line('한국검정평가원', cR.korean, REISSUE_FIXED),
+      line('베이비시터', cR.baby, REISSUE_FIXED),
+      line('배송', shipReissueCount, SHIPPING_FEE)
+    ]
+  };
+}
+
+// 섹션 출력
+function writeSettlementSection(out, startRow, name, lines) {
+  out.getRange(startRow, 1, 1, 6)
+     .setValues([[name, '건수', '금액', '부가세 계산전', '부가세', '부가세 포함']])
+     .setFontWeight('bold').setBackground('#4472C4').setFontColor('#FFFFFF');
+  startRow++;
+  var vals = lines.map(function(l) { return [l.label, l.count, l.unit, l.supply, l.vat, l.total]; });
+  out.getRange(startRow, 1, vals.length, 6).setValues(vals);
+  out.getRange(startRow, 2, vals.length, 5).setNumberFormat('#,##0');
+  return startRow + vals.length;
 }
