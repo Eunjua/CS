@@ -786,8 +786,10 @@ function createSettlementTable() {
   }
 
   // 송장 입력된 행만, 배송일 일자로 반월 분리
+  // ★ '취소' 체크된 행은 정산에서 제외 (NCS 건수 집계에서도 자동 제외됨)
   var firstHalf = [], secondHalf = [];
   values.slice(1).forEach(function(row) {
+    if (idx['취소'] !== undefined && isCancelled(row[idx['취소']])) return;
     if (!(row[idx['송장번호']] || '').toString().trim()) return;
     var d = parseDateObj(row[idx['배송일']]);
     if (!d) return;
@@ -923,4 +925,47 @@ function writeSettlementSection(out, startRow, name, lines) {
   out.getRange(startRow, 1, vals.length, 6).setValues(vals);
   out.getRange(startRow, 2, vals.length, 5).setNumberFormat('#,##0');
   return startRow + vals.length;
+}
+
+// ============================================================
+//  취소 처리 (정산 누락 방지)
+//  - 정산집계 시트 '취소' 칸에 체크하면 그 건은 정산표 생성 시 자동 제외
+//  - 체크하면 바로 옆 I열(취소일)에 오늘 날짜 자동 입력 (onEdit)
+// ============================================================
+
+// 취소 여부 판정 (체크박스 TRUE 또는 텍스트 '취소'/'Y'/'O' 등)
+function isCancelled(v) {
+  if (v === true) return true;
+  var s = (v == null ? '' : v).toString().trim().toUpperCase();
+  return s === 'TRUE' || s === '취소' || s === 'Y' || s === 'O' || s === 'V';
+}
+
+// 취소 체크 시 바로 옆 칸(I열)에 취소일 자동 기록 (체크 해제 시 삭제)
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    if (sheet.getName() !== '정산집계') return;
+
+    var lastCol = sheet.getLastColumn();
+    if (lastCol < 1) return;
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var cancelCol = 0;
+    headers.forEach(function(h, i) { if (h.toString().trim() === '취소') cancelCol = i + 1; });
+    if (cancelCol === 0) return;   // '취소' 칸을 못 찾으면 아무것도 안 함
+
+    var row = e.range.getRow();
+    var col = e.range.getColumn();
+    if (col !== cancelCol || row < 2) return;
+
+    var dateCol = cancelCol + 1;   // 취소 바로 옆 칸 (= I열)
+    if (isCancelled(e.range.getValue())) {   // 체크박스 TRUE 또는 '취소' 글자 모두 인정
+      var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      sheet.getRange(row, dateCol).setValue(today);
+    } else {
+      sheet.getRange(row, dateCol).clearContent();
+    }
+  } catch (err) {
+    // onEdit는 조용히 실패해도 시트 사용에 지장 없도록 무시
+  }
 }
