@@ -700,15 +700,15 @@ var VAT_RATE = 0.1;
 
 // ----- 수수료 설정 (단가 바뀌면 여기만 수정) -----
 var NCS_TIER = [
-  { min: 0,     max: 500,   sangjang: 20000, cardAdd: 3000 },
-  { min: 501,   max: 1000,  sangjang: 12000, cardAdd: 3000 },
-  { min: 1001,  max: 1300,  sangjang: 11000, cardAdd: 2500 },
-  { min: 1301,  max: 2000,  sangjang: 10000, cardAdd: 2000 },
-  { min: 2001,  max: 5000,  sangjang: 10000, cardAdd: 2000 },
-  { min: 5001,  max: 7500,  sangjang: 8500,  cardAdd: 2000 },
-  { min: 7501,  max: 10000, sangjang: 8000,  cardAdd: 2000 },
-  { min: 10001, max: 15000, sangjang: 7500,  cardAdd: 2000 },
-  { min: 15001, max: 20000, sangjang: 7000,  cardAdd: 2000 }
+  { min: 0,    max: 250,   sangjang: 20000, cardAdd: 3000 },
+  { min: 251,  max: 500,   sangjang: 12000, cardAdd: 3000 },
+  { min: 501,  max: 650,   sangjang: 11000, cardAdd: 2500 },
+  { min: 651,  max: 1000,  sangjang: 10000, cardAdd: 2000 },
+  { min: 1001, max: 2500,  sangjang: 10000, cardAdd: 2000 },
+  { min: 2501, max: 3750,  sangjang: 8500,  cardAdd: 2000 },
+  { min: 3751, max: 5000,  sangjang: 8000,  cardAdd: 2000 },
+  { min: 5001, max: 7500,  sangjang: 7500,  cardAdd: 2000 },
+  { min: 7501, max: 10000, sangjang: 7000,  cardAdd: 2000 }
 ];
 var FIXED_NORMAL_FEE = 22000;  // 한국검정평가원·베이비시터 신규 고정
 var SHIPPING_FEE     = 3000;   // 배송 단가 (송장 1건당, 고정)
