@@ -861,12 +861,17 @@ function writeHalfTable(out, startRow, title, rows, idx, certMapping, tier) {
   out.getRange(startRow, 1).setValue(title).setFontWeight('bold').setFontSize(12);
   startRow++;
 
+  var dataStart = startRow + 1;  // 첫 섹션(일반 발급) 헤더 다음 = 첫 데이터 행
   startRow = writeSettlementSection(out, startRow, '일반 발급', agg.normalLines);
   startRow = writeSettlementSection(out, startRow, '재발급', agg.reissueLines);
+  var dataEnd = startRow - 1;     // 총계 직전 = 마지막 데이터 행
 
-  var s = 0, v = 0, t = 0;
-  agg.normalLines.concat(agg.reissueLines).forEach(function(l) { s += l.supply; v += l.vat; t += l.total; });
-  out.getRange(startRow, 1, 1, 6).setValues([['총계', '', '', s, v, t]])
+  // 총계: 각 열(D 부가세 계산전 / E 부가세 / F 부가세 포함)의 SUM
+  //  - 두 섹션 사이에 끼는 헤더 행의 텍스트는 SUM이 자동으로 무시
+  out.getRange(startRow, 1, 1, 6).setValues([['총계', '', '',
+      '=SUM(D' + dataStart + ':D' + dataEnd + ')',
+      '=SUM(E' + dataStart + ':E' + dataEnd + ')',
+      '=SUM(F' + dataStart + ':F' + dataEnd + ')']])
      .setFontWeight('bold').setBackground('#FFF2CC');
   out.getRange(startRow, 4, 1, 3).setNumberFormat('₩#,##0');
   return startRow + 1;
@@ -934,7 +939,13 @@ function writeSettlementSection(out, startRow, name, lines) {
      .setValues([[name, '건수', '금액', '부가세 계산전', '부가세', '부가세 포함']])
      .setFontWeight('bold').setBackground('#4472C4').setFontColor('#FFFFFF');
   startRow++;
-  var vals = lines.map(function(l) { return [l.label, l.count, l.unit, l.supply, l.vat, l.total]; });
+  var vals = lines.map(function(l, i) {
+    var r = startRow + i;  // 이 줄이 시트에서 실제 위치할 행 번호
+    return [l.label, l.count, l.unit,
+            '=B' + r + '*C' + r,   // 부가세 계산전 = 건수 × 금액
+            '=D' + r + '*0.1',     // 부가세 = 부가세 계산전 × 0.1
+            '=D' + r + '+E' + r];  // 부가세 포함 = 부가세 계산전 + 부가세
+  });
   out.getRange(startRow, 1, vals.length, 6).setValues(vals);
   out.getRange(startRow, 2, vals.length, 5).setNumberFormat('#,##0');
   return startRow + vals.length;
