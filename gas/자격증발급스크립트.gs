@@ -534,6 +534,10 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
     });
   }
 
+  // 입력할 모든 줄을 먼저 메모리에서 표(배열)로 만든 뒤, 한 번에 setValues로 입력
+  // (칸마다 setValue 하면 구글 서버와 매번 통신 → 건수 많으면 수십 분 소요)
+  var outRows = [];   // [배송일, 이름, 전화번호, 자격증, type_code, 송장번호(빈칸), 재발급]
+
   selectedDates.forEach(function(mmdd) {
     var group   = dateGroups[mmdd];
     var allRows = sortByName(group.baby)
@@ -551,15 +555,24 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
         : shipDate.toString().trim();
       var remark      = buildRemark(row, idx);
 
-      summarySheet.getRange(insertRow, 1).setValue(shipDateStr);
-      summarySheet.getRange(insertRow, 2).setValue(row[idx['user_name']] || '');
-      setCellText(summarySheet, insertRow, 3, phone);
-      summarySheet.getRange(insertRow, 4).setValue(row[idx['title_with_grade']] || '');
-      summarySheet.getRange(insertRow, 5).setValue(row[idx['type_code']] || '');
-      summarySheet.getRange(insertRow, 7).setValue(remark);
-      insertRow++;
+      outRows.push([
+        shipDateStr,
+        row[idx['user_name']] || '',
+        phone,
+        row[idx['title_with_grade']] || '',
+        row[idx['type_code']] || '',
+        '',        // 송장번호: 배송 업데이트 때 채워짐 (지금은 빈칸)
+        remark
+      ]);
     });
   });
+
+  if (outRows.length > 0) {
+    // 전화번호 칸(3열)은 앞자리 0 보존을 위해 텍스트 서식 → 값 입력 전에 범위 전체에 한 번만 지정
+    summarySheet.getRange(insertRow, 3, outRows.length, 1).setNumberFormat('@');
+    // 전체를 한 번에 입력 (통신 2번)
+    summarySheet.getRange(insertRow, 1, outRows.length, 7).setValues(outRows);
+  }
 }
 
 // ===== 유틸: 유효성검사 F인 행의 배송일자, 제작일자 삭제 =====
