@@ -110,8 +110,6 @@ function onOpen() {
     .addItem('📤 GitHub 업데이트', 'pushToGitHub')
     .addSeparator()
     .addItem('📝 VOC 주간 리포트 생성', 'generateWeeklyReport')
-    .addSeparator()
-    .addItem('🔍 CSAT 집계 진단', 'diagnoseCsat_')
     .addToUi();
 }
 
@@ -355,16 +353,12 @@ function doGet(e) {
   if (sheet === 'report') {
     const pubSh     = ss.getSheetByName(SHEET_PUBLIC);
     const mappedSh  = ss.getSheetByName(SHEET_MAPPED);
-    const nps요양Sh = ss.getSheetByName(SHEET_NPS_요양);
-    const nps기관Sh = ss.getSheetByName(SHEET_NPS_기관);
 
     const pubValues     = pubSh     ? pubSh.getDataRange().getValues()     : [];
     const mappedValues  = mappedSh  ? mappedSh.getDataRange().getValues()  : [];
-    const nps요양Values = nps요양Sh ? nps요양Sh.getDataRange().getValues() : [];
-    const nps기관Values = nps기관Sh ? nps기관Sh.getDataRange().getValues() : [];
 
     return ContentService
-      .createTextOutput(buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Values))
+      .createTextOutput(buildReportJson(pubValues, mappedValues))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -418,14 +412,10 @@ function pushToGitHub() {
   }
 
   const mappedSh  = ss.getSheetByName(SHEET_MAPPED);
-  const nps요양Sh = ss.getSheetByName(SHEET_NPS_요양);
-  const nps기관Sh = ss.getSheetByName(SHEET_NPS_기관);
 
   const mappedValues  = mappedSh  ? mappedSh.getDataRange().getValues()  : [];
-  const nps요양Values = nps요양Sh ? nps요양Sh.getDataRange().getValues() : [];
-  const nps기관Values = nps기관Sh ? nps기관Sh.getDataRange().getValues() : [];
 
-  const json   = buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Values);
+  const json   = buildReportJson(pubValues, mappedValues);
   const result = pushFileToGitHub('dashboard/report.json', json);
 
   if (result.ok) {
@@ -487,7 +477,7 @@ function pushFileToGitHub(filename, content) {
 //  buildReportJson (확장판)
 // ============================================================
 
-function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Values) {
+function buildReportJson(pubValues, mappedValues) {
 
   // ── 1. 대시보드_공개용 헤더 인덱스
   const pubHeaders = pubValues[0].map(h => String(h).trim());
@@ -511,18 +501,23 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
     const weekLabel = toWeekLabel(rawDate);
     if (!weekLabel) return;
 
-    if (!weekMap[weekLabel]) weekMap[weekLabel] = { tags: {}, chat: 0, call: 0 };
+    if (!weekMap[weekLabel]) weekMap[weekLabel] = { tags: {}, tagsChat: {}, tagsCall: {}, chat: 0, call: 0 };
+
+    // 채널 판별 (전화 = phone, 그 외 = 채팅)
+    const isCall = mediumCol >= 0 &&
+                   String(row[mediumCol] || '').trim().toLowerCase() === 'phone';
 
     rawTags.split(',').forEach(tag => {
       const t = tag.trim();
       if (!t) return;
       weekMap[weekLabel].tags[t] = (weekMap[weekLabel].tags[t] || 0) + 1;
+      if (isCall) weekMap[weekLabel].tagsCall[t] = (weekMap[weekLabel].tagsCall[t] || 0) + 1;
+      else        weekMap[weekLabel].tagsChat[t] = (weekMap[weekLabel].tagsChat[t] || 0) + 1;
     });
 
     if (mediumCol >= 0) {
-      const medium = String(row[mediumCol] || '').trim().toLowerCase();
-      if (medium === 'phone') weekMap[weekLabel].call++;
-      else                    weekMap[weekLabel].chat++;
+      if (isCall) weekMap[weekLabel].call++;
+      else        weekMap[weekLabel].chat++;
     }
   });
 
@@ -619,54 +614,6 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
     }
   }
 
-  // ── 5. NPS 주차별 집계 — 요양 / 기관 분리 (헤더: created_at, score)
-  const npsWeekMap요양 = {};
-  const npsWeekMap기관 = {};
-
-  function processNpsSheet(npsValues, targetMap) {
-    if (!npsValues || npsValues.length < 2) return;
-    const nHead     = npsValues[0].map(h => String(h).trim());
-    const nDateCol  = nHead.indexOf('created_at');
-    const nScoreCol = nHead.indexOf('score');
-
-    if (nDateCol < 0 || nScoreCol < 0) {
-      Logger.log('⚠️ NPS 시트 헤더 인식 실패 (created_at, score 컬럼 필요): ' + nHead.join(', '));
-      return;
-    }
-
-    npsValues.slice(1).forEach(row => {
-      const rawDate = row[nDateCol];
-      if (!rawDate) return;
-      const weekLabel = toWeekLabel(rawDate);
-      if (!weekLabel) return;
-
-      const score = parseFloat(row[nScoreCol]);
-      if (isNaN(score)) return;
-
-      if (!targetMap[weekLabel]) targetMap[weekLabel] = { promoter: 0, passive: 0, detractor: 0 };
-
-      if      (score >= 9) targetMap[weekLabel].promoter++;
-      else if (score >= 7) targetMap[weekLabel].passive++;
-      else                 targetMap[weekLabel].detractor++;
-    });
-  }
-
-  processNpsSheet(nps요양Values, npsWeekMap요양);
-  processNpsSheet(nps기관Values, npsWeekMap기관);
-
-  // NPS 점수 계산 헬퍼
-  function calcNps(data) {
-    if (!data) return { nps: null, promoter: null, passive: null, detractor: null, total: null };
-    const total = data.promoter + data.passive + data.detractor;
-    return {
-      nps      : total > 0 ? Math.round(((data.promoter - data.detractor) / total) * 100) : null,
-      promoter : data.promoter,
-      passive  : data.passive,
-      detractor: data.detractor,
-      total
-    };
-  }
-
   // ── 6. 주차 정렬 및 최종 JSON 조립
   const sortedWeeks = Object.keys(weekMap).sort((a, b) => {
     const toNum = s => {
@@ -692,9 +639,6 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
       ? Math.round((csatData.resolveSolved / resolveTotal) * 1000) / 10
       : null;
 
-    const nps요양 = calcNps(npsWeekMap요양[week]);
-    const nps기관 = calcNps(npsWeekMap기관[week]);
-
     const recontact = calcRecontactRate(week);
 
     return {
@@ -710,18 +654,10 @@ function buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Valu
       resolve_rate        : resolveRate,
       resolve_solved      : csatData ? (csatData.resolveSolved || 0) : null,
       resolve_total       : resolveTotal || null,
-      nps_요양            : nps요양.nps,
-      nps_요양_promoter   : nps요양.promoter,
-      nps_요양_passive    : nps요양.passive,
-      nps_요양_detractor  : nps요양.detractor,
-      nps_요양_total      : nps요양.total,
-      nps_기관            : nps기관.nps,
-      nps_기관_promoter   : nps기관.promoter,
-      nps_기관_passive    : nps기관.passive,
-      nps_기관_detractor  : nps기관.detractor,
-      nps_기관_total      : nps기관.total,
       top_voc             : topVoc,
-      tags                : base.tags
+      tags                : base.tags,
+      tags_chat           : base.tagsChat,
+      tags_call           : base.tagsCall
     };
   });
 
@@ -1043,6 +979,8 @@ function generateWeeklyReport() {
       chat5             : csatData.chat5,
       phoneAvg          : csatData.phoneAvg,
       phoneCount        : csatData.phoneCount,
+      csatSum           : csatData.csatSum,
+      csatCount         : csatData.csatCount,
       phone1            : csatData.phone1,
       phone2            : csatData.phone2,
       phone3            : csatData.phone3,
@@ -1072,124 +1010,12 @@ function generateWeeklyReport() {
   }
 }
 
-// 🔍 CSAT 집계 진단 — 매핑결과 시트가 제대로 읽히는지 한눈에 확인
-function diagnoseCsat_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var ui = SpreadsheetApp.getUi();
-  var sh = ss.getSheetByName(SHEET_MAPPED);
-  if (!sh) { ui.alert('❌ 매핑결과 시트를 찾을 수 없어요.'); return; }
-
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) { ui.alert('❌ 매핑결과 시트에 데이터가 없어요.'); return; }
-
-  var headers = data[0].map(function(h) { return String(h).trim(); });
-  var dateCol = headers.indexOf('week');
-  var csatCol = headers.indexOf('만족도');
-  var chCol   = headers.indexOf('mediumType');
-
-  if (dateCol < 0 || csatCol < 0) {
-    ui.alert('❌ 컬럼을 못 찾았어요.\n필요: week, 만족도\n실제 헤더: ' + headers.join(', '));
-    return;
-  }
-
-  var total = data.length - 1;
-  var parseFail = 0;       // 날짜 변환 실패 행
-  var csatInvalid = 0;     // 만족도가 1~5 숫자가 아닌 행
-  var weekCount = {};      // 주차별 (만족도 유효) 응답 수
-  var samples = [];        // 처음 3개 원본→주차 변환 샘플
-
-  for (var i = 1; i < data.length; i++) {
-    var raw  = data[i][dateCol];
-    var wl   = toWeekLabel(raw);
-    var sc   = parseFloat(data[i][csatCol]);
-    var okSc = !isNaN(sc) && sc >= 1 && sc <= 5;
-
-    if (i <= 3) samples.push('· "' + raw + '" → ' + (wl || '(변환실패)'));
-    if (!wl) parseFail++;
-    if (!okSc) csatInvalid++;
-    if (wl && okSc) weekCount[wl] = (weekCount[wl] || 0) + 1;
-  }
-
-  var lastVals = data[data.length - 1].map(function(v) { return String(v); });
-  var lines = [
-    '📋 매핑결과 진단',
-    '──────────────',
-    '컬럼(' + headers.length + '개): ' + headers.join(' | '),
-    '마지막 행: ' + lastVals.join(' | '),
-    '',
-    '총 ' + total + '행',
-    '날짜(week) 변환 실패: ' + parseFail + '행',
-    '만족도 숫자 아님: ' + csatInvalid + '행',
-    'mediumType 컬럼: ' + (chCol >= 0 ? '있음' : '없음'),
-    '',
-    '날짜 변환 샘플:',
-    samples.join('\n'),
-    '',
-    '주차별 CSAT 응답 수:'
-  ];
-  var ws = Object.keys(weekCount).sort();
-  if (ws.length === 0) lines.push('  (집계된 응답 없음)');
-  else ws.forEach(function(w) { lines.push('  ' + w + ' : ' + weekCount[w] + '건'); });
-
-  // ── 설문 응답 시트(응답일 기준) + 상담데이터 조인 가능 여부 ──
-  var formSh = ss.getSheetByName(SHEET_FORM);
-  var rawSh  = ss.getSheetByName(SHEET_RAW);
-  if (formSh && rawSh) {
-    var fData = formSh.getDataRange().getValues();
-    var rData = rawSh.getDataRange().getValues();
-    if (fData.length > 1 && rData.length > 1) {
-      var fHead = fData[0].map(function(h) { return String(h).trim(); });
-      var rHead = rData[0].map(function(h) { return String(h).trim(); });
-      var fTs = fHead.indexOf(FORM_HEADERS.timestamp);
-      var fId = findFormIdCol_(fHead);
-      var rId = rHead.indexOf(RAW_HEADERS.id);
-
-      if (fTs >= 0 && fId >= 0 && rId >= 0) {
-        var rawIds = {};
-        for (var r = 1; r < rData.length; r++) {
-          var rid = String(rData[r][rId]).trim();
-          if (rid) rawIds[rid] = true;
-        }
-
-        var formWeek = {};   // 응답일 기준 주차별 응답 수
-        var noMatch  = {};   // 그 중 상담데이터에 id 없는 수 (조인 실패)
-        for (var f = 1; f < fData.length; f++) {
-          var fwl = toWeekLabel(fData[f][fTs]);
-          if (!fwl) continue;
-          formWeek[fwl] = (formWeek[fwl] || 0) + 1;
-          var fid = String(fData[f][fId] || '').trim();
-          if (!fid || !rawIds[fid]) noMatch[fwl] = (noMatch[fwl] || 0) + 1;
-        }
-
-        lines.push('');
-        lines.push('── 설문응답(응답일 기준) / 상담데이터 미매칭 ──');
-        var fws = Object.keys(formWeek).sort();
-        if (fws.length === 0) lines.push('  (응답 없음)');
-        else fws.forEach(function(w) {
-          lines.push('  ' + w + ' : 응답 ' + formWeek[w] + '건 · 미매칭 ' + (noMatch[w] || 0) + '건');
-        });
-      } else {
-        lines.push('');
-        lines.push('── 컬럼 인식 실패 (찾는 이름과 실제 헤더가 다름) ──');
-        lines.push('찾는 이름 → 타임스탬프:"' + FORM_HEADERS.timestamp + '"(위치 ' + fTs + ') / id(위치 ' + fId + ') / 상담데이터 id(위치 ' + rId + ')');
-        lines.push('');
-        lines.push('설문 시트 실제 헤더:');
-        lines.push('  ' + fHead.join(' | '));
-        lines.push('');
-        lines.push('상담데이터 실제 헤더:');
-        lines.push('  ' + rHead.join(' | '));
-      }
-    }
-  }
-
-  ui.alert(lines.join('\n'));
-}
-
 // 매핑결과 시트에서 지정 주차의 CSAT 자동 계산 (채팅/전화 분리)
 function readCsatFromSheet_(ss, weekLabel) {
   var result = {
     chatAvg: 0, chatCount: 0, chat1: 0, chat2: 0, chat3: 0, chat4: 0, chat5: 0,
     phoneAvg: 0, phoneCount: 0, phone1: 0, phone2: 0, phone3: 0, phone4: 0, phone5: 0,
+    csatSum: 0, csatCount: 0,   // ← 전체 원본 점수 합/건수 (대시보드와 동일하게 직접 평균용)
     tagCsat: [], lowComments: [], subQuestions: [],   // ← CSAT 원인 분석용: 태그별 평균 / 저점수 코멘트 / 세부 문항(친절·해결·속도)
   };
 
@@ -1282,6 +1108,9 @@ function readCsatFromSheet_(ss, weekLabel) {
   result.chatCount = chatCount;
   result.phoneAvg   = phoneCount > 0 ? Math.round(phoneSum / phoneCount * 10) / 10 : 0;
   result.phoneCount = phoneCount;
+  // ── 전체 원본 점수 합/건수 (반올림 전) — 상담만족도를 대시보드처럼 직접 평균 내기 위함
+  result.csatSum   = chatSum + phoneSum;
+  result.csatCount = chatCount + phoneCount;
   result.chat1  = chatDist[0];  result.chat2  = chatDist[1];  result.chat3  = chatDist[2];
   result.chat4  = chatDist[3];  result.chat5  = chatDist[4];
   result.phone1 = phoneDist[0]; result.phone2 = phoneDist[1]; result.phone3 = phoneDist[2];
@@ -1406,15 +1235,11 @@ function readReportJson_() {
   var ss        = SpreadsheetApp.getActiveSpreadsheet();
   var pubSh     = ss.getSheetByName(SHEET_PUBLIC);
   var mappedSh  = ss.getSheetByName(SHEET_MAPPED);
-  var nps요양Sh = ss.getSheetByName(SHEET_NPS_요양);
-  var nps기관Sh = ss.getSheetByName(SHEET_NPS_기관);
 
   var pubValues     = pubSh     ? pubSh.getDataRange().getValues()     : [[]];
   var mappedValues  = mappedSh  ? mappedSh.getDataRange().getValues()  : [[]];
-  var nps요양Values = nps요양Sh ? nps요양Sh.getDataRange().getValues() : [[]];
-  var nps기관Values = nps기관Sh ? nps기관Sh.getDataRange().getValues() : [[]];
 
-  return JSON.parse(buildReportJson(pubValues, mappedValues, nps요양Values, nps기관Values));
+  return JSON.parse(buildReportJson(pubValues, mappedValues));
 }
 
 
@@ -1430,9 +1255,10 @@ function buildReportBlocks_(inputs, okr, reportData, config, weekIdx) {
   // ── OKR 지표
   blocks.push(heading2_('📊 OKR 지표'));
 
-  var totalCsatCount = (inputs.chatCount || 0) + (inputs.phoneCount || 0);
+  // 상담만족도: 채널 평균을 다시 합치지 않고, 전체 원본 점수를 직접 평균 (대시보드와 동일 공식)
+  var totalCsatCount = inputs.csatCount || ((inputs.chatCount || 0) + (inputs.phoneCount || 0));
   var combinedCsat   = totalCsatCount > 0
-    ? (((inputs.chatAvg * (inputs.chatCount || 0)) + (inputs.phoneAvg * (inputs.phoneCount || 0))) / totalCsatCount).toFixed(2)
+    ? ((inputs.csatSum || 0) / totalCsatCount).toFixed(2)
     : '0.00';
   var recontact     = thisWeek.recontact_rate || 0;
   var prevRecontact = lastWeek.recontact_rate || 0;
