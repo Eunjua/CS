@@ -523,8 +523,14 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
       .setBackground('#4472C4').setFontColor('#FFFFFF').setFontWeight('bold');
   }
 
-  var lastRow   = summarySheet.getLastRow();
-  var insertRow = lastRow + 1;
+  // 시트 전체 getLastRow()는 다른 열(송장번호 등)에 유령 값이 남으면 엉뚱하게 커져서
+  // 중간에 공백이 생긴다 → 이름 열(2열) 기준으로 "값이 실제 있는 마지막 행"을 직접 찾는다
+  var nameCol     = summarySheet.getRange(1, 2, summarySheet.getMaxRows(), 1).getValues();
+  var lastDataRow = 1;  // 최소 헤더(1행)
+  for (var r = nameCol.length - 1; r >= 0; r--) {
+    if (nameCol[r][0] !== '' && nameCol[r][0] !== null) { lastDataRow = r + 1; break; }
+  }
+  var insertRow = lastDataRow + 1;
 
   function sortByName(rows) {
     return rows.slice().sort(function(a, b) {
