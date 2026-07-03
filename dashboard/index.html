@@ -62,6 +62,28 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .drop-zone h2{font-size:15px;font-weight:700;margin-bottom:6px;}
 .drop-zone p{font-size:11px;color:var(--muted);line-height:1.7;}
 .drop-zone input{display:none;}
+
+/* 로딩 오버레이 */
+.load-overlay{
+  display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(10,10,16,.66); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center;
+}
+.load-overlay.show{display:flex;}
+.load-box{
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  padding:32px 40px; border-radius:16px;
+  background:var(--surface); border:1px solid var(--border);
+  box-shadow:0 12px 40px rgba(0,0,0,.4);
+}
+.load-spinner{
+  width:38px; height:38px; border-radius:50%;
+  border:3px solid var(--dim); border-top-color:var(--accent);
+  animation:load-spin .8s linear infinite;
+}
+@keyframes load-spin{to{transform:rotate(360deg);}}
+.load-title{font-size:14px;font-weight:700;color:var(--text);}
+.load-step{font-size:11px;color:var(--muted);}
 .pick-btn{
   margin-top:18px;padding:9px 24px;background:var(--accent);color:#0f0f13;
   font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;
@@ -344,6 +366,15 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     <button class="hdr-btn ghost" id="refreshBtn" style="display:none" onclick="loadFromSheet(false)">🔄 새로고침</button>
     <button class="hdr-btn ghost" id="settingsBtn" style="display:none" onclick="openSettings()">⚙ 필터 설정<span class="filter-badge" id="filterBadge" style="display:none">!</span></button>
     <button class="hdr-btn primary" onclick="openSheetPanel()">🔗 시트 연결</button>
+  </div>
+</div>
+
+<!-- 로딩 오버레이 (시트 연결/불러오기 중) -->
+<div class="load-overlay" id="loadOverlay">
+  <div class="load-box">
+    <div class="load-spinner"></div>
+    <div class="load-title" id="loadTitle">시트에 연결 중…</div>
+    <div class="load-step" id="loadStep">잠시만 기다려 주세요</div>
   </div>
 </div>
 
@@ -727,6 +758,20 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
     <span class="week-label">주차</span>
     <select class="week-select" id="csatWeekSelect" onchange="selectWeek(this.value)"></select>
     <span class="week-range-info" id="csatWeekRangeInfo"></span>
+  </div>
+
+  <!-- AI/사람 응대 주체 토글 + 비교 -->
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <span style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px">응대 주체</span>
+    <div id="csatGroupBtns" style="display:flex;gap:6px;align-items:center">
+      <button class="csat-grp-btn active" data-grp="all" onclick="csatSetGroup('all')"
+        style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;background:var(--surface2);color:var(--text);border:1px solid var(--accent);font-family:'Noto Sans KR',sans-serif">전체</button>
+      <button class="csat-grp-btn" data-grp="AI" onclick="csatSetGroup('AI')"
+        style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-family:'Noto Sans KR',sans-serif">🤖 AI</button>
+      <button class="csat-grp-btn" data-grp="사람" onclick="csatSetGroup('사람')"
+        style="padding:3px 10px;font-size:10px;font-weight:700;border-radius:5px;cursor:pointer;background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-family:'Noto Sans KR',sans-serif">🧑 사람</button>
+    </div>
+    <div id="csatGroupCompare" style="margin-left:auto;font-size:11px;color:var(--text)"></div>
   </div>
 
   <!-- 상단 KPI: 응답률 왼쪽, 만족도, 친절도 순 — JS로 렌더 -->
@@ -1147,6 +1192,18 @@ let cDailyResponseWeekChart = null;
 let ttStatus = '전체';
 let ttSort   = 'total';
 let selectedWeek = 'all';
+let csatGroup = 'all';   // 만족도 탭 응대 주체 필터: 'all' | 'AI' | '사람'
+
+function csatSetGroup(g) {
+  csatGroup = g;
+  document.querySelectorAll('.csat-grp-btn').forEach(b => {
+    const on = b.dataset.grp === g;
+    b.classList.toggle('active', on);
+    b.style.color = on ? 'var(--text)' : 'var(--muted)';
+    b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+  });
+  renderCsatTab(selectedWeek);
+}
 let ptSelectedWeek = null;   // 문제 태그 진단 탭: 선택 주차
 let ptCumulative = false;    // false=주차 1주 기준, true=기간 누적
 let ptRangeStart = null;     // 누적 모드: 시작 주차(week 라벨)
@@ -1442,6 +1499,14 @@ function parseRawRows(rows) {
   }).filter(Boolean);
 }
 
+// 태그로 AI/사람 판정 (GAS aiOrHuman_ 과 동일 규칙) — 'AI구분' 컬럼이 아직 없을 때 폴백용
+function deriveAiGroup(tagStr) {
+  const tags = String(tagStr || '').split(',').map(t => t.trim());
+  if (tags.some(t => t.indexOf('상담원이관') >= 0)) return '사람';
+  if (tags.some(t => t === 'AI' || t.indexOf('AI/') === 0)) return 'AI';
+  return '사람';
+}
+
 // 매핑결과 행 → csatData Map
 function parseCsatRows(rows) {
   const list = [];
@@ -1475,6 +1540,7 @@ function parseCsatRows(rows) {
       해결여부: (r['해결여부'] || '').trim(),
       대기시간: (r['대기시간'] || '').trim(),
       자유의견: (r['자유의견'] || '').trim(),
+      구분:     (String(r['AI구분'] || '').trim() || deriveAiGroup(r['태그'] || r['tags'] || '')),
     });
   });
   return list;
@@ -1497,12 +1563,32 @@ async function fetchSheet(baseUrl, sheetParam) {
 }
 
 // 두 시트 fetch → allData + csatData → render
+// 로딩 오버레이 제어
+function showLoading(title, step) {
+  const ov = document.getElementById('loadOverlay');
+  if (!ov) return;
+  const t = document.getElementById('loadTitle');
+  const s = document.getElementById('loadStep');
+  if (t && title) t.textContent = title;
+  if (s) s.textContent = step || '';
+  ov.classList.add('show');
+}
+function setLoadStep(step) {
+  const s = document.getElementById('loadStep');
+  if (s) s.textContent = step || '';
+}
+function hideLoading() {
+  const ov = document.getElementById('loadOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
 async function loadFromSheet(isAuto) {
   const baseUrl = _ls.getItem(SHEET_URL_KEY) || DEFAULT_SHEET_URL;
   if (!baseUrl) { if (!isAuto) openSheetPanel(); return; }
 
   const refreshBtn = document.getElementById('refreshBtn');
   if (refreshBtn) { refreshBtn.textContent = '⏳ 불러오는 중…'; refreshBtn.disabled = true; }
+  showLoading(isAuto ? '데이터 불러오는 중…' : '시트에 연결 중…', '상담 데이터를 불러오고 있어요');
 
   try {
     // ① 상담 데이터
@@ -1512,6 +1598,7 @@ async function loadFromSheet(isAuto) {
     if (!allData.length) throw new Error('유효한 상담 데이터 없음');
 
     // ② CSAT (실패해도 무시)
+    setLoadStep('만족도(CSAT) 데이터를 불러오고 있어요');
     csatRows = [];
     csatData = {};
     try {
@@ -1528,6 +1615,7 @@ async function loadFromSheet(isAuto) {
     } catch(e2) { console.warn('[CSAT] 로드 실패:', e2.message); }
 
     // ③ 만족도 발송건 (실패해도 무시)
+    setLoadStep('발송건·태그·응대율 데이터를 불러오고 있어요');
     csatSendData = [];
     try {
       const rawSend = await fetchSheet(baseUrl, 'csat_send');
@@ -1556,6 +1644,7 @@ async function loadFromSheet(isAuto) {
       }
     } catch(e6) { console.warn('당일 응대율 로드 실패(무시):', e6.message); }
 
+    setLoadStep('화면을 그리고 있어요');
     rebuildWeeks();
     const now = new Date().toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     _ls.setItem(LAST_SYNC_KEY, now);
@@ -1572,6 +1661,7 @@ async function loadFromSheet(isAuto) {
     console.error(e);
     if (!isAuto) showToast(`불러오기 실패: ${e.message}`);
   } finally {
+    hideLoading();
     if (refreshBtn) { refreshBtn.textContent = '🔄 새로고침'; refreshBtn.disabled = false; }
   }
 }
@@ -2230,9 +2320,26 @@ function getSendCountForWeek(week) {
 
 function getCsatMatchedForWeek(curWeek) {
   // 줄 단위(중복·빈ID 포함)로 집계 — 헤드라인 건수/만족도용
+  // csatGroup 토글(전체/AI/사람)에 따라 응대 주체로 필터
   return csatRows
     .filter(r => r.week === curWeek)
+    .filter(r => csatGroup === 'all' || r.구분 === csatGroup)
     .map(r => ({ _id: r.id, ...r }));
+}
+
+// 토글과 무관하게 해당 주차 전체 행 (AI↔사람 비교용)
+function csatRowsForWeekRaw(curWeek) {
+  return csatRows.filter(r => r.week === curWeek);
+}
+
+// 해당 주차·그룹의 평균 만족도 + 응답수
+function csatGroupAvg(curWeek, group) {
+  const vals = csatRowsForWeekRaw(curWeek)
+    .filter(r => r.구분 === group)
+    .map(r => r.만족도)
+    .filter(v => v !== null);
+  return vals.length ? { avg: vals.reduce((a, b) => a + b, 0) / vals.length, n: vals.length }
+                     : { avg: null, n: 0 };
 }
 
 function renderCsatTab(curWeek) {
@@ -2277,7 +2384,24 @@ function renderCsatTab(curWeek) {
   };
 
   const matched = getCsatMatchedForWeek(curWeek);
-  console.log('[CSAT] 선택 주차:', curWeek, '/ matched 건수:', matched.length);
+  console.log('[CSAT] 선택 주차:', curWeek, '/ matched 건수:', matched.length, '/ 그룹:', csatGroup);
+
+  // AI ↔ 사람 비교 스트립 (토글과 무관하게 항상 현재 주차 전체 기준)
+  const cmpEl = document.getElementById('csatGroupCompare');
+  if (cmpEl) {
+    const aiG = csatGroupAvg(curWeek, 'AI');
+    const huG = csatGroupAvg(curWeek, '사람');
+    const fmt = o => o.avg !== null
+      ? `${o.avg.toFixed(2)}<span style="color:var(--muted);font-weight:400"> (${o.n}건)</span>`
+      : `—<span style="color:var(--muted);font-weight:400"> (0건)</span>`;
+    let diffTxt = '';
+    if (aiG.avg !== null && huG.avg !== null) {
+      const d = huG.avg - aiG.avg;
+      const c = d >= 0 ? '#6ee7b7' : '#f87171';
+      diffTxt = ` <span style="color:var(--muted)">·</span> 사람 <strong style="color:${c}">${d >= 0 ? '+' : ''}${d.toFixed(2)}</strong>`;
+    }
+    cmpEl.innerHTML = `🤖 AI <strong>${fmt(aiG)}</strong> <span style="color:var(--muted)">vs</span> 🧑 사람 <strong>${fmt(huG)}</strong>${diffTxt}`;
+  }
   const curIdx  = weeks.indexOf(curWeek);
   const prevWeek = curIdx > 0 ? weeks[curIdx - 1] : null;
   const prevMatched = prevWeek ? getCsatMatchedForWeek(prevWeek) : [];
@@ -2402,6 +2526,31 @@ function renderCsatTab(curWeek) {
     yAxisID: 'y',
   }));
 
+  // AI ↔ 사람 만족도 비교 라인 (전체 모드에서만 추가, 실선으로 구분)
+  const CSAT_GRP_LINES = [
+    { grp: 'AI',   label: '🤖 AI 만족도',  color: '#f59e0b' },
+    { grp: '사람', label: '🧑 사람 만족도', color: '#60a5fa' },
+  ];
+  if (csatGroup === 'all') {
+    CSAT_GRP_LINES.forEach(g => {
+      datasets.push({
+        label: g.label,
+        data: trendLabels.map(w => {
+          const o = csatGroupAvg(w, g.grp);
+          return o.avg !== null ? parseFloat(o.avg.toFixed(2)) : null;
+        }),
+        borderColor: g.color,
+        backgroundColor: g.color + '22',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.3,
+        spanGaps: true,
+        yAxisID: 'y',
+      });
+    });
+  }
+
   // 응답률 데이터 계산 (동적 Y축 범위 산출용)
   const respRateData = trendLabels.map(w => {
     const wMatched = getCsatMatchedForWeek(w);
@@ -2502,6 +2651,12 @@ function renderCsatTab(curWeek) {
             ${m.label}
           </span>`
         ),
+        ...(csatGroup === 'all' ? CSAT_GRP_LINES.map(g =>
+          `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
+            <span style="width:12px;height:2px;background:${g.color};display:inline-block;border-radius:1px"></span>
+            ${g.label}
+          </span>`
+        ) : []),
         `<span style="display:flex;align-items:center;gap:4px;color:var(--muted)">
           <span style="width:12px;height:2px;background:#fbbf24;display:inline-block;border-radius:1px;border-top:2px dashed #fbbf24"></span>
           응답률
@@ -2517,7 +2672,8 @@ function renderCsatTab(curWeek) {
   // ④ 채널별 비교 차트
   const chMatched = (ch) => {
     const ids = allData.filter(r => r.week === curWeek && r.id && r.ch === ch).map(r => String(r.id));
-    return ids.map(id => csatData[id]).filter(Boolean);
+    return ids.map(id => csatData[id]).filter(Boolean)
+      .filter(r => csatGroup === 'all' || r.구분 === csatGroup);
   };
   const chatMatched = chMatched('채팅');
   const phoneMatched = chMatched('전화');

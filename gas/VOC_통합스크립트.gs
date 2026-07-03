@@ -94,7 +94,7 @@ const RAW_HEADERS = {
 // ── 매핑결과 탭 헤더
 const MAPPED_HEADERS = [
   '상담ID', '상담일시', '채널', '태그', '상태',
-  '만족도', '친절도', '해결여부', '대기시간', '자유의견', '응답일시'
+  '만족도', '친절도', '해결여부', '대기시간', '자유의견', '응답일시', 'AI구분'
 ];
 
 
@@ -150,6 +150,43 @@ function kindnessToScore(val) {
     return map[String(val).trim()] ?? val;
 }
 
+// 태그로 AI/사람 판정 (2분류 · 상담원이관은 사람에 포함)
+//  - 태그에 '상담원이관' 포함 → 사람 (AI가 못 풀어 사람에게 넘긴 상담)
+//  - 그 외 'AI' 계열 태그(AI, AI/상담완료 등) 있음 → AI (AI 단독 완결)
+//  - AI 태그 자체가 없음(순수 사람 응대·전화) → 사람
+function aiOrHuman_(tagStr) {
+  const tags = String(tagStr || '').split(',').map(t => t.trim());
+  if (tags.some(t => t.indexOf('상담원이관') >= 0)) return '사람';
+  if (tags.some(t => t === 'AI' || t.indexOf('AI/') === 0)) return 'AI';
+  return '사람';
+}
+
+// 기존 매핑결과 시트에 'AI구분' 컬럼이 없으면 추가 + 값이 빈 기존 행을 태그로 소급 채움
+function ensureAiColumn_(sh) {
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (lastRow < 1 || lastCol < 1) return;
+  const header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+  let aiCol  = header.indexOf('AI구분') + 1;   // 1-based, 0이면 없음
+  const tagCol = header.indexOf('태그') + 1;
+  if (aiCol === 0) {
+    aiCol = lastCol + 1;
+    sh.getRange(1, aiCol).setValue('AI구분').setFontWeight('bold').setBackground('#f0f0f0');
+  }
+  if (lastRow < 2 || tagCol === 0) return;
+  const n       = lastRow - 1;
+  const aiVals  = sh.getRange(2, aiCol,  n, 1).getValues();
+  const tagVals = sh.getRange(2, tagCol, n, 1).getValues();
+  let changed = false;
+  for (let i = 0; i < n; i++) {
+    if (String(aiVals[i][0]).trim() === '') {
+      aiVals[i][0] = aiOrHuman_(tagVals[i][0]);
+      changed = true;
+    }
+  }
+  if (changed) sh.getRange(2, aiCol, n, 1).setValues(aiVals);
+}
+
 function runCsatMapping() {
   const ss     = SpreadsheetApp.getActiveSpreadsheet();
   const formSh = ss.getSheetByName(SHEET_FORM);
@@ -169,6 +206,9 @@ function runCsatMapping() {
       .setFontWeight('bold')
       .setBackground('#f0f0f0');
   }
+
+  // 기존 시트에 AI구분 컬럼 보장 + 과거 행 소급 채우기
+  ensureAiColumn_(mappedSh);
 
   const formData = formSh.getDataRange().getValues();
   if (formData.length < 2) { Logger.log('폼 응답 없음'); return; }
@@ -230,18 +270,20 @@ function runCsatMapping() {
     const rawRow = rawMap[formId];
     if (!rawRow) { noMatch++; continue; }
 
+    const tagVal = rIdx.tags >= 0 ? rawRow[rIdx.tags] : '';
     newRows.push([
       formId,
       rIdx.openedAt  >= 0 ? rawRow[rIdx.openedAt]  : '',
       rIdx.medium    >= 0 ? rawRow[rIdx.medium]     : '',
-      rIdx.tags      >= 0 ? rawRow[rIdx.tags]       : '',
+      tagVal,
       rIdx.state     >= 0 ? rawRow[rIdx.state]      : '',
       fIdx.csat      >= 0 ? csatToScore(row[fIdx.csat])          : '',
       fIdx.kindness  >= 0 ? kindnessToScore(row[fIdx.kindness])      : '',
       fIdx.resolved  >= 0 ? row[fIdx.resolved]      : '',
       fIdx.waiting   >= 0 ? row[fIdx.waiting]       : '',
       fIdx.comment   >= 0 ? row[fIdx.comment]       : '',
-      fIdx.timestamp >= 0 ? row[fIdx.timestamp]     : ''
+      fIdx.timestamp >= 0 ? row[fIdx.timestamp]     : '',
+      aiOrHuman_(tagVal)
     ]);
 
     existingIds.add(formId);
