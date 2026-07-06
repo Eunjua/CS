@@ -86,6 +86,7 @@ const FORM_HEADERS = {
 const RAW_HEADERS = {
   id       : 'id',
   openedAt : 'openedAt',
+  managed  : 'managedAt',   // AI 자동완결 건은 openedAt이 비어 있어 week 폴백용으로 사용
   medium   : 'mediumType',
   tags     : 'tags',
   state    : 'state'
@@ -110,6 +111,8 @@ function onOpen() {
     .addItem('📤 GitHub 업데이트', 'pushToGitHub')
     .addSeparator()
     .addItem('📝 VOC 주간 리포트 생성', 'generateWeeklyReport')
+    .addSeparator()
+    .addItem('🩹 상담일시 빈 행 채우기 (managedAt)', 'backfillMappedDates')
     .addToUi();
 }
 
@@ -234,6 +237,7 @@ function runCsatMapping() {
   const rIdx    = {
     id       : rHead.indexOf(RAW_HEADERS.id),
     openedAt : rHead.indexOf(RAW_HEADERS.openedAt),
+    managed  : rHead.indexOf(RAW_HEADERS.managed),
     medium   : rHead.indexOf(RAW_HEADERS.medium),
     tags     : rHead.indexOf(RAW_HEADERS.tags),
     state    : rHead.indexOf(RAW_HEADERS.state)
@@ -273,7 +277,7 @@ function runCsatMapping() {
     const tagVal = rIdx.tags >= 0 ? rawRow[rIdx.tags] : '';
     newRows.push([
       formId,
-      rIdx.openedAt  >= 0 ? rawRow[rIdx.openedAt]  : '',
+      pickInquiryDate_(rawRow, rIdx),
       rIdx.medium    >= 0 ? rawRow[rIdx.medium]     : '',
       tagVal,
       rIdx.state     >= 0 ? rawRow[rIdx.state]      : '',
@@ -296,6 +300,67 @@ function runCsatMapping() {
   }
 
   Logger.log(`CSAT 매핑 완료 — 신규 ${matched}건 / 미매칭 ${noMatch}건 / 건너뜀 ${skipped}건`);
+}
+
+
+// ── 과거 소급 백필 ────────────────────────────────────────────
+// 매핑결과 시트에서 상담일시(week 기준 열)가 빈 행을,
+// 상담데이터의 openedAt(없으면 managedAt)로 다시 채운다.
+// AI 자동완결 건은 openedAt이 비어 매핑 당시 week가 안 잡혔던 걸 되살리는 용도.
+function backfillMappedDates() {
+  const ss       = SpreadsheetApp.getActiveSpreadsheet();
+  const mappedSh = ss.getSheetByName(SHEET_MAPPED);
+  const rawSh    = ss.getSheetByName(SHEET_RAW);
+  const ui       = SpreadsheetApp.getUi();
+
+  if (!mappedSh) { ui.alert('❌ 매핑결과 시트가 없어요.'); return; }
+  if (!rawSh)    { ui.alert('❌ 상담데이터 시트가 없어요.'); return; }
+
+  // 상담데이터: id → 상담일시(openedAt 우선, 없으면 managedAt)
+  const rawData  = rawSh.getDataRange().getValues();
+  const rHead    = rawData[0].map(h => String(h).trim());
+  const rId      = rHead.indexOf(RAW_HEADERS.id);
+  const rOpened  = rHead.indexOf(RAW_HEADERS.openedAt);
+  const rManaged = rHead.indexOf(RAW_HEADERS.managed);
+  if (rId < 0) { ui.alert('❌ 상담데이터에 id 컬럼이 없어요.'); return; }
+
+  const dateById = {};
+  for (let i = 1; i < rawData.length; i++) {
+    const id = String(rawData[i][rId]).trim();
+    if (!id) continue;
+    const opened  = rOpened  >= 0 ? rawData[i][rOpened]  : '';
+    const managed = rManaged >= 0 ? rawData[i][rManaged] : '';
+    dateById[id] = (opened !== '' && opened != null) ? opened
+                 : ((managed !== '' && managed != null) ? managed : '');
+  }
+
+  // 매핑결과: 1열=상담ID, 2열=상담일시(week 계산 기준). 헤더명은 버전에 따라 'week'/'상담일시' 혼재
+  const mData = mappedSh.getDataRange().getValues();
+  if (mData.length < 2) { ui.alert('매핑결과에 데이터가 없어요.'); return; }
+  const mHead    = mData[0].map(h => String(h).trim());
+  let idCol      = mHead.indexOf('상담ID');
+  if (idCol < 0) idCol = 0;
+  let dateCol    = mHead.indexOf('week');
+  if (dateCol < 0) dateCol = mHead.indexOf('상담일시');
+  if (dateCol < 0) dateCol = 1;
+
+  let filled = 0, missing = 0;
+  for (let i = 1; i < mData.length; i++) {
+    const cur = mData[i][dateCol];
+    if (cur !== '' && cur != null) continue;   // 이미 값 있음 → 건드리지 않음
+    const id = String(mData[i][idCol]).trim();
+    if (!id) continue;
+    const d = dateById[id];
+    if (d !== '' && d != null) {
+      mappedSh.getRange(i + 1, dateCol + 1).setValue(d);
+      filled++;
+    } else {
+      missing++;
+    }
+  }
+
+  ui.alert('🩹 백필 완료\n\n채운 행: ' + filled + '개\n상담데이터에서 날짜 못 찾음: ' + missing + '개');
+  Logger.log('[백필] 채운 행 ' + filled + ' / 못 찾음 ' + missing);
 }
 
 
@@ -730,6 +795,20 @@ function toDate(val) {
   // 그 외 (ISO, etc.)
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d;
+}
+
+
+// ============================================================
+//  상담일시 결정 (week 계산 기준 열)
+//    openedAt 우선, 비어 있으면 managedAt로 폴백
+//    → AI가 자동 완결해 openedAt이 없는 건도 week가 잡히도록
+// ============================================================
+
+function pickInquiryDate_(rawRow, rIdx) {
+  var opened = rIdx.openedAt >= 0 ? rawRow[rIdx.openedAt] : '';
+  if (opened !== '' && opened != null) return opened;
+  var managed = rIdx.managed >= 0 ? rawRow[rIdx.managed] : '';
+  return (managed != null) ? managed : '';
 }
 
 
