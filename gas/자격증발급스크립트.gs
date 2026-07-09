@@ -8,8 +8,7 @@ var SOURCE_SHEET_NAME          = '제작리스트';
 var COURSE_SHEET_NAME          = '발급과정';
 var CERT_MAPPING_SHEET_NAME    = '자격증매핑';
 var DELIVERY_BABY_SHEET_NAME   = '[배송]베이비시터';
-var DELIVERY_NCS_SHEET_NAME    = '[배송]NCS';
-var DELIVERY_KOREAN_SHEET_NAME = '[배송]한국검정평가원';
+var DELIVERY_NCS_SHEET_NAME    = '[배송]NCS';   // 한국검정평가원 송장도 여기 섞여 옴 (NCS로 통합 처리)
 
 // ===== 자격증매핑 시트 로드 =====
 function loadCertMapping(ss) {
@@ -139,9 +138,11 @@ function createCertificationFiles() {
 
   selectedDates.forEach(function(mmdd) {
     var group = dateGroups[mmdd];
-    if (group.baby.length > 0)   { createBabyOrKoreanFile(folder, mmdd + '_보살핌_베이비시터',   group.baby,   idx); createdCount++; }
-    if (group.korean.length > 0) { createBabyOrKoreanFile(folder, mmdd + '_보살핌_한국검정평가원', group.korean, idx); createdCount++; }
-    if (group.ncs.length > 0)    { createNCSFile(folder, mmdd + '_보살핌_NCS', group.ncs, idx, courseCodeMap, typeAmountMap); createdCount++; }
+    if (group.baby.length > 0) { createBabyOrKoreanFile(folder, mmdd + '_보살핌_베이비시터', group.baby, idx); createdCount++; }
+
+    // 한국검정평가원(korean)은 NCS 파일에 통합 발급 (과정코드·결제금액은 빈칸으로 나옴)
+    var ncsRows = group.ncs.concat(group.korean);
+    if (ncsRows.length > 0) { createNCSFile(folder, mmdd + '_보살핌_NCS', ncsRows, idx, courseCodeMap, typeAmountMap); createdCount++; }
 
     var nonBaby = group.korean.concat(group.ncs);
     if (nonBaby.length > 0) { createDeliveryCheckFile(folder, mmdd + '_배송확인리스트', nonBaby, idx); createdCount++; }
@@ -158,14 +159,9 @@ function updateDeliveryBaby() {
   updateDeliveryTracking('baby');
 }
 
-// ===== 배송 업데이트 - NCS =====
+// ===== 배송 업데이트 - NCS (한국검정평가원 통합) =====
 function updateDeliveryNCS() {
   updateDeliveryTracking('ncs');
-}
-
-// ===== 배송 업데이트 - 한국검정평가원 =====
-function updateDeliveryKorean() {
-  updateDeliveryTracking('korean');
 }
 
 // ===== 배송 업데이트 공통 함수 =====
@@ -318,43 +314,6 @@ function updateDeliveryKorean() {
       );
     }
 
-    if (type === 'korean') {
-      var deliveryKoreanSheet = ss.getSheetByName(DELIVERY_KOREAN_SHEET_NAME);
-      if (!deliveryKoreanSheet) {
-        SpreadsheetApp.getUi().alert('시트를 찾을 수 없습니다: ' + DELIVERY_KOREAN_SHEET_NAME);
-        return;
-      }
-
-      var koreanMap = buildSummaryMap(function(sRow) {
-        var sDate  = normalizeDate(sRow[sIdx['배송일']]);
-        var sName  = sRow[sIdx['이름']] ? sRow[sIdx['이름']].toString().trim() : '';
-        var sPhone = normalizePhone(sRow[sIdx['전화번호']]);
-        if (!sDate || !sName || !sPhone) return null;
-        return sDate + '|' + sName + '|' + sPhone;
-      });
-
-      var koreanData = deliveryKoreanSheet.getDataRange().getValues();
-      var koreanRows = koreanData.slice(1).filter(function(row) {
-        return row[8] && row[8].toString().trim() !== '';
-      });
-      totalCount = koreanRows.length;
-
-      koreanRows.forEach(function(kRow) {
-        var kDate     = normalizeDate(kRow[0]);
-        var kName     = kRow[3].toString().trim();
-        var kPhone    = normalizePhone(kRow[4].toString().trim());
-        var kTracking = kRow[8].toString().trim();
-        var key = kDate + '|' + kName + '|' + kPhone;
-        var n = applyTracking(koreanMap, key, kTracking);
-        if (n > 0) { matchCount++; filledCount += n; }
-      });
-
-      SpreadsheetApp.getUi().alert(
-        '한국검정평가원 배송 업데이트 완료!\n\n' +
-        '✅ 송장 입력: ' + filledCount + '건 (합배송 포함)\n' +
-        '✅ 매칭된 배송: ' + matchCount + ' / ' + totalCount + '건'
-      );
-    }
   }
 
 
@@ -699,9 +658,8 @@ function onOpen() {
     .addItem('📖 자격증 업데이트', 'createCertificationFiles')
     .addSeparator()
     .addSubMenu(SpreadsheetApp.getUi().createMenu('🚍 배송 업데이트')
-      .addItem('베이비시터',     'updateDeliveryBaby')
-      .addItem('NCS',           'updateDeliveryNCS')
-      .addItem('한국검정평가원', 'updateDeliveryKorean'))
+      .addItem('베이비시터',            'updateDeliveryBaby')
+      .addItem('NCS (한국검정평가원 포함)', 'updateDeliveryNCS'))
     .addItem('💰 정산표 생성', 'createSettlementTable')
     .addToUi();
 }
