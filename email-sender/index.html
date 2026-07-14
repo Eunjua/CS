@@ -863,6 +863,19 @@
     renderSmsPreview();
   }
 
+  /* ── 문자 맨 끝에 자동으로 붙는 안내 문구 ──
+     이 번호로 답장해도 받을 수 없다는 것을 고객에게 알려줍니다.
+     ※ 알림톡은 승인된 템플릿과 글자가 정확히 같아야 발송되므로 붙이지 않습니다. */
+  const SMS_FOOTER = '※ 본 문자는 발신전용으로 회신을 받지 않습니다.';
+
+  /** 문자일 때만 본문 끝에 안내 문구를 붙여 돌려줍니다. */
+  function withFooter(text, isAlim) {
+    if (isAlim) return text;                  // 알림톡은 그대로
+    const body = text.replace(/\s+$/, '');    // 끝 공백·줄바꿈 정리
+    if (!body) return text;                   // 아직 안 쓴 상태면 그대로
+    return body + '\n\n' + SMS_FOOTER;
+  }
+
   /* ── 문자 byte 계산 (한글 2byte, 영문·숫자 1byte) ── */
   function byteLen(s) {
     let n = 0;
@@ -885,10 +898,11 @@
 
   /* ── 문자 미리보기 갱신 ── */
   function renderSmsPreview() {
-    const text   = $('msg').value;
+    const isAlim = (currentChannel() === 'alimtalk');
+    const typed  = $('msg').value;
+    const text   = withFooter(typed, isAlim);   // 실제로 나가는 내용(안내 문구 포함)
     const bytes  = byteLen(text);
     const isLms  = bytes > 90;
-    const isAlim = (currentChannel() === 'alimtalk');
 
     // 글자수 미터 + 문자 종류
     $('byteCount').textContent = isLms
@@ -900,9 +914,11 @@
     pill.className   = 'pill ' + (isLms ? 'lms' : 'sms');
 
     $('titleField').classList.toggle('hidden', !isLms);
-    $('byteHint').textContent = isLms
+    const footerNote = isAlim ? '' : ' 맨 끝의 "' + SMS_FOOTER + '" 는 자동으로 붙으며, 위 글자수에 포함되어 있습니다.';
+    $('byteHint').textContent = (isLms
       ? '90byte를 넘어 장문(LMS)으로 발송됩니다. 위에 제목을 넣어 주세요. 이모지는 넣을 수 없습니다.'
-      : '한글은 1자에 2byte입니다. 90byte(한글 45자)를 넘으면 자동으로 장문(LMS)으로 보냅니다. 문자에는 이모지를 넣을 수 없습니다.';
+      : '한글은 1자에 2byte입니다. 90byte(한글 45자)를 넘으면 자동으로 장문(LMS)으로 보냅니다. 문자에는 이모지를 넣을 수 없습니다.'
+    ) + footerNote;
 
     // 받는 사람 수
     $('numCount').textContent = parseNumbers().length + '명';
@@ -969,7 +985,7 @@
       const payload = {
         channel:      channel,
         numbers:      numbers,
-        message:      message,
+        message:      withFooter(message, channel === 'alimtalk'),   // 문자면 안내 문구 자동 첨부
         smsTitle:     title,
         templateCode: tmpl,
         pin:          pin
