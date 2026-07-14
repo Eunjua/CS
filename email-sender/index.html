@@ -504,6 +504,16 @@
   <!-- ─── 문자 · 알림톡 탭 ─── -->
   <div id="smsPane">
 
+    <!-- 자주 보내는 문자 템플릿 -->
+    <label for="smsTpl">자주 보내는 문자</label>
+    <select id="smsTpl" onchange="applySmsTemplate()">
+      <option value="">(직접 작성)</option>
+      <option value="app">앱 다운로드 안내</option>
+      <option value="chat">채팅 상담 안내</option>
+      <option value="job">일자리 확인 방법</option>
+    </select>
+    <p class="hint">고르면 아래 내용이 자동으로 채워집니다. 그 뒤에 자유롭게 고쳐 쓰세요.</p>
+
     <!-- 발송 방식 -->
     <label>발송 방식</label>
     <div class="choice-row">
@@ -860,6 +870,56 @@
     $('chSms').classList.toggle('on', !isAlim);
     $('chAlim').classList.toggle('on', isAlim);
     $('tmplField').classList.toggle('hidden', !isAlim);
+    renderSmsPreview();
+  }
+
+  /* ── 자주 보내는 문자 템플릿 ──
+     title = 장문(LMS)일 때 문자 제목으로 들어갑니다.
+     내용을 바꾸려면 아래 body 안의 글자만 고치면 됩니다. */
+  const SMS_TEMPLATES = {
+    app: {
+      title: "케어파트너 앱 설치 안내",
+      body:
+        "안녕하세요, 케어파트너입니다.\n" +
+        "케어파트너 어플 다운 받는 링크 전달드려요.\n" +
+        "아래 영어를 눌러 어플을 설치해주세요.\n\n" +
+        "https://play.google.com/store/search?q=케어파트너&c=apps&hl=ko\n\n" +
+        "※ 아이폰(아이패드)에서는 앱을 설치하실 수 없습니다.\n" +
+        "아이폰을 쓰신다면 인터넷에 \"케어파트너\"를 검색해주세요."
+    },
+    chat: {
+      title: "케어파트너 상담 안내",
+      body:
+        "문의 주신 내용은 채팅으로 자세히 도와드리고 있습니다.\n" +
+        "아래 링크 눌러주시면 카카오톡 문의로 바로 연결 됩니다.\n\n" +
+        "http://pf.kakao.com/_jixkfG/chat"
+    },
+    job: {
+      title: "일자리 확인 방법 안내",
+      body:
+        "일자리는 아래 방법을 통해 알아보시는 걸 추천드려요!\n\n" +
+        "- 고용24 (www.work24.go.kr)\n" +
+        "- 서울교육청 구인구직 (https://work.sen.go.kr/work/index.do)\n" +
+        "- 고용노동부 고객센터 국번없이 1350\n" +
+        "- 거주 지역 일자리센터\n" +
+        "모두 무료로 이용하실 수 있어요"
+    }
+  };
+
+  /** 드롭다운에서 고른 템플릿을 내용·제목 칸에 채웁니다. */
+  function applySmsTemplate() {
+    const key = $('smsTpl').value;
+    if (!key) return;                 // (직접 작성)이면 그대로 둠
+    const t = SMS_TEMPLATES[key];
+    if (!t) return;
+
+    const cur = $('msg').value.trim();
+    if (cur && !confirm('이미 쓰신 내용이 있습니다. 템플릿 내용으로 바꿀까요?')) {
+      $('smsTpl').value = '';
+      return;
+    }
+    $('msg').value      = t.body;
+    $('smsTitle').value = t.title;
     renderSmsPreview();
   }
 
