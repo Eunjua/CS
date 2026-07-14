@@ -445,18 +445,18 @@
 
 <!-- ═══ 탭 ═══ -->
 <div class="tabs" role="tablist">
-  <button class="tab" role="tab" aria-selected="true"  id="tabEmail" onclick="selectTab('email')">✉️ 이메일</button>
-  <button class="tab" role="tab" aria-selected="false" id="tabSms"   onclick="selectTab('sms')">💬 문자 · 알림톡</button>
+  <button class="tab" role="tab" aria-selected="true"  id="tabSms"   onclick="selectTab('sms')">💬 문자 · 알림톡</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabEmail" onclick="selectTab('email')">✉️ 이메일</button>
 </div>
 
 <div class="page-wrap">
 
   <!-- ═══ 왼쪽: 입력 폼 ═══ -->
   <aside class="form-panel">
-    <h2 id="formTitle">메일 작성</h2>
+    <h2 id="formTitle">문자 · 알림톡 작성</h2>
 
   <!-- ─── 이메일 탭 ─── -->
-  <div id="emailPane">
+  <div id="emailPane" class="hidden">
 
     <!-- 상황 템플릿 드롭다운 -->
     <label for="tpl">상황 템플릿</label>
@@ -502,7 +502,7 @@
   </div><!-- /emailPane -->
 
   <!-- ─── 문자 · 알림톡 탭 ─── -->
-  <div id="smsPane" class="hidden">
+  <div id="smsPane">
 
     <!-- 발송 방식 -->
     <label>발송 방식</label>
@@ -576,7 +576,7 @@
   </div><!-- /smsPane -->
 
     <!-- 발송 버튼 -->
-    <button class="btn-send" id="sendBtn" onclick="onSend()">✉️ 발송하기</button>
+    <button class="btn-send" id="sendBtn" onclick="onSend()">💬 발송하기</button>
 
     <!-- 결과 메시지 -->
     <div class="result-msg" id="result"></div>
@@ -584,10 +584,10 @@
 
   <!-- ═══ 오른쪽: 미리보기 ═══ -->
   <main class="preview-wrap">
-    <div class="preview-title" id="previewTitle">보낼 메일 미리보기</div>
+    <div class="preview-title" id="previewTitle">고객 휴대폰에 보이는 모습</div>
 
     <!-- 이메일 미리보기 -->
-    <div class="mail-card" id="mailPreview">
+    <div class="mail-card hidden" id="mailPreview">
       <div class="mail-head">
         <div class="row"><span class="k">보낸사람</span><span class="v">케어아카데미 &lt;eju@bosalpim.co.kr&gt;</span></div>
         <div class="row"><span class="k">받는사람</span><span class="v" id="pv-to">—</span></div>
@@ -601,7 +601,7 @@
     </div>
 
     <!-- 문자·알림톡 미리보기 (고객 휴대폰 화면) -->
-    <div class="phone-card hidden" id="smsPreview">
+    <div class="phone-card" id="smsPreview">
       <div class="phone-bar" id="phoneBar">문자 메시지</div>
       <div class="sender-tag" id="senderTag">케어아카데미</div>
       <div class="bubble placeholder" id="bubble">내용을 입력하면 여기에 미리보기가 나타납니다.</div>
@@ -1044,7 +1044,7 @@
     document.getElementById('senderNumDisplay').textContent = SENDER_NUM_DISPLAY;
   }
   renderPreview();
-  renderSmsPreview();
+  selectTab('sms');   // 화면을 열면 문자 탭이 먼저 보입니다
 </script>
 </body>
 </html>
