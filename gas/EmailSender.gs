@@ -50,6 +50,11 @@ function doPost(e) {
       return jsonOut_({ ok: false, error: 'PIN이 올바르지 않습니다.' });
     }
 
+    // 화면의 "문자·알림톡" 탭에서 온 요청이면 비즈엠 발송(BizmSender.gs)으로 넘깁니다.
+    if (body.channel === 'sms' || body.channel === 'alimtalk') {
+      return jsonOut_(sendBizm_(body));
+    }
+
     const to      = String(body.to || '').trim();
     const subject = String(body.subject || '').trim();
     const text    = String(body.body || '');

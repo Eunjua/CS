@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>이메일 발송 도구 — 보살핌 케어아카데미</title>
+<title>발송 도구 — 보살핌 케어아카데미</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -262,24 +262,201 @@
     color: #555;
   }
 
+  /* ── 탭 (이메일 / 문자·알림톡) ── */
+  .tabs {
+    max-width: 1100px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid #e0e4ea;
+  }
+
+  .tab {
+    padding: 11px 20px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    border-radius: 10px 10px 0 0;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: #888;
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+
+  .tab:hover { color: #333; background: #f5f7fa; }
+  .tab[aria-selected="true"] { color: #3b7dd8; border-bottom-color: #3b7dd8; }
+
+  /* ── 발송 방식 선택 (문자만 / 알림톡) ── */
+  .choice-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 13px 14px;
+    border: 1.5px solid #dde1e7;
+    border-radius: 10px;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color .15s, background .15s;
+  }
+
+  .choice:hover { border-color: #3b7dd8; }
+  .choice.on { border-color: #3b7dd8; background: #eef4fd; }
+  .choice input { margin-top: 3px; flex-shrink: 0; accent-color: #3b7dd8; }
+  .choice .t { display: block; font-size: 14px; font-weight: 600; color: #1a1a2e; }
+  .choice .d { display: block; font-size: 11.5px; color: #888; margin-top: 3px; line-height: 1.5; }
+
+  /* ── 글자수 미터 + 문자 종류 뱃지 ── */
+  .label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 18px;
+    margin-bottom: 6px;
+  }
+
+  .label-row label { margin: 0; }
+
+  .meter {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: #999;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    border: 1px solid #dde1e7;
+    background: #f5f7fa;
+    color: #888;
+  }
+
+  .pill.sms { background: #e9f7ef; color: #1e7e44; border-color: #b8e3c9; }
+  .pill.lms { background: #eef4fd; color: #2e67be; border-color: #cfe0f7; }
+
+  /* 번호 입력칸은 본문보다 짧게 (전역 textarea min-height 상쇄) */
+  textarea.short { min-height: 84px; }
+
+  /* 안내 박스 (알림톡 주의사항) */
+  .notice {
+    margin-top: 8px;
+    padding: 11px 13px;
+    background: #fff8e6;
+    border: 1px solid #f0dca6;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #9a6b00;
+    line-height: 1.6;
+  }
+
+  /* ── 문자 미리보기(휴대폰 화면) ── */
+  .phone-card {
+    border: 1px solid #e0e4ea;
+    border-radius: 20px;
+    background: #f5f7fa;
+    padding: 16px 16px 22px;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .phone-bar {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #999;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e6e9ee;
+  }
+
+  .sender-tag { font-size: 11px; color: #999; padding-left: 3px; }
+
+  .bubble {
+    align-self: flex-start;
+    max-width: 92%;
+    padding: 13px 15px;
+    background: #fff;
+    border: 1px solid #e0e4ea;
+    border-radius: 4px 14px 14px 14px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .bubble.kakao { background: #fee500; border-color: #e6cf00; color: #3c1e1e; }
+  .bubble.placeholder { color: #bbb; }
+
+  .bubble .lms-title {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 7px;
+    padding-bottom: 7px;
+    border-bottom: 1px dashed rgba(0,0,0,.18);
+  }
+
+  .fallback-note {
+    margin-top: auto;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px dashed #dde1e7;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.6;
+  }
+
+  /* 발송 결과 목록 */
+  .result-msg ul { margin: 7px 0 0; padding-left: 18px; }
+  .result-msg li { line-height: 1.7; }
+
+  .hidden { display: none !important; }
+
   @media (max-width: 880px) {
     .page-wrap { grid-template-columns: 1fr; }
     .preview-wrap { position: static; }
+    .choice-row { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
 
 <div class="page-title">
-  📧 이메일 발송 도구
+  📨 발송 도구
   <span class="sub">보살핌 케어아카데미 · CS 상담원용</span>
+</div>
+
+<!-- ═══ 탭 ═══ -->
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true"  id="tabEmail" onclick="selectTab('email')">✉️ 이메일</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabSms"   onclick="selectTab('sms')">💬 문자 · 알림톡</button>
 </div>
 
 <div class="page-wrap">
 
   <!-- ═══ 왼쪽: 입력 폼 ═══ -->
   <aside class="form-panel">
-    <h2>메일 작성</h2>
+    <h2 id="formTitle">메일 작성</h2>
+
+  <!-- ─── 이메일 탭 ─── -->
+  <div id="emailPane">
 
     <!-- 상황 템플릿 드롭다운 -->
     <label for="tpl">상황 템플릿</label>
@@ -322,8 +499,84 @@
     <input type="password" id="pin" placeholder="공용 PIN 입력" autocomplete="off">
     <p class="hint">상담원이 공유하는 공용 PIN을 입력해야 발송됩니다.</p>
 
+  </div><!-- /emailPane -->
+
+  <!-- ─── 문자 · 알림톡 탭 ─── -->
+  <div id="smsPane" class="hidden">
+
+    <!-- 발송 방식 -->
+    <label>발송 방식</label>
+    <div class="choice-row">
+      <label class="choice on" id="chSms">
+        <input type="radio" name="channel" value="sms" checked onchange="onChannelChange()">
+        <span>
+          <span class="t">문자만 보내기</span>
+          <span class="d">카카오를 거치지 않고 바로 문자. 문구를 자유롭게 씁니다.</span>
+        </span>
+      </label>
+      <label class="choice" id="chAlim">
+        <input type="radio" name="channel" value="alimtalk" onchange="onChannelChange()">
+        <span>
+          <span class="t">알림톡 → 실패 시 문자</span>
+          <span class="d">카톡으로 먼저 보내고, 안 되면 문자로 대체. 승인된 템플릿만 가능.</span>
+        </span>
+      </label>
+    </div>
+
+    <!-- 받는 사람 번호 -->
+    <div class="label-row">
+      <label for="nums">받는 사람 번호</label>
+      <span class="meter"><span id="numCount">0명</span></span>
+    </div>
+    <textarea id="nums" class="short" placeholder="01012345678&#10;01098765432" oninput="renderSmsPreview()"></textarea>
+    <p class="hint">여러 명에게 보낼 때는 줄을 바꿔 입력하세요. 한 번에 100명까지 가능합니다. 하이픈(-)은 있어도 됩니다.</p>
+
+    <!-- 템플릿 코드 (알림톡일 때만) -->
+    <div id="tmplField" class="hidden">
+      <label for="tmpl">템플릿 코드</label>
+      <input type="text" id="tmpl" placeholder="예: care_cert_001" autocomplete="off">
+      <div class="notice">
+        알림톡은 <b>비즈엠에서 승인받은 템플릿 문구와 글자가 정확히 같아야</b> 발송됩니다.
+        아래 내용 칸에 승인된 템플릿 문구를 그대로 붙여넣고, 이름·날짜 같은 변수 자리만 바꿔 주세요.
+        문구가 다르면 알림톡이 실패하고 문자로 대체 발송됩니다.
+      </div>
+    </div>
+
+    <!-- 문자 제목 (LMS일 때만) -->
+    <div id="titleField" class="hidden">
+      <label for="smsTitle">문자 제목</label>
+      <input type="text" id="smsTitle" placeholder="[케어아카데미] 수강 안내" maxlength="30" oninput="renderSmsPreview()">
+      <p class="hint">장문(LMS)일 때만 들어갑니다. 30자까지. 비워두면 "케어아카데미 안내"로 나갑니다.</p>
+    </div>
+
+    <!-- 내용 -->
+    <div class="label-row">
+      <label for="msg">내용</label>
+      <span class="meter">
+        <span id="byteCount">0 / 90 byte</span>
+        <span class="pill sms" id="kindPill">단문 SMS</span>
+      </span>
+    </div>
+    <textarea id="msg" placeholder="안녕하세요, 케어아카데미입니다.&#10;문의 주신 이수증 발급이 완료되어 안내드립니다." oninput="renderSmsPreview()"></textarea>
+    <p class="hint" id="byteHint">한글은 1자에 2byte입니다. 90byte(한글 45자)를 넘으면 자동으로 장문(LMS)으로 보냅니다. 문자에는 이모지를 넣을 수 없습니다.</p>
+
+    <!-- 발신번호 (고정) -->
+    <label>보내는 번호</label>
+    <div class="fixed-sender">
+      <span class="lock">🔒</span>
+      <span id="senderNumDisplay">비즈엠에 승인된 발신번호</span>
+    </div>
+    <p class="hint">발신번호는 서버에 설정된 값으로 고정되며 화면에서 바꿀 수 없습니다.</p>
+
+    <!-- 공용 PIN -->
+    <label for="smsPin">발송 PIN</label>
+    <input type="password" id="smsPin" placeholder="공용 PIN 입력" autocomplete="off">
+    <p class="hint">이메일과 같은 공용 PIN입니다.</p>
+
+  </div><!-- /smsPane -->
+
     <!-- 발송 버튼 -->
-    <button class="btn-send" id="sendBtn" onclick="sendMail()">✉️ 발송하기</button>
+    <button class="btn-send" id="sendBtn" onclick="onSend()">✉️ 발송하기</button>
 
     <!-- 결과 메시지 -->
     <div class="result-msg" id="result"></div>
@@ -331,9 +584,10 @@
 
   <!-- ═══ 오른쪽: 미리보기 ═══ -->
   <main class="preview-wrap">
-    <div class="preview-title">보낼 메일 미리보기</div>
+    <div class="preview-title" id="previewTitle">보낼 메일 미리보기</div>
 
-    <div class="mail-card">
+    <!-- 이메일 미리보기 -->
+    <div class="mail-card" id="mailPreview">
       <div class="mail-head">
         <div class="row"><span class="k">보낸사람</span><span class="v">케어아카데미 &lt;eju@bosalpim.co.kr&gt;</span></div>
         <div class="row"><span class="k">받는사람</span><span class="v" id="pv-to">—</span></div>
@@ -343,6 +597,17 @@
       <div class="mail-attach" id="pv-attach-wrap" style="display:none;">
         <div class="label">첨부파일</div>
         <div id="pv-attach"></div>
+      </div>
+    </div>
+
+    <!-- 문자·알림톡 미리보기 (고객 휴대폰 화면) -->
+    <div class="phone-card hidden" id="smsPreview">
+      <div class="phone-bar" id="phoneBar">문자 메시지</div>
+      <div class="sender-tag" id="senderTag">케어아카데미</div>
+      <div class="bubble placeholder" id="bubble">내용을 입력하면 여기에 미리보기가 나타납니다.</div>
+      <div class="fallback-note hidden" id="fallbackNote">
+        카톡을 쓰지 않거나 채널을 추가하지 않은 고객에게는 같은 내용이 <b>문자로 다시</b> 나갑니다.
+        이 경우 알림톡이 아니라 문자 요금이 청구됩니다.
       </div>
     </div>
   </main>
@@ -551,8 +816,219 @@
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     문자 · 알림톡 탭
+     ═══════════════════════════════════════════════════════════ */
+
+  /* 화면에 표시할 발신번호. 비즈엠에 승인받은 번호로 바꿔 주세요.
+     (표시용일 뿐이며, 실제 발송에 쓰이는 번호는 Apps Script의 스크립트 속성
+      BIZM_SENDER_NUM 값입니다. 두 값을 같게 맞춰 주세요.) */
+  const SENDER_NUM_DISPLAY = "1588-5877";
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ── 탭 전환 ── */
+  function selectTab(which) {
+    const isSms = (which === 'sms');
+
+    $('tabSms').setAttribute('aria-selected', String(isSms));
+    $('tabEmail').setAttribute('aria-selected', String(!isSms));
+
+    $('smsPane').classList.toggle('hidden', !isSms);
+    $('emailPane').classList.toggle('hidden', isSms);
+
+    $('smsPreview').classList.toggle('hidden', !isSms);
+    $('mailPreview').classList.toggle('hidden', isSms);
+
+    $('formTitle').textContent    = isSms ? '문자 · 알림톡 작성' : '메일 작성';
+    $('previewTitle').textContent = isSms ? '고객 휴대폰에 보이는 모습' : '보낼 메일 미리보기';
+    $('sendBtn').textContent      = isSms ? '💬 발송하기' : '✉️ 발송하기';
+
+    $('result').className = 'result-msg';   // 이전 결과 감추기
+    if (isSms) renderSmsPreview();
+  }
+
+  /* ── 현재 선택된 발송 방식 ── */
+  function currentChannel() {
+    const el = document.querySelector('input[name="channel"]:checked');
+    return el ? el.value : 'sms';
+  }
+
+  /* ── 발송 방식(문자만 / 알림톡) 변경 ── */
+  function onChannelChange() {
+    const isAlim = (currentChannel() === 'alimtalk');
+    $('chSms').classList.toggle('on', !isAlim);
+    $('chAlim').classList.toggle('on', isAlim);
+    $('tmplField').classList.toggle('hidden', !isAlim);
+    renderSmsPreview();
+  }
+
+  /* ── 문자 byte 계산 (한글 2byte, 영문·숫자 1byte) ── */
+  function byteLen(s) {
+    let n = 0;
+    for (let i = 0; i < s.length; i++) n += s.charCodeAt(i) > 127 ? 2 : 1;
+    return n;
+  }
+
+  /* ── 입력한 번호 목록 (숫자만, 중복 제거) ── */
+  function parseNumbers() {
+    const seen = new Set();
+    return $('nums').value
+      .split(/[\n,]/)
+      .map(v => v.replace(/[^0-9]/g, ''))
+      .filter(n => {
+        if (!n || seen.has(n)) return false;
+        seen.add(n);
+        return true;
+      });
+  }
+
+  /* ── 문자 미리보기 갱신 ── */
+  function renderSmsPreview() {
+    const text   = $('msg').value;
+    const bytes  = byteLen(text);
+    const isLms  = bytes > 90;
+    const isAlim = (currentChannel() === 'alimtalk');
+
+    // 글자수 미터 + 문자 종류
+    $('byteCount').textContent = isLms
+      ? bytes.toLocaleString() + ' / 2,000 byte'
+      : bytes + ' / 90 byte';
+
+    const pill = $('kindPill');
+    pill.textContent = isLms ? '장문 LMS' : '단문 SMS';
+    pill.className   = 'pill ' + (isLms ? 'lms' : 'sms');
+
+    $('titleField').classList.toggle('hidden', !isLms);
+    $('byteHint').textContent = isLms
+      ? '90byte를 넘어 장문(LMS)으로 발송됩니다. 위에 제목을 넣어 주세요. 이모지는 넣을 수 없습니다.'
+      : '한글은 1자에 2byte입니다. 90byte(한글 45자)를 넘으면 자동으로 장문(LMS)으로 보냅니다. 문자에는 이모지를 넣을 수 없습니다.';
+
+    // 받는 사람 수
+    $('numCount').textContent = parseNumbers().length + '명';
+
+    // 휴대폰 화면
+    $('phoneBar').textContent  = isAlim ? '카카오톡' : (SENDER_NUM_DISPLAY || '문자 메시지');
+    $('senderTag').textContent = isAlim ? '케어아카데미 채널' : '케어아카데미';
+    $('fallbackNote').classList.toggle('hidden', !isAlim);
+
+    const bubble = $('bubble');
+    bubble.className = 'bubble' + (isAlim ? ' kakao' : '');
+    bubble.textContent = '';
+
+    if (!text.trim()) {
+      bubble.classList.add('placeholder');
+      bubble.textContent = '내용을 입력하면 여기에 미리보기가 나타납니다.';
+      return;
+    }
+
+    // 장문(LMS)이면 제목이 본문 위에 붙습니다
+    const title = $('smsTitle').value.trim();
+    if (isLms && !isAlim && title) {
+      const t = document.createElement('span');
+      t.className = 'lms-title';
+      t.textContent = title;
+      bubble.appendChild(t);
+    }
+    bubble.appendChild(document.createTextNode(text));
+  }
+
+  /* ── 발송 버튼: 지금 열린 탭에 맞는 발송 실행 ── */
+  function onSend() {
+    if ($('tabSms').getAttribute('aria-selected') === 'true') sendSms();
+    else sendMail();
+  }
+
+  /* ── 문자·알림톡 발송 ── */
+  async function sendSms() {
+    const channel = currentChannel();
+    const numbers = parseNumbers();
+    const message = $('msg').value;
+    const pin     = $('smsPin').value.trim();
+    const tmpl    = $('tmpl').value.trim();
+    const title   = $('smsTitle').value.trim();
+    const btn     = $('sendBtn');
+
+    // ── 입력 검증 ──
+    if (!numbers.length)  return showResult('err', '❌ 받는 사람 번호를 입력해 주세요.');
+    if (numbers.length > 100) {
+      return showResult('err', '❌ 한 번에 100명까지 보낼 수 있습니다. (현재 ' + numbers.length + '명)');
+    }
+    const bad = numbers.filter(n => !/^0\d{8,10}$/.test(n));
+    if (bad.length)       return showResult('err', '❌ 번호 형식이 올바르지 않습니다: ' + bad.join(', '));
+    if (!message.trim())  return showResult('err', '❌ 보낼 내용을 입력해 주세요.');
+    if (channel === 'alimtalk' && !tmpl) {
+      return showResult('err', '❌ 알림톡은 템플릿 코드를 입력해야 합니다.');
+    }
+    if (!pin)             return showResult('err', '❌ 발송 PIN을 입력해 주세요.');
+
+    btn.disabled = true;
+    showResult('loading', '⏳ ' + numbers.length + '명에게 보내는 중입니다…');
+
+    try {
+      const payload = {
+        channel:      channel,
+        numbers:      numbers,
+        message:      message,
+        smsTitle:     title,
+        templateCode: tmpl,
+        pin:          pin
+      };
+
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (!data.ok && !Array.isArray(data.results)) {
+        return showResult('err', '❌ 발송 실패: ' + (data.error || '알 수 없는 오류입니다.'));
+      }
+      showSendResult(data);
+
+      // 성공했으면 번호·PIN만 비우고 내용은 재사용할 수 있게 남겨 둡니다
+      if (data.sent > 0) {
+        $('nums').value = '';
+        $('smsPin').value = '';
+        renderSmsPreview();
+      }
+    } catch (err) {
+      showResult('err', '❌ 발송 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ── 발송 결과를 한 명씩 보여줍니다 ── */
+  function showSendResult(data) {
+    const el = document.getElementById('result');
+    const allOk = data.failed === 0;
+
+    el.className = 'result-msg show ' + (allOk ? 'ok' : 'err');
+    el.textContent = '';
+
+    const head = document.createElement('div');
+    head.innerHTML = allOk
+      ? '✅ <b>' + data.sent + '명에게 ' + data.kind + ' 발송 완료</b>'
+      : '⚠️ <b>' + data.sent + '명 성공, ' + data.failed + '명 실패</b> (' + data.kind + ')';
+    el.appendChild(head);
+
+    const ul = document.createElement('ul');
+    (data.results || []).forEach(r => {
+      const li = document.createElement('li');
+      li.textContent = r.number + ' — ' + r.text;
+      ul.appendChild(li);
+    });
+    el.appendChild(ul);
+  }
+
   /* ── 초기 렌더 ── */
+  if (SENDER_NUM_DISPLAY) {
+    document.getElementById('senderNumDisplay').textContent = SENDER_NUM_DISPLAY;
+  }
   renderPreview();
+  renderSmsPreview();
 </script>
 </body>
 </html>
