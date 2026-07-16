@@ -337,6 +337,12 @@ function buildRemark(row, idx) {
   return remark;
 }
 
+// ===== 재발급 여부 → "T" 또는 "" (재발급 전용 열에 사용) =====
+function reissueFlag(row, idx) {
+  var v = row[idx['재발급']];
+  return (v === true || v === 'true' || v === 'TRUE') ? 'T' : '';
+}
+
 // ===== 유틸: 이름(user_name) 가나다 순 → 동명이인은 전화번호 순 정렬 =====
 function sortRowsByName(rows, idx) {
   return rows.slice().sort(function(a, b) {
@@ -455,7 +461,6 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
     var birthday  = yearVal + monthVal + dayVal;
     var phone     = formatPhone(row[idx['전화번호']]);
     var issueType = formatIssueType(row[idx['type_code']]);
-    var remark    = buildRemark(row, idx);
 
     sheet.getRange(rowNum, 1).setValue(makeDate);
     sheet.getRange(rowNum, 2).setValue(row[idx['user_name']] || '');
@@ -464,7 +469,7 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
     sheet.getRange(rowNum, 5).setValue(row[idx['title_with_grade']] || '');
     sheet.getRange(rowNum, 6).setValue(issueType);
     sheet.getRange(rowNum, 7).setValue(row[idx['주소']] || '');
-    sheet.getRange(rowNum, 8).setValue(remark);
+    sheet.getRange(rowNum, 8).setValue(reissueFlag(row, idx));
   });
 
   highlightDuplicates(sheet, rows.length + 1, 2, 4);   // 이름(2)+전화번호(4) 같으면 이름열 색칠
@@ -518,7 +523,6 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
       var shipDateStr = shipDate instanceof Date
         ? Utilities.formatDate(shipDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
         : shipDate.toString().trim();
-      var remark      = buildRemark(row, idx);
 
       outRows.push([
         shipDateStr,
@@ -527,7 +531,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
         row[idx['title_with_grade']] || '',
         row[idx['type_code']] || '',
         '',        // 송장번호: 배송 업데이트 때 채워짐 (지금은 빈칸)
-        remark
+        reissueFlag(row, idx)
       ]);
     });
   });
