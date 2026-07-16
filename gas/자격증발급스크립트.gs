@@ -324,13 +324,18 @@ function setCellText(sheet, rowNum, colNum, value) {
   cell.setValue(value !== null && value !== undefined ? value.toString() : '');
 }
 
+// ===== 재발급 여부 판정 (체크박스 TRUE 또는 텍스트 "T" 모두 인정) =====
+function isReissueValue(v) {
+  var s = (v == null ? '' : v).toString().trim().toUpperCase();
+  return s === 'TRUE' || s === 'T';
+}
+
 // ===== 재발급/비고 remark 생성 유틸 =====
 function buildRemark(row, idx) {
-  var isReissue = row[idx['재발급']];
-  var bigoVal   = (row[idx['비고']] || '').toString().trim();
-  var remark    = '';
+  var bigoVal = (row[idx['비고']] || '').toString().trim();
+  var remark  = '';
 
-  if (isReissue === true || isReissue === 'true' || isReissue === 'TRUE') {
+  if (isReissueValue(row[idx['재발급']])) {
     remark = bigoVal ? '재발급/' + bigoVal : '재발급';
   }
 
@@ -339,8 +344,7 @@ function buildRemark(row, idx) {
 
 // ===== 재발급 여부 → "T" 또는 "" (재발급 전용 열에 사용) =====
 function reissueFlag(row, idx) {
-  var v = row[idx['재발급']];
-  return (v === true || v === 'true' || v === 'TRUE') ? 'T' : '';
+  return isReissueValue(row[idx['재발급']]) ? 'T' : '';
 }
 
 // ===== 유틸: 이름(user_name) 가나다 순 → 동명이인은 전화번호 순 정렬 =====
