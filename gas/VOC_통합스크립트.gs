@@ -92,11 +92,48 @@ const RAW_HEADERS = {
   state    : 'state'
 };
 
-// ── 매핑결과 탭 헤더
+// 태그가 비어 있는 상담에 붙이는 라벨 (대시보드 parseRawRows 와 동일)
+const NO_TAG_LABEL = '태그없음';
+
+// 이슈 태그 여부 — 대시보드 getPrefix/getIssueTags 와 동일하게 '기타'(태그없음, 접두어 없는 태그)를 걸러낸다
+function isIssueTag_(tag) {
+  const t = String(tag || '').trim();
+  if (!t || t === NO_TAG_LABEL) return false;
+  return t.indexOf('_') !== -1;
+}
+
+// ── 매핑결과 탭 헤더 (시트를 새로 만들 때만 사용. 기존 시트는 실제 헤더를 읽어 이름으로 매칭)
 const MAPPED_HEADERS = [
-  '상담ID', '상담일시', '채널', '태그', '상태',
-  '만족도', '친절도', '해결여부', '대기시간', '자유의견', '응답일시', 'AI구분'
+  'id', 'week', 'mediumType', 'tags', '상태',
+  '만족도', '친절도', '해결여부', '대기시간', '자유의견', '응답일시',
+  '문의한 월', '확인', 'AI구분'
 ];
+
+// 매핑결과 컬럼별 헤더 이름 후보 (시트 버전마다 한글/영문이 섞여 있음)
+const MAPPED_COL_ALIASES = {
+  id       : ['id', '상담ID'],
+  week     : ['week', '상담일시'],
+  medium   : ['mediumType', '채널'],
+  tags     : ['tags', '태그'],
+  state    : ['상태', 'state'],
+  csat     : ['만족도'],
+  kindness : ['친절도'],
+  resolved : ['해결여부'],
+  waiting  : ['대기시간'],
+  comment  : ['자유의견'],
+  answered : ['응답일시'],
+  month    : ['문의한 월'],
+  ai       : ['AI구분'],
+};
+
+// 매핑결과 시트의 실제 헤더 → { key: 0-based 컬럼 인덱스 } (없는 컬럼은 -1)
+function mappedColIdx_(headers) {
+  const idx = {};
+  Object.keys(MAPPED_COL_ALIASES).forEach(function(k) {
+    idx[k] = firstHeaderIdx_(headers, MAPPED_COL_ALIASES[k]);
+  });
+  return idx;
+}
 
 
 // ============================================================
@@ -113,6 +150,7 @@ function onOpen() {
     .addItem('📝 VOC 주간 리포트 생성', 'generateWeeklyReport')
     .addSeparator()
     .addItem('🩹 상담일시 빈 행 채우기 (managedAt)', 'backfillMappedDates')
+    .addItem('🩹 매핑결과 컬럼 복구 (문의한 월 ↔ AI구분)', 'repairMappedColumns')
     .addToUi();
 }
 
@@ -164,30 +202,93 @@ function aiOrHuman_(tagStr) {
   return '사람';
 }
 
+// 날짜값 → 문의한 월 (1~12). 파싱 실패 시 빈 문자열
+function monthOf_(val) {
+  const d = toDate(val);
+  return (d && !isNaN(d.getTime())) ? (d.getMonth() + 1) : '';
+}
+
 // 기존 매핑결과 시트에 'AI구분' 컬럼이 없으면 추가 + 값이 빈 기존 행을 태그로 소급 채움
 function ensureAiColumn_(sh) {
   const lastRow = sh.getLastRow();
   const lastCol = sh.getLastColumn();
   if (lastRow < 1 || lastCol < 1) return;
   const header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
-  let aiCol  = header.indexOf('AI구분') + 1;   // 1-based, 0이면 없음
-  const tagCol = header.indexOf('태그') + 1;
+  let aiCol = header.indexOf('AI구분') + 1;   // 1-based, 0이면 없음
+  // 태그 컬럼 이름이 시트마다 'tags'/'태그'로 갈려서, 예전 코드는 항상 못 찾고 백필을 건너뛰었다
+  const tagCol = firstHeaderIdx_(header, MAPPED_COL_ALIASES.tags) + 1;
   if (aiCol === 0) {
     aiCol = lastCol + 1;
     sh.getRange(1, aiCol).setValue('AI구분').setFontWeight('bold').setBackground('#f0f0f0');
   }
-  if (lastRow < 2 || tagCol === 0) return;
+  if (lastRow < 2 || tagCol === 0) {
+    Logger.log('⚠️ [AI구분] 태그 컬럼(tags/태그)을 찾지 못해 백필을 건너뜁니다.');
+    return;
+  }
   const n       = lastRow - 1;
   const aiVals  = sh.getRange(2, aiCol,  n, 1).getValues();
   const tagVals = sh.getRange(2, tagCol, n, 1).getValues();
-  let changed = false;
+  let changed = 0;
   for (let i = 0; i < n; i++) {
     if (String(aiVals[i][0]).trim() === '') {
       aiVals[i][0] = aiOrHuman_(tagVals[i][0]);
-      changed = true;
+      changed++;
     }
   }
-  if (changed) sh.getRange(2, aiCol, n, 1).setValues(aiVals);
+  if (changed > 0) sh.getRange(2, aiCol, n, 1).setValues(aiVals);
+  Logger.log('[AI구분] 소급 채움 ' + changed + '행');
+}
+
+// ── 일회성 복구: '문의한 월' 칸에 잘못 들어간 'AI'/'사람' 값을 되돌린다.
+//    (구버전 runCsatMapping이 컬럼 순서를 12칸으로 가정해 AI구분 값을 '문의한 월' 자리에 덮어썼음)
+//    문의한 월은 week(상담일시)에서 다시 계산하고, 덮어쓴 AI/사람 값은 AI구분 칸으로 옮긴다.
+function repairMappedColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const sh = ss.getSheetByName(SHEET_MAPPED);
+  if (!sh) { ui.alert('❌ 매핑결과 시트가 없어요.'); return; }
+
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) { ui.alert('매핑결과에 데이터가 없어요.'); return; }
+
+  const headers = data[0].map(h => String(h).trim());
+  const idx     = mappedColIdx_(headers);
+  if (idx.month < 0 || idx.week < 0) {
+    ui.alert('❌ "문의한 월" 또는 "week" 컬럼을 찾지 못했어요.');
+    return;
+  }
+  ensureAiColumn_(sh);   // AI구분 컬럼 보장 (없으면 새로 만들고 태그로 채움)
+
+  const headers2 = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  const idx2     = mappedColIdx_(headers2);
+
+  const n        = data.length - 1;
+  const monthVals = sh.getRange(2, idx2.month + 1, n, 1).getValues();
+  const aiVals    = sh.getRange(2, idx2.ai    + 1, n, 1).getValues();
+
+  let movedAi = 0, fixedMonth = 0;
+  for (let i = 0; i < n; i++) {
+    const m = String(monthVals[i][0]).trim();
+    if (m !== 'AI' && m !== '사람') continue;      // 오염된 행만 손댄다
+
+    // 덮어쓴 AI/사람 값을 AI구분 칸으로 이동 (AI구분이 이미 차 있으면 그대로 둔다)
+    if (String(aiVals[i][0]).trim() === '') { aiVals[i][0] = m; movedAi++; }
+
+    // 문의한 월은 week(상담일시)에서 재계산
+    monthVals[i][0] = monthOf_(data[i + 1][idx2.week]);
+    fixedMonth++;
+  }
+
+  if (fixedMonth > 0) {
+    sh.getRange(2, idx2.month + 1, n, 1).setValues(monthVals);
+    sh.getRange(2, idx2.ai    + 1, n, 1).setValues(aiVals);
+  }
+
+  const msg = '🩹 매핑결과 컬럼 복구 완료\n\n' +
+              '· 문의한 월 되살림: ' + fixedMonth + '행\n' +
+              '· AI구분으로 옮긴 값: ' + movedAi + '행';
+  Logger.log(msg);
+  ui.alert(msg);
 }
 
 function runCsatMapping() {
@@ -254,10 +355,18 @@ function runCsatMapping() {
     if (rowId) rawMap[rowId] = rawData[i];
   }
 
+  // ── 매핑결과 시트의 실제 헤더를 읽어 컬럼 위치를 이름으로 찾는다.
+  //    (예전 코드는 MAPPED_HEADERS 순서대로 12칸을 그대로 써서, 시트에 '문의한 월'·'확인'
+  //     컬럼이 추가된 뒤로 AI구분 값이 '문의한 월' 칸에 덮어써지고 있었다)
+  const mappedData = mappedSh.getDataRange().getValues();
+  const mWidth     = Math.max(mappedSh.getLastColumn(), MAPPED_HEADERS.length);
+  const mHead      = (mappedData[0] || []).map(h => String(h).trim());
+  const mIdx       = mappedColIdx_(mHead);
+  const idCol      = mIdx.id >= 0 ? mIdx.id : 0;
+
   const existingIds = new Set();
-  const mappedData  = mappedSh.getDataRange().getValues();
   for (let i = 1; i < mappedData.length; i++) {
-    const eid = String(mappedData[i][0]).trim();
+    const eid = String(mappedData[i][idCol]).trim();
     if (eid) existingIds.add(eid);
   }
 
@@ -274,28 +383,34 @@ function runCsatMapping() {
     const rawRow = rawMap[formId];
     if (!rawRow) { noMatch++; continue; }
 
-    const tagVal = rIdx.tags >= 0 ? rawRow[rIdx.tags] : '';
-    newRows.push([
-      formId,
-      pickInquiryDate_(rawRow, rIdx),
-      rIdx.medium    >= 0 ? rawRow[rIdx.medium]     : '',
-      tagVal,
-      rIdx.state     >= 0 ? rawRow[rIdx.state]      : '',
-      fIdx.csat      >= 0 ? csatToScore(row[fIdx.csat])          : '',
-      fIdx.kindness  >= 0 ? kindnessToScore(row[fIdx.kindness])      : '',
-      fIdx.resolved  >= 0 ? row[fIdx.resolved]      : '',
-      fIdx.waiting   >= 0 ? row[fIdx.waiting]       : '',
-      fIdx.comment   >= 0 ? row[fIdx.comment]       : '',
-      fIdx.timestamp >= 0 ? row[fIdx.timestamp]     : '',
-      aiOrHuman_(tagVal)
-    ]);
+    const tagVal      = rIdx.tags >= 0 ? rawRow[rIdx.tags] : '';
+    const inquiryDate = pickInquiryDate_(rawRow, rIdx);
 
+    // 헤더 이름으로 찾은 위치에만 값을 넣는다 (없는 컬럼은 건너뜀)
+    const newRow = new Array(mWidth).fill('');
+    const put = (key, val) => { if (mIdx[key] >= 0) newRow[mIdx[key]] = val; };
+
+    put('id',       formId);
+    put('week',     inquiryDate);
+    put('medium',   rIdx.medium >= 0 ? rawRow[rIdx.medium] : '');
+    put('tags',     tagVal);
+    put('state',    rIdx.state  >= 0 ? rawRow[rIdx.state]  : '');
+    put('csat',     fIdx.csat      >= 0 ? csatToScore(row[fIdx.csat])         : '');
+    put('kindness', fIdx.kindness  >= 0 ? kindnessToScore(row[fIdx.kindness]) : '');
+    put('resolved', fIdx.resolved  >= 0 ? row[fIdx.resolved]  : '');
+    put('waiting',  fIdx.waiting   >= 0 ? row[fIdx.waiting]   : '');
+    put('comment',  fIdx.comment   >= 0 ? row[fIdx.comment]   : '');
+    put('answered', fIdx.timestamp >= 0 ? row[fIdx.timestamp] : '');
+    put('month',    monthOf_(inquiryDate));
+    put('ai',       aiOrHuman_(tagVal));
+
+    newRows.push(newRow);
     existingIds.add(formId);
     matched++;
   }
 
   if (newRows.length > 0) {
-    mappedSh.getRange(mappedSh.getLastRow() + 1, 1, newRows.length, MAPPED_HEADERS.length)
+    mappedSh.getRange(mappedSh.getLastRow() + 1, 1, newRows.length, mWidth)
       .setValues(newRows);
   }
 
@@ -389,6 +504,16 @@ function runDashboardSync() {
   const waitColPos     = PUBLIC_COLS.indexOf('timeFromFirstOpenToFirstAnswerInOperation');
   const assigneeColPos = PUBLIC_COLS.indexOf('assigneeId');
 
+  // ── firstOpenedAt 폴백용 컬럼 위치
+  //    AI 자동완결 건과 일부 전화 상담은 firstOpenedAt이 비어 있는데,
+  //    대시보드(parseRawRows)는 날짜가 없으면 그 행을 통째로 버려서 태그 건수가 실제보다 적게 나왔다.
+  //    매핑결과 쪽 pickInquiryDate_ 와 같은 규칙(openedAt → managedAt)으로 채워서 내보낸다.
+  const firstOpenedColPos = PUBLIC_COLS.indexOf('firstOpenedAt');
+  const openedAtIdx       = rHead.indexOf(RAW_HEADERS.openedAt);
+  const managedAtIdx      = rHead.indexOf(RAW_HEADERS.managed);
+  let   dateFilled        = 0;
+  let   dateStillEmpty    = 0;
+
   // 상담사 ID → 이름 매핑
   const agentMapSh = ss.getSheetByName(SHEET_AGENT_MAP);
   const agentMap = {};
@@ -412,6 +537,20 @@ function runDashboardSync() {
   const outputHeaders = [...PUBLIC_COLS, '대기시간(분)'];
   const outputRows = rawData.slice(1).map(row => {
     const base    = colIndices.map(i => (i >= 0 ? row[i] : ''));
+
+    // firstOpenedAt이 비면 openedAt → managedAt 순으로 채운다
+    if (firstOpenedColPos >= 0 && (base[firstOpenedColPos] === '' || base[firstOpenedColPos] == null)) {
+      const opened  = openedAtIdx  >= 0 ? row[openedAtIdx]  : '';
+      const managed = managedAtIdx >= 0 ? row[managedAtIdx] : '';
+      const fallback = (opened !== '' && opened != null) ? opened : managed;
+      if (fallback !== '' && fallback != null) {
+        base[firstOpenedColPos] = fallback;
+        dateFilled++;
+      } else {
+        dateStillEmpty++;
+      }
+    }
+
     const waitSec = waitColPos >= 0 ? parseFloat(base[waitColPos]) : NaN;
     const waitMin = (!isNaN(waitSec) && waitSec > 0) ? Math.round(waitSec / 60) : '';
     if (assigneeColPos >= 0) {
@@ -430,6 +569,7 @@ function runDashboardSync() {
     .setBackground('#e8f5e9');
 
   Logger.log(`대시보드 동기화 완료 — ${outputRows.length}건 → "${SHEET_PUBLIC}" 탭 업데이트됨`);
+  Logger.log(`📅 firstOpenedAt 폴백 — openedAt/managedAt로 채운 행 ${dateFilled}개 / 여전히 날짜 없는 행 ${dateStillEmpty}개(대시보드에서 제외됨)`);
 }
 
 
@@ -600,10 +740,12 @@ function buildReportJson(pubValues, mappedValues) {
   // ── 2. 주차별 기본 집계
   const weekMap = {};
 
+  // 대시보드와 동일하게, 태그가 없는 상담도 '태그없음'으로 세어 건수에 포함한다
+  //  (예전에는 태그 없는 행을 통째로 버려서 리포트 처리건수가 대시보드보다 적게 나왔다)
   pubValues.slice(1).forEach(row => {
     const rawDate = row[dateCol];
+    if (!rawDate) return;
     const rawTags = String(row[tagsCol] || '').trim();
-    if (!rawDate || !rawTags) return;
 
     const weekLabel = toWeekLabel(rawDate);
     if (!weekLabel) return;
@@ -614,9 +756,11 @@ function buildReportJson(pubValues, mappedValues) {
     const isCall = mediumCol >= 0 &&
                    String(row[mediumCol] || '').trim().toLowerCase() === 'phone';
 
-    rawTags.split(',').forEach(tag => {
-      const t = tag.trim();
-      if (!t) return;
+    const tagList = rawTags
+      ? rawTags.split(',').map(t => t.trim()).filter(Boolean)
+      : [NO_TAG_LABEL];
+
+    tagList.forEach(t => {
       weekMap[weekLabel].tags[t] = (weekMap[weekLabel].tags[t] || 0) + 1;
       if (isCall) weekMap[weekLabel].tagsCall[t] = (weekMap[weekLabel].tagsCall[t] || 0) + 1;
       else        weekMap[weekLabel].tagsChat[t] = (weekMap[weekLabel].tagsChat[t] || 0) + 1;
@@ -628,47 +772,52 @@ function buildReportJson(pubValues, mappedValues) {
     }
   });
 
-  // ── 3. 재문의율 계산
-  const allRows = pubValues.slice(1).map(row => ({
-    date  : toDate(row[dateCol]),
-    userId: userIdCol >= 0 ? String(row[userIdCol] || '').trim() : '',
-    tags  : String(row[tagsCol] || '').trim()
-  })).filter(r => r.date && !isNaN(r.date.getTime()) && r.userId && r.tags);
+  // ── 3. 재문의율 계산 (대시보드 calcRecontactRate 와 동일한 공식)
+  //    기준: 이번 주에 문의한 고객 중, [주 시작 -14일 ~ 주 종료] 안에서
+  //          같은 고객ID + 같은 태그로 하루 이상 간격을 두고 다시 문의한 고객의 비율.
+  //    예전 공식은 각 상담 시점 기준 ±14일(=다음 주 문의까지)을 봐서 항상 더 높게 나왔다.
+  const allRows = pubValues.slice(1).map(row => {
+    const rawTags = String(row[tagsCol] || '').trim();
+    return {
+      date  : toDate(row[dateCol]),
+      userId: userIdCol >= 0 ? String(row[userIdCol] || '').trim() : '',
+      tags  : rawTags ? rawTags.split(',').map(t => t.trim()).filter(Boolean) : [NO_TAG_LABEL]
+    };
+  }).filter(r => r.date && !isNaN(r.date.getTime()) && r.userId);
 
   function calcRecontactRate(weekLabel) {
-    const [monStr, sunStr] = weekLabel.split('~');
-    const year = new Date().getFullYear();
-    function parseMMDD(str) {
-      const [m, d] = str.split('/').map(Number);
-      return new Date(year, m - 1, d);
-    }
-    const weekStart = parseMMDD(monStr);
-    const weekEnd   = parseMMDD(sunStr);
-    weekEnd.setHours(23, 59, 59);
-
-    const weekRows = allRows.filter(r => r.date >= weekStart && r.date <= weekEnd);
+    // 주차 라벨(MM/DD~MM/DD)만으로는 연도를 알 수 없어, 그 주에 속한 실제 행의 날짜에서 주 시작일을 얻는다
+    const weekRows = allRows.filter(r => toWeekLabel(r.date) === weekLabel);
     if (weekRows.length === 0) return null;
 
-    const recontactUsers = new Set();
-    const totalUsers     = new Set();
+    const anyDate   = weekRows[0].date;
+    const dow       = (anyDate.getDay() + 6) % 7;   // 월=0 … 일=6
+    const weekStart = new Date(anyDate.getFullYear(), anyDate.getMonth(), anyDate.getDate() - dow);
+    const windowStart = new Date(weekStart); windowStart.setDate(windowStart.getDate() - 14);
+    const windowEnd   = new Date(weekStart); windowEnd.setDate(windowEnd.getDate() + 6);
+    windowEnd.setHours(23, 59, 59);
 
-    weekRows.forEach(r => {
-      if (!r.userId) return;
-      totalUsers.add(r.userId);
-
-      const rangeStart = new Date(r.date); rangeStart.setDate(rangeStart.getDate() - 14);
-      const rangeEnd   = new Date(r.date); rangeEnd.setDate(rangeEnd.getDate() + 14);
-      const rTags      = r.tags.split(',').map(t => t.trim());
-
-      const hasRecontact = allRows.some(other => {
-        if (other === r) return false;
-        if (other.userId !== r.userId) return false;
-        if (other.date < rangeStart || other.date > rangeEnd) return false;
-        const otherTags = other.tags.split(',').map(t => t.trim());
-        return rTags.some(t => otherTags.includes(t));
+    // window 내 (고객ID + 태그) 조합별 문의 날짜 목록
+    //  대시보드 getIssueTags 와 동일하게 '기타'(태그없음·접두어 없는 태그)는 재문의 판정에서 뺀다
+    const contactMap = {};
+    allRows.forEach(r => {
+      if (r.date < windowStart || r.date > windowEnd) return;
+      r.tags.filter(isIssueTag_).forEach(t => {
+        const key = r.userId + '__' + t;
+        if (!contactMap[key]) contactMap[key] = { userId: r.userId, dates: [] };
+        contactMap[key].dates.push(r.date);
       });
+    });
 
-      if (hasRecontact) recontactUsers.add(r.userId);
+    const totalUsers     = new Set(weekRows.map(r => r.userId));
+    const recontactUsers = new Set();
+
+    Object.keys(contactMap).forEach(key => {
+      const c = contactMap[key];
+      if (!totalUsers.has(c.userId)) return;              // 이번 주 문의 고객만 대상
+      const sorted   = c.dates.slice().sort((a, b) => a - b);
+      const diffDays = (sorted[sorted.length - 1] - sorted[0]) / (1000 * 60 * 60 * 24);
+      if (diffDays >= 1) recontactUsers.add(c.userId);    // 하루 이상 간격 = 재문의
     });
 
     const rate = totalUsers.size > 0
@@ -1108,6 +1257,8 @@ function generateWeeklyReport() {
       phone4            : csatData.phone4,
       phone5            : csatData.phone5,
       dailyResponseRate : dailyRate,
+      csatAi            : csatData.ai    || { avg: null, count: 0, dist: [0,0,0,0,0] },   // 응대 주체별 만족도
+      csatHuman         : csatData.human || { avg: null, count: 0, dist: [0,0,0,0,0] },
       tagCsat           : csatData.tagCsat || [],      // CSAT 원인 분석용
       lowComments       : csatData.lowComments || [],
       subQuestions      : csatData.subQuestions || [],
@@ -1137,6 +1288,9 @@ function readCsatFromSheet_(ss, weekLabel) {
     chatAvg: 0, chatCount: 0, chat1: 0, chat2: 0, chat3: 0, chat4: 0, chat5: 0,
     phoneAvg: 0, phoneCount: 0, phone1: 0, phone2: 0, phone3: 0, phone4: 0, phone5: 0,
     csatSum: 0, csatCount: 0,   // ← 전체 원본 점수 합/건수 (대시보드와 동일하게 직접 평균용)
+    // ── 응대 주체(AI/사람)별 집계 — 대시보드 만족도 탭의 AI↔사람 비교와 동일 기준
+    ai:    { sum: 0, count: 0, dist: [0, 0, 0, 0, 0] },
+    human: { sum: 0, count: 0, dist: [0, 0, 0, 0, 0] },
     tagCsat: [], lowComments: [], subQuestions: [],   // ← CSAT 원인 분석용: 태그별 평균 / 저점수 코멘트 / 세부 문항(친절·해결·속도)
   };
 
@@ -1147,11 +1301,12 @@ function readCsatFromSheet_(ss, weekLabel) {
   if (data.length < 2) return result;
 
   var headers    = data[0].map(function(h) { return String(h).trim(); });
-  var dateCol    = headers.indexOf('week');
-  var csatCol    = headers.indexOf('만족도');
-  var channelCol = headers.indexOf('mediumType');
-  // 태그·코멘트 컬럼은 시트마다 한글/영문이 섞여 있어 후보를 순서대로 시도
-  var tagCol     = firstHeaderIdx_(headers, ['태그', 'tags']);
+  var mIdx       = mappedColIdx_(headers);
+  var dateCol    = mIdx.week;
+  var csatCol    = mIdx.csat;
+  var channelCol = mIdx.medium;
+  var tagCol     = mIdx.tags;
+  var aiCol      = mIdx.ai;
   var commentCol = firstHeaderIdx_(headers, ['자유의견', 'comment', '코멘트']);
   // 세부 문항: 친절도=점수(1~5), 해결여부·대기시간=텍스트(긍/중/부정)
   var subDefs = [
@@ -1190,6 +1345,14 @@ function readCsatFromSheet_(ss, weekLabel) {
     } else {
       chatSum  += score; chatCount++;  chatDist[bucket]++;
     }
+
+    // ── 응대 주체(AI/사람) 누적 — AI구분 컬럼이 비어 있으면 태그로 판정 (대시보드 폴백과 동일 규칙)
+    var aiVal = aiCol >= 0 ? String(row[aiCol] || '').trim() : '';
+    var group = (aiVal === 'AI' || aiVal === '사람')
+      ? aiVal
+      : aiOrHuman_(tagCol >= 0 ? row[tagCol] : '');
+    var g = (group === 'AI') ? result.ai : result.human;
+    g.sum += score; g.count++; g.dist[bucket]++;
 
     // ── 태그별 만족도 누적 (한 행에 태그가 여러 개면 각 태그에 점수 귀속)
     if (tagCol >= 0) {
@@ -1232,6 +1395,9 @@ function readCsatFromSheet_(ss, weekLabel) {
   // ── 전체 원본 점수 합/건수 (반올림 전) — 상담만족도를 대시보드처럼 직접 평균 내기 위함
   result.csatSum   = chatSum + phoneSum;
   result.csatCount = chatCount + phoneCount;
+  // ── AI / 사람 평균 (응답 없으면 null)
+  result.ai.avg    = result.ai.count    > 0 ? result.ai.sum    / result.ai.count    : null;
+  result.human.avg = result.human.count > 0 ? result.human.sum / result.human.count : null;
   result.chat1  = chatDist[0];  result.chat2  = chatDist[1];  result.chat3  = chatDist[2];
   result.chat4  = chatDist[3];  result.chat5  = chatDist[4];
   result.phone1 = phoneDist[0]; result.phone2 = phoneDist[1]; result.phone3 = phoneDist[2];
@@ -1252,6 +1418,7 @@ function readCsatFromSheet_(ss, weekLabel) {
   });
 
   Logger.log('[CSAT] ' + weekLabel + ' — 채팅 ' + chatCount + '건(' + result.chatAvg + '점) / 전화 ' + phoneCount + '건(' + result.phoneAvg + '점) / 태그 ' + result.tagCsat.length + '종 / 저점수 코멘트 ' + lowComments.length + '건');
+  Logger.log('[CSAT·응대주체] AI ' + result.ai.count + '건(' + (result.ai.avg !== null ? result.ai.avg.toFixed(2) : '-') + '점) / 사람 ' + result.human.count + '건(' + (result.human.avg !== null ? result.human.avg.toFixed(2) : '-') + '점)');
   return result;
 }
 
@@ -1398,19 +1565,53 @@ function buildReportBlocks_(inputs, okr, reportData, config, weekIdx) {
     ? prevResolveRate + '%'
     : '-';
 
+  // 응대 주체(AI/사람)별 만족도 — 대시보드 만족도 탭의 AI↔사람 비교와 동일 기준
+  var ai    = inputs.csatAi    || { avg: null, count: 0 };
+  var human = inputs.csatHuman || { avg: null, count: 0 };
+  var fmtGroup = function(g) {
+    return g.avg !== null
+      ? g.avg.toFixed(2) + '점 (' + g.count + '건)'
+      : '– (0건)';
+  };
+
   blocks.push(tableBlock_(
     ['지표', '실적 / 목표', '전주'],
     [
-      ['상담만족도',   combinedCsat + '점 / ' + okr.csatTarget + '점',                   '-'],
-      ['재문의율',     recontact + '% / ' + okr.recontactTarget + '%',                   prevRecontact + '%'],
-      ['당일응대율',   inputs.dailyResponseRate + '% / ' + okr.dailyResponseTarget + '%', '-'],
-      ['해결율',       resolveCell,       resolvePrevCell],
-      ['처리건수',     totalVoc + '건',   prevTotalVoc + '건 (' + vocSign + vocChangePct + '%)'],
+      ['상담만족도 (전체)',   combinedCsat + '점 / ' + okr.csatTarget + '점',                   '-'],
+      ['└ AI 응대',           fmtGroup(ai),                                                     '-'],
+      ['└ 사람 응대',         fmtGroup(human),                                                  '-'],
+      ['재문의율',            recontact + '% / ' + okr.recontactTarget + '%',                   prevRecontact + '%'],
+      ['당일응대율',          inputs.dailyResponseRate + '% / ' + okr.dailyResponseTarget + '%', '-'],
+      ['해결율',              resolveCell,       resolvePrevCell],
+      ['처리건수',            totalVoc + '건',   prevTotalVoc + '건 (' + vocSign + vocChangePct + '%)'],
     ]
   ));
 
   // ── CSAT 상세
   blocks.push(heading2_('💬 CSAT 상세'));
+
+  // 응대 주체별 (AI / 사람)
+  blocks.push(heading3_('🤖 응대 주체별 만족도'));
+  blocks.push(tableBlock_(
+    ['응대 주체', '평균 만족도', '응답 건수', '점수 분포 (1~5점)'],
+    [
+      ['AI',   ai.avg    !== null ? ai.avg.toFixed(2)    + '점' : '–', ai.count    + '건', formatGroupDist_(ai)],
+      ['사람', human.avg !== null ? human.avg.toFixed(2) + '점' : '–', human.count + '건', formatGroupDist_(human)],
+    ]
+  ));
+  if (ai.avg !== null && human.avg !== null) {
+    var gap  = human.avg - ai.avg;
+    var who  = gap >= 0 ? '사람' : 'AI';
+    blocks.push(paragraph_(
+      '→ ' + who + ' 응대가 ' + Math.abs(gap).toFixed(2) + '점 높습니다.' +
+      (ai.count < 10 ? ' (단, AI 응답이 ' + ai.count + '건뿐이라 해석에 주의)' : '')
+    ));
+  } else if (ai.count === 0) {
+    blocks.push(paragraph_('→ 이번 주 AI 응대 만족도 응답이 0건이라 비교를 생략합니다.'));
+  }
+
+  // 채널별 (채팅 / 전화)
+  blocks.push(heading3_('📞 채널별 만족도'));
   blocks.push(paragraph_('채팅 CSAT — 평균 ' + inputs.chatAvg + '점'));
   blocks.push(paragraph_('점수 분포: ' + formatDist_(inputs, 'chat')));
   blocks.push(paragraph_('전화 CSAT — 평균 ' + inputs.phoneAvg + '점'));
@@ -1641,6 +1842,16 @@ function getTop5_(tags, category) {
   }
   items.sort(function(a, b) { return b.count - a.count; });
   return items.slice(0, 5);
+}
+
+// 응대 주체 그룹({dist:[1점,2점,3점,4점,5점]}) → "1점 2건 · 4점 5건" 문자열
+function formatGroupDist_(g) {
+  var dist  = (g && g.dist) || [0, 0, 0, 0, 0];
+  var parts = [];
+  for (var i = 0; i < 5; i++) {
+    if (dist[i] > 0) parts.push((i + 1) + '점 ' + dist[i] + '건');
+  }
+  return parts.length ? parts.join(' · ') : '–';
 }
 
 function formatDist_(inputs, prefix) {

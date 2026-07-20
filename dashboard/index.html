@@ -123,6 +123,15 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .kpi .val{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;letter-spacing:-1px;line-height:1;}
 .kpi .chg{font-size:10px;margin-top:5px;font-weight:500;}
 .up{color:var(--red);} .dn{color:var(--accent);} .flat{color:var(--muted);}
+/* 총 문의 카드 — AI/상담원 비중 막대 */
+.ai-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:9px;background:var(--dim);}
+.ai-bar i{display:block;height:100%;}
+.ai-bar .b-human{background:var(--accent);}
+.ai-bar .b-ai{background:var(--accent3);}
+.ai-split{display:flex;justify-content:space-between;font-size:10px;margin-top:6px;font-weight:500;}
+.ai-split .s-human{color:var(--accent);}
+.ai-split .s-ai{color:var(--accent3);}
+.ai-split .s-num{font-family:'DM Mono',monospace;color:var(--text);}
 .grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;}
 .card-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
@@ -418,11 +427,16 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
               <span class="tooltip-label">집계 기준</span>
               <span class="tooltip-desc">필터 설정에서 제외한 태그(콜백, 운영시간외 등)는 빠진 숫자예요.</span>
             </div>
+            <div class="tooltip-row">
+              <span class="tooltip-label">AI / 상담원</span>
+              <span class="tooltip-desc">AI가 끝까지 처리한 건만 AI로 세요. 도중에 상담원에게 넘긴 건(상담원이관)은 상담원으로 잡혀요. 전화는 전부 상담원이에요.</span>
+            </div>
           </div>
         </span>
       </div>
       <div class="val" id="kTotal">—</div>
-      <div class="chg" id="kTotalChg">—</div>
+      <div class="ai-bar" id="kAiBar" style="display:none"><i class="b-human"></i><i class="b-ai"></i></div>
+      <div class="ai-split" id="kAiSplit"></div>
     </div>
     <div class="kpi" style="--c:var(--accent3)">
       <div class="lbl" style="display:flex;align-items:center;gap:5px">전주 대비
@@ -1085,8 +1099,8 @@ th.hm-cur::after { content:'현재'; display:block; font-size:8px; opacity:.7; }
       <span style="font-size:10px;color:var(--muted)">부재중 제외</span>
       <button id="drMissedToggle" onclick="drToggleMissed()"
         style="padding:4px 14px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;
-        border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);
-        border:1px solid var(--border);transition:all .15s">OFF</button>
+        border-radius:6px;cursor:pointer;background:var(--accent);color:#0f0f13;
+        border:1px solid var(--accent);transition:all .15s">ON</button>
     </div>
   </div>
 
@@ -1186,7 +1200,7 @@ let weeks = [];
 let reportWeeks = [];   // report.json 주차별 태그 집계 [{week, tags:{...}}]
 let dailyResponseData = { weeks: [] }; // 당일 응대율 [{week, total, responded, missed, rate, total_excl, rate_excl, days:[]}]
 let drSelectedWeek = null;
-let drExclMissed = false;
+let drExclMissed = true;   // 기본값: 부재중 제외 (주간 리포트 당일응대율과 같은 기준)
 let cDailyResponseChart = null;
 let cDailyResponseWeekChart = null;
 let ttStatus = '전체';
@@ -1748,17 +1762,34 @@ function render(w) {
   document.getElementById('kTotal').textContent = total.toLocaleString();
   if (diff!==null) {
     const s = diff>=0?'+':'';
-    document.getElementById('kTotalChg').textContent = `전주 대비 ${s}${diff}건`;
-    document.getElementById('kTotalChg').className = 'chg '+(diff>0?'up':diff<0?'dn':'flat');
     document.getElementById('kDiff').textContent = `${s}${diff}`;
     document.getElementById('kDiff').style.color = diff>0?'var(--red)':diff<0?'var(--accent)':'var(--muted)';
     document.getElementById('kDiffPct').textContent = `${s}${pct}% 변화`;
     document.getElementById('kDiffPct').className = 'chg '+(diff>0?'up':diff<0?'dn':'flat');
   } else {
-    document.getElementById('kTotalChg').textContent = '이전 주차 없음';
-    document.getElementById('kTotalChg').className = 'chg flat';
     document.getElementById('kDiff').textContent = '—';
     document.getElementById('kDiffPct').textContent = '—';
+  }
+
+  // 응대 주체(AI/상담원) 분리 — deriveAiGroup 규칙 재사용 (CSAT 탭·주간 리포트와 동일 기준)
+  //  · 태그에 '상담원이관' 있음        → 상담원 (AI가 못 풀어 넘긴 건)
+  //  · 그 외 'AI'·'AI/*' 태그 있음     → AI (AI 단독 완결)
+  //  · AI 태그 없음(전화·순수 사람 응대) → 상담원
+  const aiCnt    = curData.filter(r => deriveAiGroup(r.tags.join(',')) === 'AI').length;
+  const humanCnt = total - aiCnt;
+  const aiBar    = document.getElementById('kAiBar');
+  const aiSplit  = document.getElementById('kAiSplit');
+  if (total > 0) {
+    const humanPct = (humanCnt/total)*100;
+    aiBar.style.display = 'flex';
+    aiBar.querySelector('.b-human').style.width = `${humanPct}%`;
+    aiBar.querySelector('.b-ai').style.width    = `${100-humanPct}%`;
+    aiSplit.innerHTML =
+      `<span><span class="s-human">상담원</span> <span class="s-num">${humanCnt.toLocaleString()}</span></span>` +
+      `<span><span class="s-ai">AI</span> <span class="s-num">${aiCnt.toLocaleString()}</span></span>`;
+  } else {
+    aiBar.style.display = 'none';
+    aiSplit.innerHTML = '';
   }
 
   // 채팅/전화 KPI
@@ -2062,7 +2093,9 @@ function calcRecontactRate(curWeek) {
 
   const baseDate = new Date(curSortKey);
   const windowStart = new Date(baseDate); windowStart.setDate(baseDate.getDate() - 14);
+  // 일요일 자정(00:00)으로 끊으면 일요일 하루치 문의가 통째로 빠진다 → 일요일 끝까지 포함
   const windowEnd   = new Date(baseDate); windowEnd.setDate(baseDate.getDate() + 6);
+  windowEnd.setHours(23, 59, 59, 999);
 
   // window 범위 내 데이터 (userId 있는 것만)
   const windowData = activeData.filter(r => {
