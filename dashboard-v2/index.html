@@ -196,17 +196,9 @@ a{color:inherit;}
     <div class="card">
       <div class="card-head">
         <div class="card-title">주차별 만족도 추이</div>
-        <div class="card-sub">상담 만족도 · 친절도 (5점)</div>
+        <div class="card-sub">응대 주체별 평균 만족도 (5점)</div>
       </div>
       <div class="chart-box"><canvas id="c-csat"></canvas></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">AI ↔ 상담원 만족도 추이</div>
-        <div class="card-sub">응대 주체별 주차 평균 (5점)</div>
-      </div>
-      <div class="chart-box"><canvas id="c-aihuman"></canvas></div>
     </div>
   </div>
 
@@ -307,7 +299,6 @@ function render(){
   renderTags(cur['주차']);
   renderCats(cur['주차'], total);
   renderCsatTrend(weeks);
-  renderAiHuman(weeks);
 }
 
 // ── 공통 차트 옵션
@@ -341,25 +332,10 @@ function renderTrend(weeks){
 
 function renderCsatTrend(weeks){
   const labels = weeks.map(w=>w['주차']);
-  charts['c-csat'] = new Chart(fresh('c-csat'),{
-    type:'line',
-    data:{labels,datasets:[
-      {label:'만족도',data:weeks.map(w=>w['만족도평균']||null),borderColor:'#6ee7b7',backgroundColor:'rgba(110,231,183,.1)',tension:.3,fill:true,pointRadius:4,pointBackgroundColor:'#6ee7b7',spanGaps:true},
-      {label:'친절도',data:weeks.map(w=>w['친절도평균']||null),borderColor:'#f472b6',borderDash:[5,3],tension:.3,pointRadius:4,pointBackgroundColor:'#f472b6',spanGaps:true},
-    ]},
-    options:Object.assign(baseOpts(),{
-      scales:{x:{grid:{display:false},ticks:{color:TICK,font:{size:10}}},
-              y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:1,max:5}}
-    })
-  });
-}
-
-function renderAiHuman(weeks){
-  const labels = weeks.map(w=>w['주차']);
   // 응답이 없는 주(응답수 0)는 점을 찍지 않는다 — 0점으로 오해하지 않도록
   const huData = weeks.map(w=> (w['상담원응답수']>0 ? w['상담원만족도'] : null));
   const aiData = weeks.map(w=> (w['AI응답수']>0 ? w['AI만족도'] : null));
-  charts['c-aihuman'] = new Chart(fresh('c-aihuman'),{
+  charts['c-csat'] = new Chart(fresh('c-csat'),{
     type:'line',
     data:{labels,datasets:[
       {label:'상담원',data:huData,borderColor:'#6ee7b7',backgroundColor:'#6ee7b7',tension:.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,
