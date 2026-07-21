@@ -200,6 +200,14 @@ a{color:inherit;}
       </div>
       <div class="chart-box"><canvas id="c-csat"></canvas></div>
     </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">주차별 친절도 추이</div>
+        <div class="card-sub">응대 주체별 평균 친절도 (5점)</div>
+      </div>
+      <div class="chart-box"><canvas id="c-kind"></canvas></div>
+    </div>
   </div>
 
 </div>
@@ -299,6 +307,7 @@ function render(){
   renderTags(cur['주차']);
   renderCats(cur['주차'], total);
   renderCsatTrend(weeks);
+  renderKindTrend(weeks);
 }
 
 // ── 공통 차트 옵션
@@ -330,18 +339,20 @@ function renderTrend(weeks){
   });
 }
 
-function renderCsatTrend(weeks){
+// 응대 주체별(상담원/AI) 주차 추이 라인 — 만족도·친절도 공용
+//  keys: {hu:'상담원값', huN:'상담원응답수', ai:'AI값', aiN:'AI응답수'}
+function renderSubjectTrend(canvasId, weeks, keys){
   const labels = weeks.map(w=>w['주차']);
   // 응답이 없는 주(응답수 0)는 점을 찍지 않는다 — 0점으로 오해하지 않도록
-  const huData = weeks.map(w=> (w['상담원응답수']>0 ? w['상담원만족도'] : null));
-  const aiData = weeks.map(w=> (w['AI응답수']>0 ? w['AI만족도'] : null));
-  charts['c-csat'] = new Chart(fresh('c-csat'),{
+  const huData = weeks.map(w=> (w[keys.huN]>0 ? w[keys.hu] : null));
+  const aiData = weeks.map(w=> (w[keys.aiN]>0 ? w[keys.ai] : null));
+  charts[canvasId] = new Chart(fresh(canvasId),{
     type:'line',
     data:{labels,datasets:[
       {label:'상담원',data:huData,borderColor:'#6ee7b7',backgroundColor:'#6ee7b7',tension:.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,
-       _cnt:weeks.map(w=>w['상담원응답수'])},
+       _cnt:weeks.map(w=>w[keys.huN])},
       {label:'AI',data:aiData,borderColor:'#60a5fa',backgroundColor:'#60a5fa',tension:.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,
-       _cnt:weeks.map(w=>w['AI응답수'])},
+       _cnt:weeks.map(w=>w[keys.aiN])},
     ]},
     options:Object.assign(baseOpts(),{
       plugins:{
@@ -355,6 +366,16 @@ function renderCsatTrend(weeks){
               y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:1,max:5}}
     })
   });
+}
+
+function renderCsatTrend(weeks){
+  renderSubjectTrend('c-csat', weeks,
+    {hu:'상담원만족도', huN:'상담원응답수', ai:'AI만족도', aiN:'AI응답수'});
+}
+
+function renderKindTrend(weeks){
+  renderSubjectTrend('c-kind', weeks,
+    {hu:'상담원친절도', huN:'상담원친절응답수', ai:'AI친절도', aiN:'AI친절응답수'});
 }
 
 function renderTags(week){

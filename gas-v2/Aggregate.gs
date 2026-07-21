@@ -11,6 +11,7 @@ const AGG_WEEK_HEADERS = [
   'AI완결', '상담원응대', '부재중',
   '만족도평균', '만족도응답수', '친절도평균',
   'AI만족도', 'AI응답수', '상담원만족도', '상담원응답수',
+  'AI친절도', 'AI친절응답수', '상담원친절도', '상담원친절응답수',
 ];
 
 const AGG_TAG_HEADERS = ['주차', '태그', '건수'];
@@ -69,7 +70,8 @@ function buildAggregates() {
     return {
       total: 0, chat: 0, phone: 0, ai: 0, human: 0, missed: 0,
       cSum: 0, cCnt: 0, kSum: 0, kCnt: 0,
-      aiSum: 0, aiCnt: 0, huSum: 0, huCnt: 0,
+      aiSum: 0, aiCnt: 0, huSum: 0, huCnt: 0,          // 만족도(AI/상담원)
+      aiKSum: 0, aiKCnt: 0, huKSum: 0, huKCnt: 0,      // 친절도(AI/상담원)
     };
   };
 
@@ -108,7 +110,11 @@ function buildAggregates() {
         if (isAi) { w.aiSum += sc.csat; w.aiCnt++; }
         else      { w.huSum += sc.csat; w.huCnt++; }
       }
-      if (sc.kind !== null) { w.kSum += sc.kind; w.kCnt++; }
+      if (sc.kind !== null) {
+        w.kSum += sc.kind; w.kCnt++;
+        if (isAi) { w.aiKSum += sc.kind; w.aiKCnt++; }
+        else      { w.huKSum += sc.kind; w.huKCnt++; }
+      }
     }
   }
 
@@ -120,6 +126,7 @@ function buildAggregates() {
       w.ai, w.human, w.missed,
       avg_(w.cSum, w.cCnt), w.cCnt, avg_(w.kSum, w.kCnt),
       avg_(w.aiSum, w.aiCnt), w.aiCnt, avg_(w.huSum, w.huCnt), w.huCnt,
+      avg_(w.aiKSum, w.aiKCnt), w.aiKCnt, avg_(w.huKSum, w.huKCnt), w.huKCnt,
     ];
   });
   writeSheet_(ss, SHEET_AGG_WEEK, AGG_WEEK_HEADERS, weekRows);
