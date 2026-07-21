@@ -203,10 +203,10 @@ a{color:inherit;}
 
     <div class="card">
       <div class="card-head">
-        <div class="card-title">AI ↔ 상담원 만족도 비교</div>
-        <div class="card-sub">응대 주체별 평균 만족도</div>
+        <div class="card-title">AI ↔ 상담원 만족도 추이</div>
+        <div class="card-sub">응대 주체별 주차 평균 (5점)</div>
       </div>
-      <div class="chart-box" style="height:200px"><canvas id="c-aihuman"></canvas></div>
+      <div class="chart-box"><canvas id="c-aihuman"></canvas></div>
     </div>
   </div>
 
@@ -307,7 +307,7 @@ function render(){
   renderTags(cur['주차']);
   renderCats(cur['주차'], total);
   renderCsatTrend(weeks);
-  renderAiHuman(cur);
+  renderAiHuman(weeks);
 }
 
 // ── 공통 차트 옵션
@@ -354,22 +354,29 @@ function renderCsatTrend(weeks){
   });
 }
 
-function renderAiHuman(cur){
+function renderAiHuman(weeks){
+  const labels = weeks.map(w=>w['주차']);
+  // 응답이 없는 주(응답수 0)는 점을 찍지 않는다 — 0점으로 오해하지 않도록
+  const huData = weeks.map(w=> (w['상담원응답수']>0 ? w['상담원만족도'] : null));
+  const aiData = weeks.map(w=> (w['AI응답수']>0 ? w['AI만족도'] : null));
   charts['c-aihuman'] = new Chart(fresh('c-aihuman'),{
-    type:'bar',
-    data:{labels:['상담원','AI'],datasets:[{
-      data:[cur['상담원만족도']||null, cur['AI만족도']||null],
-      backgroundColor:['#6ee7b7','#60a5fa'], borderRadius:4, barThickness:60
-    }]},
+    type:'line',
+    data:{labels,datasets:[
+      {label:'상담원',data:huData,borderColor:'#6ee7b7',backgroundColor:'#6ee7b7',tension:.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,
+       _cnt:weeks.map(w=>w['상담원응답수'])},
+      {label:'AI',data:aiData,borderColor:'#60a5fa',backgroundColor:'#60a5fa',tension:.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,
+       _cnt:weeks.map(w=>w['AI응답수'])},
+    ]},
     options:Object.assign(baseOpts(),{
-      indexAxis:'y',
-      plugins:{legend:{display:false},
+      plugins:{
+        legend:{labels:{color:'#e8e8f0',font:{size:11},usePointStyle:true,pointStyleWidth:8}},
         tooltip:{callbacks:{label:c=>{
-          const cnt=c.dataIndex===0?cur['상담원응답수']:cur['AI응답수'];
-          return c.parsed.x+'점 ('+fmt(cnt)+'건 응답)';
-        }}}},
-      scales:{x:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:0,max:5},
-              y:{grid:{display:false},ticks:{color:'#e8e8f0',font:{size:12,weight:'700'}}}}
+          const cnt=(c.dataset._cnt||[])[c.dataIndex]||0;
+          return c.dataset.label+' '+c.parsed.y+'점 ('+fmt(cnt)+'건 응답)';
+        }}}
+      },
+      scales:{x:{grid:{display:false},ticks:{color:TICK,font:{size:10}}},
+              y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:1,max:5}}
     })
   });
 }
