@@ -39,6 +39,7 @@ a{color:inherit;}
 
 /* ── KPI */
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.kpi-row-3{grid-template-columns:repeat(3,1fr);}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c,var(--accent));}
 .kpi .lbl{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;}
@@ -109,7 +110,7 @@ a{color:inherit;}
 
   <!-- ── 대시보드 탭 -->
   <div class="tab-page active" id="tab-dash">
-    <div class="kpi-row">
+    <div class="kpi-row kpi-row-3">
       <div class="kpi" style="--c:var(--accent)">
         <div class="lbl">총 문의
           <span class="info">?<span class="tip">선택 주차의 전체 상담 건수예요. 채널톡 인입일(managedAt) 기준이라 채널톡 숫자와 일치해요.</span></span>
@@ -129,13 +130,6 @@ a{color:inherit;}
         </div>
         <div class="val" id="k-airate">—</div>
         <div class="sub" id="k-airate-sub">전체 중 AI완결</div>
-      </div>
-      <div class="kpi" style="--c:var(--red)">
-        <div class="lbl">부재중
-          <span class="info">?<span class="tip">응대하지 못한 상담이에요. 운영시간외·응대불가·대기초과 등이 포함돼요.</span></span>
-        </div>
-        <div class="val" id="k-missed">—</div>
-        <div class="sub" id="k-missed-sub">전체 중 부재중</div>
       </div>
     </div>
 
@@ -299,8 +293,6 @@ function render(){
   document.getElementById('k-ch-sub').textContent = '채팅 '+fmt(cur['채팅'])+' · 전화 '+fmt(cur['전화']);
   document.getElementById('k-airate').textContent = pct(ai,total)+'%';
   document.getElementById('k-airate-sub').textContent = 'AI완결 '+fmt(ai)+'건';
-  document.getElementById('k-missed').textContent = fmt(cur['부재중']);
-  document.getElementById('k-missed-sub').textContent = pct(cur['부재중'],total)+'% · 응대 못한 상담';
 
   // ── 만족도 KPI
   document.getElementById('k-csat').textContent = fmt(cur['만족도평균']);
