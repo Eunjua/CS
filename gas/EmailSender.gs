@@ -10,7 +10,7 @@
  * [배포 방법] — 비개발자용 단계별
  *   ① 이 .gs 파일 내용을 은주 계정의 Apps Script 프로젝트에 그대로 붙여넣고 저장합니다.
  *      (구글 드라이브 → 새로 만들기 → 더보기 → Google Apps Script)
- *   ② 프로젝트 설정 → 스크립트 속성에 SEND_PIN을 넣습니다. (아래 getSendPin_ 설명 참고)
+ *   ② 아래 SEND_PIN 값을 원하는 PIN으로 바꿉니다. (상담원 2명과 공유할 공용 PIN)
  *   ③ 우상단 [배포] → [새 배포] → 유형을 "웹 앱"으로 선택합니다.
  *        - 실행: 나 (은주 계정)
  *        - 액세스 권한: 링크가 있는 모든 사용자
@@ -24,30 +24,8 @@
  *   배포 → 배포 관리 → (연필) 편집 → 버전: '새 버전' → 배포   (URL 그대로 유지)
  */
 
-/**
- * 발송 열쇠(PIN)
- *
- * 이 값은 코드에 직접 적지 않습니다.
- * (이 폴더는 GitHub에 공개되므로, 코드에 적으면 열쇠가 그대로 노출됩니다.)
- * 대신 Apps Script의 "스크립트 속성"에 저장합니다.
- *   ① Apps Script 편집기 왼쪽 ⚙️ [프로젝트 설정] 클릭
- *   ② 맨 아래 [스크립트 속성] → [스크립트 속성 추가]
- *        SEND_PIN = (긴 무작위 값)
- *   ③ bo(백오피스)의 apps/admin/.env.local 의 CS_MESSAGE_PIN 과 같은 값이어야 합니다.
- *
- * ※ 상담원은 이 값을 입력하지 않습니다. bo 서버가 대신 붙여 보냅니다.
- */
-function getSendPin_() {
-  var pin = String(
-    PropertiesService.getScriptProperties().getProperty('SEND_PIN') || ''
-  ).trim();
-  if (!pin) {
-    throw new Error(
-      '발송 열쇠가 설정되지 않았습니다. Apps Script → 프로젝트 설정 → 스크립트 속성에 SEND_PIN을 넣어 주세요.'
-    );
-  }
-  return pin;
-}
+// 발송 권한 게이트용 공용 PIN. ── 원하는 PIN으로 바꾸세요 ──
+const SEND_PIN = "0000";
 
 // 발신자 표시명(발신 주소는 은주 계정으로 고정되며, 이름만 이 값으로 표시됩니다)
 const SENDER_NAME = "케어아카데미";
@@ -68,7 +46,7 @@ function doPost(e) {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
 
     // PIN 검증 (불일치 시 발송 안 함)
-    if (String(body.pin || '') !== getSendPin_()) {
+    if (String(body.pin || '') !== SEND_PIN) {
       return jsonOut_({ ok: false, error: 'PIN이 올바르지 않습니다.' });
     }
 
