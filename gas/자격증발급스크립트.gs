@@ -781,15 +781,17 @@ function createSettlementTable() {
     (d.getDate() <= 15 ? firstHalf : secondHalf).push(row);
   });
 
-  // ★[보류] NCS 구간 단가 = "이 탭 전체 NCS 건수" 기준.
-  //   반월별로 바꾸려면 monthNcsCount 대신 각 half 건수를 lookupNcsTier에 넣으세요.
+  // NCS 구간 단가 = "각 반월의 NCS 건수" 기준 (계약 조건: 반월 건수 기준)
+  //   1~15일분은 1~15일 건수로, 16일~말일분은 16일~말일 건수로 각각 구간을 찾는다.
   function countNcs(rows) {
     var n = 0;
     rows.forEach(function(r) { if (resolveAgency(r, idx, certMapping) === 'ncs') n++; });
     return n;
   }
-  var monthNcsCount = countNcs(firstHalf) + countNcs(secondHalf);
-  var tier = lookupNcsTier(monthNcsCount);
+  var firstNcsCount  = countNcs(firstHalf);
+  var secondNcsCount = countNcs(secondHalf);
+  var firstTier      = lookupNcsTier(firstNcsCount);
+  var secondTier     = lookupNcsTier(secondNcsCount);
 
   // 결과 '정산' 탭: 기존 내용은 그대로 두고 "아래에만 추가"
   var out = ss.getSheetByName(OUTPUT_SHEET_NAME) || ss.insertSheet(OUTPUT_SHEET_NAME);
@@ -810,11 +812,11 @@ function createSettlementTable() {
   var added = [];
 
   if (firstHalf.length > 0 && !alreadyHas(HALF1)) {
-    startRow = writeHalfTable(out, startRow, HALF1 + ' (NCS 건수 ' + monthNcsCount + ')', firstHalf, idx, certMapping, tier) + 1;
+    startRow = writeHalfTable(out, startRow, HALF1 + ' (NCS 건수 ' + firstNcsCount + ')', firstHalf, idx, certMapping, firstTier) + 1;
     added.push(HALF1);
   }
   if (secondHalf.length > 0 && !alreadyHas(HALF2)) {
-    startRow = writeHalfTable(out, startRow, HALF2 + ' (NCS 건수 ' + monthNcsCount + ')', secondHalf, idx, certMapping, tier) + 1;
+    startRow = writeHalfTable(out, startRow, HALF2 + ' (NCS 건수 ' + secondNcsCount + ')', secondHalf, idx, certMapping, secondTier) + 1;
     added.push(HALF2);
   }
 
