@@ -6,3 +6,6 @@ cs-triage/ALF_docs_미검색_추출_*.xlsx
 gas-v2/.clasp.json
 gas-v2/.omc/
 dashboard-v2/.omc/
+
+# 자격증 기준 시트 배포용 (clasp 식별자)
+gas-cert/.clasp.json
