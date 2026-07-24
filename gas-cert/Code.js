@@ -451,7 +451,7 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
   rows = sortRowsByName(rows, idx);
   var newSS   = SpreadsheetApp.create(fileName);
   var sheet   = newSS.getActiveSheet();
-  var headers = ['제작일자', '이름', '생년월일', '전화번호', '종목', '발급형태', '주소', '재발급'];
+  var headers = ['제작일자', '이름', '생년월일', '전화번호', '종목', '발급형태', '주소', '재발급', '상세주소'];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers])
     .setBackground('#4472C4').setFontColor('#FFFFFF').setFontWeight('bold');
@@ -474,6 +474,7 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
     sheet.getRange(rowNum, 6).setValue(issueType);
     sheet.getRange(rowNum, 7).setValue(row[idx['주소']] || '');
     sheet.getRange(rowNum, 8).setValue(reissueFlag(row, idx));
+    sheet.getRange(rowNum, 9).setValue(row[idx['상세주소']] || '');
   });
 
   highlightDuplicates(sheet, rows.length + 1, 2, 4);   // 이름(2)+전화번호(4) 같으면 이름열 색칠
