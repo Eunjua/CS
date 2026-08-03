@@ -6,7 +6,8 @@
 //
 //  ?sheet=week  → 집계_주차
 //  ?sheet=tag   → 집계_태그
-//  (없으면 두 집계를 한 번에: { week: [...], tag: [...] })
+//  ?sheet=agent → 집계_상담원
+//  (없으면 세 집계를 한 번에: { week: [...], tag: [...], agent: [...] })
 // ============================================================
 
 function doGet(e) {
@@ -18,10 +19,13 @@ function doGet(e) {
     payload = { week: sheetAsObjects_(ss, SHEET_AGG_WEEK) };
   } else if (sheet === 'tag') {
     payload = { tag: sheetAsObjects_(ss, SHEET_AGG_TAG) };
+  } else if (sheet === 'agent') {
+    payload = { agent: sheetAsObjects_(ss, SHEET_AGG_AGENT) };
   } else {
     payload = {
-      week: sheetAsObjects_(ss, SHEET_AGG_WEEK),
-      tag:  sheetAsObjects_(ss, SHEET_AGG_TAG),
+      week:  sheetAsObjects_(ss, SHEET_AGG_WEEK),
+      tag:   sheetAsObjects_(ss, SHEET_AGG_TAG),
+      agent: sheetAsObjects_(ss, SHEET_AGG_AGENT),
     };
   }
 

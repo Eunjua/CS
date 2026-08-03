@@ -82,6 +82,14 @@ a{color:inherit;}
 .cat .cv{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums;}
 .cat .cp{font-size:10px;color:var(--muted);margin-top:2px;}
 
+/* 상담원별 누적 평균 칩 — 주차 선은 흔들려도 이 값이 비교 기준 */
+.acum-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.acum{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 11px;font-size:11px;}
+.acum i{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.acum b{font-family:var(--mono);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;}
+.acum em{font-style:normal;color:var(--muted);font-size:10px;}
+.acum-note{font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.6;}
+
 .empty{text-align:center;color:var(--muted);font-size:12px;padding:40px;}
 .loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;gap:14px;}
 .spin{width:34px;height:34px;border:3px solid var(--dim);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;}
@@ -201,6 +209,26 @@ a{color:inherit;}
       </div>
       <div class="chart-box"><canvas id="c-kind"></canvas></div>
     </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">상담원별 만족도</div>
+        <div class="card-sub">AI완결 건 제외 · 5점 만점</div>
+      </div>
+      <div class="acum-note">칩의 숫자가 <b>누적 평균</b>이에요 — 상담원 비교는 이 값으로 보세요.
+        아래 선은 주차별 흐름인데, 한 주 응답이 1~3건이면 크게 흔들리니 참고용으로만 봐주세요.</div>
+      <div class="acum-row" id="acum-csat"></div>
+      <div class="chart-box"><canvas id="c-agent-csat"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">상담원별 친절도</div>
+        <div class="card-sub">AI완결 건 제외 · 5점 만점</div>
+      </div>
+      <div class="acum-row" id="acum-kind"></div>
+      <div class="chart-box"><canvas id="c-agent-kind"></canvas></div>
+    </div>
   </div>
 
 </div>
@@ -223,7 +251,10 @@ const CAT_DEF = [
   {key:'일반_',     label:'일반', color:'#fb923c'},
 ];
 
-let DATA = {week:[], tag:[]};
+// 상담원 선 색 — 순서대로 배정 (누적 응답이 많은 상담원부터)
+const AGENT_COLORS = ['#6ee7b7','#f472b6','#60a5fa','#fbbf24','#a78bfa','#fb923c','#34d399','#f87171'];
+
+let DATA = {week:[], tag:[], agent:[]};
 let charts = {};
 
 // ── 탭 전환
@@ -312,6 +343,8 @@ function render(){
   renderCats(cur['주차'], total);
   renderCsatTrend(weeks);
   renderKindTrend(weeks);
+  renderAgentTrend('c-agent-csat', 'acum-csat', weeks, {avg:'만족도평균', cnt:'만족도응답수'});
+  renderAgentTrend('c-agent-kind', 'acum-kind', weeks, {avg:'친절도평균', cnt:'친절도응답수'});
 }
 
 // ── 공통 차트 옵션
@@ -380,6 +413,79 @@ function renderCsatTrend(weeks){
 function renderKindTrend(weeks){
   renderSubjectTrend('c-kind', weeks,
     {hu:'상담원친절도', huN:'상담원친절응답수', ai:'AI친절도', aiN:'AI친절응답수'});
+}
+
+// 상담원별 주차 추이 + 누적 평균 칩
+//  집계_상담원은 이미 이름 기준으로 합쳐져 있다(한 사람이 담당자ID를 여러 개 써도 한 줄).
+function renderAgentTrend(canvasId, listId, weeks, keys){
+  const box    = document.getElementById(listId);
+  const canvas = document.getElementById(canvasId);
+  const rows   = DATA.agent || [];
+
+  if(charts[canvasId]){ charts[canvasId].destroy(); delete charts[canvasId]; }
+
+  if(!rows.length){
+    box.innerHTML = '<div class="empty">상담원별 집계가 아직 없어요. 스프레드시트에서 [📊 집계 생성]을 다시 실행해주세요.</div>';
+    canvas.parentElement.style.display = 'none';
+    return;
+  }
+  canvas.parentElement.style.display = '';
+
+  // 상담원 → 누적합 + 주차별 값
+  const by = {};
+  rows.forEach(r=>{
+    const name = String(r['상담원']||'').trim();
+    if(!name) return;
+    const n = Number(r[keys.cnt])||0, a = r[keys.avg];
+    if(!by[name]) by[name] = {sum:0, n:0, wk:{}};
+    if(n>0 && a!==''&&a!=null&&!isNaN(a)){
+      by[name].sum += Number(a)*n;
+      by[name].n   += n;
+      by[name].wk[r['주차']] = {avg:Number(a), cnt:n};
+    }
+  });
+
+  // 응답이 한 건도 없는 상담원은 뺀다 (빈 선만 생기니까)
+  const names = Object.keys(by).filter(nm=>by[nm].n>0)
+                      .sort((a,b)=>by[b].n-by[a].n);
+  if(!names.length){
+    box.innerHTML = '<div class="empty">아직 상담원별 응답이 없어요.</div>';
+    canvas.parentElement.style.display = 'none';
+    return;
+  }
+
+  const color = {};
+  names.forEach((nm,i)=>{ color[nm] = AGENT_COLORS[i % AGENT_COLORS.length]; });
+
+  // 누적 평균 칩
+  box.innerHTML = names.map(nm=>{
+    const cum = Math.round(by[nm].sum/by[nm].n*100)/100;
+    return '<span class="acum"><i style="background:'+color[nm]+'"></i>'+nm+
+           ' <b>'+cum+'</b> <em>누적 '+fmt(by[nm].n)+'건</em></span>';
+  }).join('');
+
+  const labels = weeks.map(w=>w['주차']);
+  charts[canvasId] = new Chart(fresh(canvasId),{
+    type:'line',
+    data:{labels,datasets:names.map(nm=>({
+      label:nm,
+      data:labels.map(wk=> by[nm].wk[wk] ? by[nm].wk[wk].avg : null),
+      borderColor:color[nm], backgroundColor:color[nm],
+      tension:.3, pointRadius:4, pointHoverRadius:6, spanGaps:true,
+      _cnt:labels.map(wk=> by[nm].wk[wk] ? by[nm].wk[wk].cnt : 0),
+    }))},
+    options:Object.assign(baseOpts(),{
+      plugins:{
+        legend:{labels:{color:'#e8e8f0',font:{size:11},usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{callbacks:{label:c=>{
+          const cnt=(c.dataset._cnt||[])[c.dataIndex]||0;
+          return c.dataset.label+' '+c.parsed.y+'점 ('+fmt(cnt)+'건 응답)';
+        }}}
+      },
+      scales:{x:{grid:{display:false},ticks:{color:TICK,font:{size:10}}},
+              y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:1,max:5}}
+    })
+  });
 }
 
 function renderTags(week){

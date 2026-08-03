@@ -16,6 +16,12 @@ const AGG_WEEK_HEADERS = [
 
 const AGG_TAG_HEADERS = ['주차', '태그', '건수'];
 
+// 상담원별 집계 — AI완결 건은 빼고, 사람이 응대한 상담만 담는다
+const AGG_AGENT_HEADERS = [
+  '주차', '상담원', '담당자ID들', '상담건수',
+  '만족도평균', '만족도응답수', '친절도평균', '친절도응답수',
+];
+
 function buildAggregates() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -40,8 +46,13 @@ function buildAggregates() {
     state  : chatCol_(cHead, '상태'),
     missed : chatCol_(cHead, '부재중사유'),
     ai     : chatCol_(cHead, 'AI완결'),
+    agent  : chatCol_(cHead, '담당자ID'),
   };
   if (ci.week < 0 || ci.id < 0) { ui.alert('❌ 상담원본 헤더가 예상과 달라요.'); return; }
+
+  // 상담원 이름 매핑을 먼저 읽는다 — 한 사람이 담당자ID를 여러 개 쓰는 경우가 있어
+  // 집계를 ID가 아니라 이름으로 묶기 위해서다.
+  const agentMap = readAgentMap_(ss);
 
   // ── 2. 만족도: 상담ID → 점수
   const csatById = {};
@@ -62,9 +73,11 @@ function buildAggregates() {
     }
   }
 
-  // ── 3. 주차별 · 태그별 누적
-  const weeks = {};   // week → 집계 객체
-  const tags  = {};   // week|tag → 건수
+  // ── 3. 주차별 · 태그별 · 상담원별 누적
+  const weeks    = {};   // week → 집계 객체
+  const tags     = {};   // week|tag → 건수
+  const agents   = {};   // week|상담원이름 → 집계 객체 (ID가 여러 개여도 이름으로 합침)
+  const agentIds = {};   // 상담원본에서 발견한 담당자ID 전체 (매핑 시트 자동 보충용)
 
   const blank = function() {
     return {
@@ -116,6 +129,22 @@ function buildAggregates() {
         else      { w.huKSum += sc.kind; w.huKCnt++; }
       }
     }
+
+    // 상담원별 — AI가 끝낸 건은 사람 성과가 아니므로 뺀다. 담당자가 없는 건도 뺀다.
+    const agentId = ci.agent >= 0 ? String(row[ci.agent] || '').trim() : '';
+    if (agentId) agentIds[agentId] = true;
+    if (!isAi && agentId) {
+      const name = agentName_(agentMap, agentId);   // 같은 이름이면 여기서 한 덩어리가 된다
+      const ak   = week + '|' + name;
+      if (!agents[ak]) agents[ak] = { cnt: 0, cSum: 0, cCnt: 0, kSum: 0, kCnt: 0, ids: {} };
+      const a = agents[ak];
+      a.cnt++;
+      a.ids[agentId] = true;
+      if (sc) {
+        if (sc.csat !== null) { a.cSum += sc.csat; a.cCnt++; }
+        if (sc.kind !== null) { a.kSum += sc.kind; a.kCnt++; }
+      }
+    }
   }
 
   // ── 4. 주차 집계 시트 쓰기 (최신 주가 위로)
@@ -141,11 +170,34 @@ function buildAggregates() {
   });
   writeSheet_(ss, SHEET_AGG_TAG, AGG_TAG_HEADERS, tagRows);
 
+  // ── 6. 상담원 집계 시트 쓰기 (이름 기준 — 한 사람의 여러 ID는 이미 합쳐져 있다)
+  const agentRows = Object.keys(agents).map(function(k) {
+    const sep = k.indexOf('|');            // 이름에 '|'가 들어갈 수 있으니 첫 구분자만 자른다
+    const wk = k.slice(0, sep), name = k.slice(sep + 1);
+    const a  = agents[k];
+    return [
+      wk, name, Object.keys(a.ids).join(', '), a.cnt,
+      avg_(a.cSum, a.cCnt), a.cCnt, avg_(a.kSum, a.kCnt), a.kCnt,
+    ];
+  }).sort(function(a, b) {
+    const d = sortWeekDesc_(a[0], b[0]);
+    return d !== 0 ? d : b[3] - a[3];   // 같은 주차면 상담건수 많은 순
+  });
+  writeSheet_(ss, SHEET_AGG_AGENT, AGG_AGENT_HEADERS, agentRows);
+
+  // 상담원본에서 처음 본 담당자ID는 매핑 시트에 줄만 추가해 둔다 (이름은 사용자가 채움)
+  const unnamed = syncAgentMap_(ss, Object.keys(agentIds), agentMap);
+
   const latest = weekRows.length ? weekRows[0] : null;
   ui.alert(
     '📊 집계 완료\n\n' +
     '주차: ' + weekRows.length + '개\n' +
     '태그 조합: ' + tagRows.length + '행\n' +
+    '상담원 집계: ' + agentRows.length + '행\n' +
+    (unnamed.length
+      ? '\n⚠️ 이름이 비어 있는 담당자 ' + unnamed.length + '명이 있어요.\n' +
+        '"' + SHEET_AGENT_MAP + '" 시트에서 이름을 채운 뒤 다시 집계해주세요.\n'
+      : '') +
     (latest
       ? '\n최신 주차 ' + latest[0] + '\n' +
         '  총 ' + latest[1] + '건 (채팅 ' + latest[2] + ' / 전화 ' + latest[3] + ')\n' +
@@ -153,6 +205,66 @@ function buildAggregates() {
         '  만족도 ' + (latest[7] === '' ? '—' : latest[7] + '점') + ' (' + latest[8] + '건 응답)'
       : '')
   );
+}
+
+// ── 상담원 이름 매핑 시트 ('담당자ID' | '이름')
+//    한 사람이 ID를 여러 개 쓸 수 있다. 같은 이름을 적으면 집계에서 한 사람으로 합쳐진다.
+//    시트가 없으면 만들고, 이름이 비어 있는 줄은 매핑에서 제외한다.
+//    반환: { 담당자ID: 이름 }
+function readAgentMap_(ss) {
+  const sh = ensureAgentMapSheet_(ss);
+  const map = {};
+  if (sh.getLastRow() > 1) {
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    vals.forEach(function(r) {
+      const id   = String(r[0] || '').trim();
+      const name = String(r[1] || '').trim();
+      if (id && name) map[id] = name;
+    });
+  }
+  return map;
+}
+
+// 상담원본에 있는데 매핑 시트에 없는 담당자ID를 줄로 추가한다.
+// 이미 적어둔 이름은 절대 건드리지 않는다 (집계 시트는 덮어쓰지만 이 시트는 사용자 입력본).
+// 반환: 아직 이름이 비어 있는 ID 목록
+function syncAgentMap_(ss, foundIds, agentMap) {
+  const sh = ensureAgentMapSheet_(ss);
+
+  const listed = {};
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(function(r) {
+      const id = String(r[0] || '').trim();
+      if (id) listed[id] = true;
+    });
+  }
+
+  const newIds = foundIds.filter(function(id) { return id && !listed[id]; });
+  if (newIds.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, newIds.length, 2)
+      .setValues(newIds.map(function(id) { return [id, '']; }));
+  }
+
+  return foundIds.filter(function(id) { return id && !agentMap[id]; });
+}
+
+function ensureAgentMapSheet_(ss) {
+  let sh = ss.getSheetByName(SHEET_AGENT_MAP);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_AGENT_MAP);
+    sh.getRange(1, 1, 1, AGENT_MAP_HEADERS.length).setValues([AGENT_MAP_HEADERS])
+      .setFontWeight('bold').setBackground('#fff3e0');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 160);
+    sh.setColumnWidth(2, 160);
+  }
+  return sh;
+}
+
+// 이름이 없으면 ID 뒤 4자리로 임시 표기 — 차트에서 빈칸으로 사라지지 않게
+function agentName_(map, id) {
+  if (map[id]) return map[id];
+  return '미지정(' + String(id).slice(-4) + ')';
 }
 
 // ── 시트를 헤더+데이터로 새로 쓴다 (집계본이라 매번 덮어쓰는 게 안전)

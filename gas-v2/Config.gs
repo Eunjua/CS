@@ -17,11 +17,19 @@ const DONE_FOLDER_NAME = '처리완료';
 const TEMP_PREFIX = '[임시] ';
 
 // ── 시트 이름
-const SHEET_CHATS    = '상담원본';
-const SHEET_CSAT     = '만족도원본';
-const SHEET_AGG_WEEK = '집계_주차';
-const SHEET_AGG_TAG  = '집계_태그';
-const SHEET_VERIFY   = '검증';
+const SHEET_CHATS     = '상담원본';
+const SHEET_CSAT      = '만족도원본';
+const SHEET_AGG_WEEK  = '집계_주차';
+const SHEET_AGG_TAG   = '집계_태그';
+const SHEET_AGG_AGENT = '집계_상담원';
+const SHEET_VERIFY    = '검증';
+
+// ── 상담원 이름 매핑 시트
+//    채널톡 담당자ID는 숫자라 그대로는 못 읽는다.
+//    집계를 돌리면 이 시트가 없을 때 자동으로 만들고, 새로 나타난 ID도 자동으로 줄을 추가한다.
+//    사용자는 '이름' 칸만 채우면 된다. (이름이 비면 대시보드에 '미지정(1234)' 로 뜬다)
+const SHEET_AGENT_MAP   = '상담원_매핑';
+const AGENT_MAP_HEADERS = ['담당자ID', '이름'];
 
 // ── 만족도(구글폼 응답) 원본 — 기존 파일. 읽기만 하고 절대 쓰지 않는다.
 const CSAT_SOURCE_ID    = '1ImaMFjMq-JcuJ1xBjTENa3QvYQnYlifnEGr62j5XeOM';
