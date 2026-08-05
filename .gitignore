@@ -2,10 +2,11 @@
 # ALF docs 미검색 추출물 (상담 링크 포함, 로컬 보관만)
 cs-triage/ALF_docs_미검색_추출_*.xlsx
 
-# v2 로컬 전용 (clasp 식별자·상태)
+# v2 로컬 전용 (clasp 식별자)
 gas-v2/.clasp.json
-gas-v2/.omc/
-dashboard-v2/.omc/
 
 # 자격증 기준 시트 배포용 (clasp 식별자)
 gas-cert/.clasp.json
+
+# OMC 임시 상태 — 어느 폴더에 생기든 무시
+.omc/
