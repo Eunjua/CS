@@ -10,3 +10,9 @@ gas-cert/.clasp.json
 
 # OMC 임시 상태 — 어느 폴더에 생기든 무시
 .omc/
+
+# 맥이 자동으로 만드는 폴더 설정 파일
+.DS_Store
+
+# 상담 원본 데이터 (고객 개인정보 — 로컬 보관만)
+cs-triage/상담내역/**/*.xlsx
