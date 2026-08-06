@@ -16,6 +16,15 @@ const AGG_WEEK_HEADERS = [
 
 const AGG_TAG_HEADERS = ['주차', '태그', '건수'];
 
+// 설문 객관식(해결여부·대기적절) 보기별 건수.
+// 보기 문구를 스크립트에 박지 않고 들어온 값 그대로 센다 — 폼 보기가 바뀌어도 집계는 안 멈춘다.
+// 순서·색은 대시보드가 정한다.
+const AGG_SURVEY_HEADERS = ['주차', '항목', '보기', '건수'];
+const SURVEY_FIELDS = [
+  { col: '해결여부', label: '해결여부' },
+  { col: '대기적절', label: '대기적절' },
+];
+
 // 상담원별 집계 — AI완결 건은 빼고, 사람이 응대한 상담만 담는다
 const AGG_AGENT_HEADERS = [
   '주차', '상담원', '담당자ID들', '상담건수',
@@ -61,13 +70,22 @@ function buildAggregates() {
     const cv = csatSh.getDataRange().getValues();
     const h  = cv[0].map(function(x) { return String(x).trim(); });
     const si = { id: h.indexOf('상담ID'), csat: h.indexOf('만족도'), kind: h.indexOf('친절도') };
+    const svIdx = SURVEY_FIELDS.map(function(f) { return h.indexOf(f.col); });
     if (si.id >= 0) {
       for (let i = 1; i < cv.length; i++) {
         const id = String(cv[i][si.id] || '').trim();
         if (!id) continue;
+        const sv = {};
+        SURVEY_FIELDS.forEach(function(f, k) {
+          if (svIdx[k] >= 0) {
+            const v = String(cv[i][svIdx[k]] || '').trim();
+            if (v) sv[f.label] = v;
+          }
+        });
         csatById[id] = {
-          csat : num_(cv[i][si.csat]),
-          kind : num_(cv[i][si.kind]),
+          csat   : num_(cv[i][si.csat]),
+          kind   : num_(cv[i][si.kind]),
+          survey : sv,
         };
       }
     }
@@ -78,6 +96,7 @@ function buildAggregates() {
   const tags     = {};   // week|tag → 건수
   const agents   = {};   // week|상담원이름 → 집계 객체 (ID가 여러 개여도 이름으로 합침)
   const agentIds = {};   // 상담원본에서 발견한 담당자ID 전체 (매핑 시트 자동 보충용)
+  const survey   = {};   // week|항목|보기 → 건수
 
   const blank = function() {
     return {
@@ -127,6 +146,13 @@ function buildAggregates() {
         w.kSum += sc.kind; w.kCnt++;
         if (isAi) { w.aiKSum += sc.kind; w.aiKCnt++; }
         else      { w.huKSum += sc.kind; w.huKCnt++; }
+      }
+      // 해결여부·대기적절 — 점수와 달리 보기 문구 그대로 센다
+      if (sc.survey) {
+        Object.keys(sc.survey).forEach(function(field) {
+          const key = week + '|' + field + '|' + sc.survey[field];
+          survey[key] = (survey[key] || 0) + 1;
+        });
       }
     }
 
@@ -185,6 +211,20 @@ function buildAggregates() {
   });
   writeSheet_(ss, SHEET_AGG_AGENT, AGG_AGENT_HEADERS, agentRows);
 
+  // ── 7. 설문 집계 시트 쓰기 (주차 최신순 → 항목 → 건수 많은 순)
+  //     보기 이름에 '|'가 들어갈 수 있으니 앞 두 구분자만 자른다
+  const surveyRows = Object.keys(survey).map(function(k) {
+    const i1 = k.indexOf('|');
+    const i2 = k.indexOf('|', i1 + 1);
+    return [k.slice(0, i1), k.slice(i1 + 1, i2), k.slice(i2 + 1), survey[k]];
+  }).sort(function(a, b) {
+    const d = sortWeekDesc_(a[0], b[0]);
+    if (d !== 0) return d;
+    if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
+    return b[3] - a[3];
+  });
+  writeSheet_(ss, SHEET_AGG_SURVEY, AGG_SURVEY_HEADERS, surveyRows);
+
   // 상담원본에서 처음 본 담당자ID는 매핑 시트에 줄만 추가해 둔다 (이름은 사용자가 채움)
   const unnamed = syncAgentMap_(ss, Object.keys(agentIds), agentMap);
 
@@ -194,6 +234,7 @@ function buildAggregates() {
     '주차: ' + weekRows.length + '개\n' +
     '태그 조합: ' + tagRows.length + '행\n' +
     '상담원 집계: ' + agentRows.length + '행\n' +
+    '설문(해결·대기) 집계: ' + surveyRows.length + '행\n' +
     (unnamed.length
       ? '\n⚠️ 이름이 비어 있는 담당자 ' + unnamed.length + '명이 있어요.\n' +
         '"' + SHEET_AGENT_MAP + '" 시트에서 이름을 채운 뒤 다시 집계해주세요.\n'

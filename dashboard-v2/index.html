@@ -107,6 +107,7 @@ a{color:inherit;}
   <div class="tabs">
     <button class="tab-btn active" data-tab="dash">📊 대시보드</button>
     <button class="tab-btn" data-tab="csat">⭐ 고객 만족도</button>
+    <button class="tab-btn" data-tab="solve">🎯 해결율 &amp; 시간</button>
   </div>
   <div class="hdr-right">
     <span class="stamp" id="stamp">—</span>
@@ -231,6 +232,44 @@ a{color:inherit;}
     </div>
   </div>
 
+  <!-- ── 해결율 & 시간 탭 -->
+  <div class="tab-page" id="tab-solve">
+    <div class="kpi-row" style="grid-template-columns:repeat(2,1fr)">
+      <div class="kpi" style="--c:var(--accent)">
+        <div class="lbl">해결율
+          <span class="info">?<span class="tip">설문 "문의하신 내용이 해결되었나요?"에서 <b>✅ 네, 해결됐어요</b>를 고른 비율이에요. 일부만 해결은 빠져요.</span></span>
+        </div>
+        <div class="val" id="k-resolve">—</div>
+        <div class="sub" id="k-resolve-sub">—</div>
+      </div>
+      <div class="kpi" style="--c:var(--accent3)">
+        <div class="lbl">대기 적절율
+          <span class="info">?<span class="tip">설문 "답변을 받기까지 기다리는 시간이 적절했나요?"에서 <b>😊 빠르게</b> + <b>🙂 괜찮았어요</b>를 고른 비율이에요. 실제 대기 분이 아니라 고객이 느낀 체감이에요.</span></span>
+        </div>
+        <div class="val" id="k-wait">—</div>
+        <div class="sub" id="k-wait-sub">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">문의한 내용이 해결되었는지</div>
+        <div class="card-sub" id="sv-resolve-sub">보기별 비중 추이</div>
+      </div>
+      <div class="chart-box"><canvas id="c-resolve"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">답변 받기까지 기다리는 시간</div>
+        <div class="card-sub" id="sv-wait-sub">보기별 비중 추이</div>
+      </div>
+      <div class="chart-box"><canvas id="c-wait"></canvas></div>
+    </div>
+
+    <div class="acum-note" id="sv-note" style="display:none"></div>
+  </div>
+
 </div>
 
 <div class="loading" id="loading">
@@ -254,7 +293,29 @@ const CAT_DEF = [
 // 상담원 선 색 — 순서대로 배정 (누적 응답이 많은 상담원부터)
 const AGENT_COLORS = ['#6ee7b7','#f472b6','#60a5fa','#fbbf24','#a78bfa','#fb923c','#34d399','#f87171'];
 
-let DATA = {week:[], tag:[], agent:[]};
+// 설문 객관식 두 문항. 집계는 보기 문구를 그대로 담아오므로 여기서 순서·색을 정한다.
+//  m = 보기를 알아보는 핵심 글자 (이모지가 바뀌어도 매칭되게 부분일치로 찾는다)
+//  pos = 앞에서부터 몇 개를 '긍정'으로 볼지 (KPI 계산용)
+const SURVEY_DEF = [
+  {
+    field:'해결여부', canvas:'c-resolve', kpi:'k-resolve', subId:'sv-resolve-sub', pos:1,
+    opts:[
+      {m:'네, 해결됐어요',   label:'✅ 해결됐어요',   color:'#6ee7b7'},
+      {m:'일부만',           label:'🔶 일부만 해결',  color:'#fbbf24'},
+      {m:'해결되지 않',      label:'❌ 아직 미해결',  color:'#f87171'},
+    ],
+  },
+  {
+    field:'대기적절', canvas:'c-wait', kpi:'k-wait', subId:'sv-wait-sub', pos:2,
+    opts:[
+      {m:'빠르게',   label:'😊 빠르게 연결',   color:'#6ee7b7'},
+      {m:'괜찮',     label:'🙂 기다렸지만 괜찮', color:'#fbbf24'},
+      {m:'오래',     label:'😞 너무 오래',     color:'#f87171'},
+    ],
+  },
+];
+
+let DATA = {week:[], tag:[], agent:[], survey:[]};
 let charts = {};
 
 // ── 탭 전환
@@ -345,6 +406,7 @@ function render(){
   renderKindTrend(weeks);
   renderAgentTrend('c-agent-csat', 'acum-csat', weeks, {avg:'만족도평균', cnt:'만족도응답수'});
   renderAgentTrend('c-agent-kind', 'acum-kind', weeks, {avg:'친절도평균', cnt:'친절도응답수'});
+  renderSurvey(weeks, cur['주차']);
 }
 
 // ── 공통 차트 옵션
@@ -485,6 +547,91 @@ function renderAgentTrend(canvasId, listId, weeks, keys){
       scales:{x:{grid:{display:false},ticks:{color:TICK,font:{size:10}}},
               y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10}},min:1,max:5}}
     })
+  });
+}
+
+// ── 해결율 & 시간 — 보기별 비중(100% 누적) 추이
+//    집계_설문: {주차, 항목, 보기, 건수}. 정의에 없는 보기는 '기타'로 모은다.
+function renderSurvey(weeks, curWeek){
+  const rows   = DATA.survey || [];
+  const labels = weeks.map(w=>w['주차']);
+  const note   = document.getElementById('sv-note');
+
+  if(!rows.length){
+    SURVEY_DEF.forEach(def=>{
+      if(charts[def.canvas]){ charts[def.canvas].destroy(); delete charts[def.canvas]; }
+      document.getElementById(def.canvas).parentElement.style.display='none';
+      document.getElementById(def.kpi).textContent='—';
+      document.getElementById(def.kpi+'-sub').textContent='집계 없음';
+    });
+    note.style.display='block';
+    note.innerHTML='설문 집계가 아직 없어요. 스프레드시트에서 <b>[📊 집계 생성]</b>을 실행하고, '+
+                   'Apps Script 웹앱을 <b>새 버전으로 재배포</b>했는지 확인해주세요.';
+    return;
+  }
+  note.style.display='none';
+
+  SURVEY_DEF.forEach(def=>{
+    document.getElementById(def.canvas).parentElement.style.display='';
+
+    // 주차 → 보기별 건수 (마지막 칸이 '기타')
+    const byWeek = {};
+    let cumTotal = 0;
+    rows.filter(r=>String(r['항목']||'').trim()===def.field).forEach(r=>{
+      const wk = String(r['주차']||'').trim();
+      const n  = Number(r['건수'])||0;
+      if(!wk || !n) return;
+      const v = String(r['보기']||'');
+      let idx = def.opts.findIndex(o=>v.indexOf(o.m)>=0);
+      if(idx<0) idx = def.opts.length;                       // 못 알아본 보기
+      if(!byWeek[wk]) byWeek[wk] = {c:new Array(def.opts.length+1).fill(0), t:0};
+      byWeek[wk].c[idx]+=n; byWeek[wk].t+=n; cumTotal+=n;
+    });
+
+    const hasEtc = Object.keys(byWeek).some(wk=>byWeek[wk].c[def.opts.length]>0);
+    const series = def.opts.concat(hasEtc ? [{label:'기타', color:'#6b6b80'}] : []);
+
+    // KPI — 이번 주 긍정 비중, 보조로 누적
+    const cw    = byWeek[curWeek];
+    const posOf = w => w && w.t ? w.c.slice(0,def.pos).reduce((a,b)=>a+b,0)/w.t*100 : null;
+    const cumPos = cumTotal
+      ? Object.keys(byWeek).reduce((a,wk)=>a+byWeek[wk].c.slice(0,def.pos).reduce((x,y)=>x+y,0),0)/cumTotal*100
+      : null;
+    const p = posOf(cw);
+    document.getElementById(def.kpi).textContent = p===null ? '—' : Math.round(p)+'%';
+    document.getElementById(def.kpi+'-sub').textContent =
+      (cw ? fmt(cw.t)+'건 응답' : '이번 주 응답 없음') +
+      (cumPos===null ? '' : ' · 누적 '+Math.round(cumPos)+'%');
+    document.getElementById(def.subId).textContent =
+      '보기별 비중 추이 · 누적 '+fmt(cumTotal)+'건 응답';
+
+    // 응답이 없는 주는 막대를 그리지 않는다 (0%로 오해하지 않도록)
+    charts[def.canvas] = new Chart(fresh(def.canvas),{
+      type:'bar',
+      data:{labels, datasets:series.map((o,i)=>({
+        label:o.label,
+        data:labels.map(wk=>{
+          const w = byWeek[wk];
+          return (w && w.t) ? Math.round(w.c[i]/w.t*1000)/10 : null;
+        }),
+        backgroundColor:o.color, stack:'s', borderRadius:2,
+        _cnt:labels.map(wk=> byWeek[wk] ? byWeek[wk].c[i] : 0),
+      }))},
+      options:Object.assign(baseOpts(),{
+        plugins:{
+          legend:{labels:{color:'#e8e8f0',font:{size:11},usePointStyle:true,pointStyleWidth:8}},
+          tooltip:{callbacks:{label:c=>{
+            const cnt=(c.dataset._cnt||[])[c.dataIndex]||0;
+            return c.dataset.label+' '+c.parsed.y+'% ('+fmt(cnt)+'건)';
+          }}}
+        },
+        scales:{
+          x:{stacked:true,grid:{display:false},ticks:{color:TICK,font:{size:10}}},
+          y:{stacked:true,grid:{color:GRID},min:0,max:100,
+             ticks:{color:TICK,font:{size:10},callback:v=>v+'%'}}
+        }
+      })
+    });
   });
 }
 

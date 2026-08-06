@@ -22,6 +22,7 @@ const SHEET_CSAT      = '만족도원본';
 const SHEET_AGG_WEEK  = '집계_주차';
 const SHEET_AGG_TAG   = '집계_태그';
 const SHEET_AGG_AGENT = '집계_상담원';
+const SHEET_AGG_SURVEY = '집계_설문';   // 해결여부·대기적절 보기별 건수
 const SHEET_VERIFY    = '검증';
 
 // ── 상담원 이름 매핑 시트
