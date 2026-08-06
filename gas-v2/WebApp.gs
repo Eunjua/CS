@@ -7,8 +7,9 @@
 //  ?sheet=week  → 집계_주차
 //  ?sheet=tag   → 집계_태그
 //  ?sheet=agent  → 집계_상담원
-//  ?sheet=survey → 집계_설문 (해결여부·대기적절)
-//  (없으면 네 집계를 한 번에: { week, tag, agent, survey })
+//  ?sheet=survey   → 집계_설문 (해결여부·대기적절)
+//  ?sheet=feelwait → 집계_체감대기 (체감 × 실제 대기시간 구간)
+//  (없으면 전부 한 번에: { week, tag, agent, survey, feelwait })
 // ============================================================
 
 function doGet(e) {
@@ -24,12 +25,15 @@ function doGet(e) {
     payload = { agent: sheetAsObjects_(ss, SHEET_AGG_AGENT) };
   } else if (sheet === 'survey') {
     payload = { survey: sheetAsObjects_(ss, SHEET_AGG_SURVEY) };
+  } else if (sheet === 'feelwait') {
+    payload = { feelwait: sheetAsObjects_(ss, SHEET_AGG_FEELWAIT) };
   } else {
     payload = {
-      week:   sheetAsObjects_(ss, SHEET_AGG_WEEK),
-      tag:    sheetAsObjects_(ss, SHEET_AGG_TAG),
-      agent:  sheetAsObjects_(ss, SHEET_AGG_AGENT),
-      survey: sheetAsObjects_(ss, SHEET_AGG_SURVEY),
+      week:     sheetAsObjects_(ss, SHEET_AGG_WEEK),
+      tag:      sheetAsObjects_(ss, SHEET_AGG_TAG),
+      agent:    sheetAsObjects_(ss, SHEET_AGG_AGENT),
+      survey:   sheetAsObjects_(ss, SHEET_AGG_SURVEY),
+      feelwait: sheetAsObjects_(ss, SHEET_AGG_FEELWAIT),
     };
   }
 

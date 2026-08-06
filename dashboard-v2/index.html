@@ -267,6 +267,17 @@ a{color:inherit;}
       <div class="chart-box"><canvas id="c-wait"></canvas></div>
     </div>
 
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">체감 vs 실제 대기시간</div>
+        <div class="card-sub" id="fw-sub">—</div>
+      </div>
+      <div class="acum-note">고객이 <b>느낀</b> 대기(왼쪽 3줄)별로, 채널톡에 기록된 <b>실제</b> 대기시간이 어떻게 나뉘는지예요.
+        막대가 서로 다르면 체감과 실제가 맞는 거고, 비슷하면 대기시간 말고 다른 이유로 불만이 생긴 거예요.</div>
+      <div class="chart-box" style="height:220px"><canvas id="c-feelwait"></canvas></div>
+      <div class="acum-note" id="fw-insight" style="margin:12px 0 0"></div>
+    </div>
+
     <div class="acum-note" id="sv-note" style="display:none"></div>
   </div>
 
@@ -315,7 +326,18 @@ const SURVEY_DEF = [
   },
 ];
 
-let DATA = {week:[], tag:[], agent:[], survey:[]};
+// 실제 대기시간 구간 — 집계(waitBucket_)가 내보내는 이름과 반드시 같아야 한다.
+//  '즉시'(0초)를 따로 두는 이유: ALF 봇이 답하면 0초로 찍히는데, 봇 답변 뒤
+//  상담원을 한참 기다린 고객도 여기 섞인다. 묶으면 어긋남이 안 보인다.
+const WAIT_BUCKETS = [
+  {key:'즉시',    label:'즉시(봇 포함)', color:'#34d399'},
+  {key:'~5분',    label:'~5분',          color:'#6ee7b7'},
+  {key:'5~15분',  label:'5~15분',        color:'#fbbf24'},
+  {key:'15~30분', label:'15~30분',       color:'#fb923c'},
+  {key:'30분+',   label:'30분+',         color:'#f87171'},
+];
+
+let DATA = {week:[], tag:[], agent:[], survey:[], feelwait:[]};
 let charts = {};
 
 // ── 탭 전환
@@ -407,6 +429,7 @@ function render(){
   renderAgentTrend('c-agent-csat', 'acum-csat', weeks, {avg:'만족도평균', cnt:'만족도응답수'});
   renderAgentTrend('c-agent-kind', 'acum-kind', weeks, {avg:'친절도평균', cnt:'친절도응답수'});
   renderSurvey(weeks, cur['주차']);
+  renderFeelWait();
 }
 
 // ── 공통 차트 옵션
@@ -633,6 +656,97 @@ function renderSurvey(weeks, curWeek){
       })
     });
   });
+}
+
+// ── 체감(고객이 고른 대기 만족) × 실제 대기시간
+//    가로 100% 누적 막대 3줄. 누적 전체 주차 기준 — 주차별로 쪼개면 칸당 몇 건뿐이라 못 읽는다.
+//    '측정불가'(채널톡에 대기시간이 안 남은 건)는 막대에서 빼고 건수만 따로 알린다.
+function renderFeelWait(){
+  const rows   = DATA.feelwait || [];
+  const feel   = SURVEY_DEF.find(d=>d.field==='대기적절');
+  const sub    = document.getElementById('fw-sub');
+  const insight= document.getElementById('fw-insight');
+  const canvas = document.getElementById('c-feelwait');
+
+  if(charts['c-feelwait']){ charts['c-feelwait'].destroy(); delete charts['c-feelwait']; }
+
+  if(!rows.length){
+    canvas.parentElement.style.display='none';
+    sub.textContent='집계 없음';
+    insight.innerHTML='체감×실제 집계가 아직 없어요. 스프레드시트에서 <b>[📊 집계 생성]</b>을 다시 실행해주세요.';
+    return;
+  }
+  canvas.parentElement.style.display='';
+
+  // 체감 → 구간별 건수
+  const by = feel.opts.map(()=>({b:{}, measured:0, unknown:0}));
+  rows.forEach(r=>{
+    const f = String(r['체감']||'');
+    const i = feel.opts.findIndex(o=>f.indexOf(o.m)>=0);
+    if(i<0) return;                                   // 못 알아본 보기는 버린다
+    const n = Number(r['건수'])||0;
+    if(!n) return;
+    const g = String(r['구간']||'').trim();
+    if(g==='측정불가'){ by[i].unknown += n; return; }
+    by[i].b[g] = (by[i].b[g]||0) + n;
+    by[i].measured += n;
+  });
+
+  const totMeasured = by.reduce((a,g)=>a+g.measured,0);
+  const totUnknown  = by.reduce((a,g)=>a+g.unknown,0);
+  if(!totMeasured){
+    canvas.parentElement.style.display='none';
+    sub.textContent='실제 대기시간이 기록된 건이 없음';
+    insight.innerHTML='설문에 답한 상담 '+fmt(totUnknown)+'건 모두 채널톡에 대기시간이 안 남아 있어요. '+
+                      '전화 상담이거나 운영시간 밖 문의라 값이 비는 경우예요.';
+    return;
+  }
+
+  sub.textContent = '누적 전체 주차 · 실제 대기시간이 기록된 '+fmt(totMeasured)+'건 기준';
+
+  charts['c-feelwait'] = new Chart(fresh('c-feelwait'),{
+    type:'bar',
+    data:{
+      labels: feel.opts.map((o,i)=>o.label+'  ('+fmt(by[i].measured)+'건)'),
+      datasets: WAIT_BUCKETS.map(b=>({
+        label:b.label,
+        data:by.map(g=> g.measured ? Math.round((g.b[b.key]||0)/g.measured*1000)/10 : null),
+        backgroundColor:b.color, stack:'s', borderRadius:2,
+        _cnt:by.map(g=>g.b[b.key]||0),
+      })),
+    },
+    options:Object.assign(baseOpts(),{
+      indexAxis:'y',
+      plugins:{
+        legend:{labels:{color:'#e8e8f0',font:{size:11},usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{callbacks:{label:c=>{
+          const cnt=(c.dataset._cnt||[])[c.dataIndex]||0;
+          return c.dataset.label+' '+c.parsed.x+'% ('+fmt(cnt)+'건)';
+        }}}
+      },
+      scales:{
+        x:{stacked:true,min:0,max:100,grid:{color:GRID},
+           ticks:{color:TICK,font:{size:10},callback:v=>v+'%'}},
+        y:{stacked:true,grid:{display:false},ticks:{color:TICK,font:{size:11}}}
+      }
+    })
+  });
+
+  // 어긋남 — 15분 안에 답을 받았는데도 '너무 오래'라고 한 건
+  const neg  = by[by.length-1];
+  const fast = (neg.b['즉시']||0)+(neg.b['~5분']||0)+(neg.b['5~15분']||0);
+  const parts = [];
+  if(neg.measured){
+    parts.push('😞 <b>너무 오래</b>라고 답한 '+fmt(neg.measured)+'건 중 <b>'+fmt(fast)+'건('+
+      Math.round(fast/neg.measured*100)+'%)</b>은 실제로 15분 안에 첫 답을 받았어요. '+
+      '이 건들은 응대를 더 빨리 해서 풀리는 게 아니라, <b>기다리는 동안 안내가 없어서</b> 생긴 불만일 가능성이 커요.');
+  }
+  if(totUnknown){
+    parts.push('※ 설문 응답 중 '+fmt(totUnknown)+'건은 채널톡에 대기시간이 안 남아 막대에서 뺐어요(전화·운영시간 밖 등).');
+  }
+  parts.push('※ 실제 대기시간은 <b>첫 응답까지</b>예요. ALF 봇이 먼저 답하면 0초로 잡혀서 <b>즉시</b>에 들어가는데, '+
+             '봇 답변 뒤 상담원을 오래 기다린 고객도 여기 섞여 있어요.');
+  insight.innerHTML = parts.join('<br>');
 }
 
 function renderTags(week){

@@ -25,6 +25,27 @@ const SURVEY_FIELDS = [
   { col: '대기적절', label: '대기적절' },
 ];
 
+// 체감(고객이 고른 대기 만족) × 실제 대기시간 구간
+const AGG_FEELWAIT_HEADERS = ['주차', '체감', '구간', '건수'];
+
+// 채널톡 '대기시간초'(timeFromFirstOpenToFirstAnswerInOperation)를 구간으로.
+//  · 단위는 초. 원본 export로 확인함 (0초 초과 건 중앙 10.5분, 최대 138분)
+//  · 0초는 감추지 않고 따로 둔다 — ALF 봇이 즉답하면 0초로 찍히는데,
+//    봇 답변 뒤 상담원을 한참 기다린 고객도 여기 섞인다. 묶어버리면
+//    '빨리 답했는데 왜 불만이지' 하는 어긋남이 안 보인다.
+//  · 빈칸은 '측정불가' — 전체의 45%라 0분으로 취급하면 통계가 통째로 망가진다.
+function waitBucket_(v) {
+  if (v === '' || v === null || v === undefined) return '측정불가';
+  const sec = Number(v);
+  if (isNaN(sec) || sec < 0) return '측정불가';
+  if (sec === 0) return '즉시';
+  const min = sec / 60;
+  if (min < 5)  return '~5분';
+  if (min < 15) return '5~15분';
+  if (min < 30) return '15~30분';
+  return '30분+';
+}
+
 // 상담원별 집계 — AI완결 건은 빼고, 사람이 응대한 상담만 담는다
 const AGG_AGENT_HEADERS = [
   '주차', '상담원', '담당자ID들', '상담건수',
@@ -56,6 +77,7 @@ function buildAggregates() {
     missed : chatCol_(cHead, '부재중사유'),
     ai     : chatCol_(cHead, 'AI완결'),
     agent  : chatCol_(cHead, '담당자ID'),
+    wait   : chatCol_(cHead, '대기시간초'),
   };
   if (ci.week < 0 || ci.id < 0) { ui.alert('❌ 상담원본 헤더가 예상과 달라요.'); return; }
 
@@ -97,6 +119,7 @@ function buildAggregates() {
   const agents   = {};   // week|상담원이름 → 집계 객체 (ID가 여러 개여도 이름으로 합침)
   const agentIds = {};   // 상담원본에서 발견한 담당자ID 전체 (매핑 시트 자동 보충용)
   const survey   = {};   // week|항목|보기 → 건수
+  const feelWait = {};   // week|체감|구간 → 건수
 
   const blank = function() {
     return {
@@ -153,6 +176,13 @@ function buildAggregates() {
           const key = week + '|' + field + '|' + sc.survey[field];
           survey[key] = (survey[key] || 0) + 1;
         });
+        // 체감 × 실제 — 대기 문항에 답한 상담만
+        const feel = sc.survey['대기적절'];
+        if (feel) {
+          const fk = week + '|' + feel + '|' +
+                     waitBucket_(ci.wait >= 0 ? row[ci.wait] : '');
+          feelWait[fk] = (feelWait[fk] || 0) + 1;
+        }
       }
     }
 
@@ -211,19 +241,12 @@ function buildAggregates() {
   });
   writeSheet_(ss, SHEET_AGG_AGENT, AGG_AGENT_HEADERS, agentRows);
 
-  // ── 7. 설문 집계 시트 쓰기 (주차 최신순 → 항목 → 건수 많은 순)
-  //     보기 이름에 '|'가 들어갈 수 있으니 앞 두 구분자만 자른다
-  const surveyRows = Object.keys(survey).map(function(k) {
-    const i1 = k.indexOf('|');
-    const i2 = k.indexOf('|', i1 + 1);
-    return [k.slice(0, i1), k.slice(i1 + 1, i2), k.slice(i2 + 1), survey[k]];
-  }).sort(function(a, b) {
-    const d = sortWeekDesc_(a[0], b[0]);
-    if (d !== 0) return d;
-    if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
-    return b[3] - a[3];
-  });
-  writeSheet_(ss, SHEET_AGG_SURVEY, AGG_SURVEY_HEADERS, surveyRows);
+  // ── 7. 설문 집계 · 체감×실제 집계 시트 쓰기
+  //     둘 다 'week|A|B → 건수' 구조라 같은 방식으로 편다.
+  const surveyRows   = countMapToRows_(survey);
+  const feelWaitRows = countMapToRows_(feelWait);
+  writeSheet_(ss, SHEET_AGG_SURVEY,   AGG_SURVEY_HEADERS,   surveyRows);
+  writeSheet_(ss, SHEET_AGG_FEELWAIT, AGG_FEELWAIT_HEADERS, feelWaitRows);
 
   // 상담원본에서 처음 본 담당자ID는 매핑 시트에 줄만 추가해 둔다 (이름은 사용자가 채움)
   const unnamed = syncAgentMap_(ss, Object.keys(agentIds), agentMap);
@@ -235,6 +258,7 @@ function buildAggregates() {
     '태그 조합: ' + tagRows.length + '행\n' +
     '상담원 집계: ' + agentRows.length + '행\n' +
     '설문(해결·대기) 집계: ' + surveyRows.length + '행\n' +
+    '체감×실제 대기 집계: ' + feelWaitRows.length + '행\n' +
     (unnamed.length
       ? '\n⚠️ 이름이 비어 있는 담당자 ' + unnamed.length + '명이 있어요.\n' +
         '"' + SHEET_AGENT_MAP + '" 시트에서 이름을 채운 뒤 다시 집계해주세요.\n'
@@ -329,6 +353,22 @@ function chatCol_(header, label) {
   if (byName >= 0) return byName;
   const byDef = CHAT_HEADERS.indexOf(label);
   return byDef;   // 정의에 있으면 그 위치, 없으면 -1
+}
+
+// 'week|A|B → 건수' 맵을 [주차, A, B, 건수] 행으로.
+// B(보기·구간)에 '|'가 들어갈 수 있으니 앞 두 구분자만 자른다.
+// 정렬: 주차 최신순 → A 이름순 → 건수 많은 순
+function countMapToRows_(map) {
+  return Object.keys(map).map(function(k) {
+    const i1 = k.indexOf('|');
+    const i2 = k.indexOf('|', i1 + 1);
+    return [k.slice(0, i1), k.slice(i1 + 1, i2), k.slice(i2 + 1), map[k]];
+  }).sort(function(a, b) {
+    const d = sortWeekDesc_(a[0], b[0]);
+    if (d !== 0) return d;
+    if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
+    return b[3] - a[3];
+  });
 }
 
 function avg_(sum, cnt) {

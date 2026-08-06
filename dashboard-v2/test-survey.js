@@ -107,3 +107,91 @@ assert.strictEqual(el('k-resolve').textContent, '—');
 assert.strictEqual(el('sv-note').style.display, 'block');
 
 console.log('통과 — 비중 계산, 기타 처리, 빈 주차, KPI, 빈 집계 안내');
+
+// ============================================================
+//  체감 × 실제 대기시간
+// ============================================================
+
+// ── 1) 집계 쪽 구간 나누기 (gas-v2/Aggregate.gs 의 waitBucket_ 를 그대로 불러 쓴다)
+const gasSb = { SpreadsheetApp: undefined, console };
+vm.createContext(gasSb);
+vm.runInContext(fs.readFileSync('/Users/eunju/work/CS/gas-v2/Aggregate.gs', 'utf8'), gasSb);
+const wb = gasSb.waitBucket_;
+
+[ ['',   '측정불가'], [null, '측정불가'], [undefined, '측정불가'],
+  ['abc','측정불가'], [-5,   '측정불가'],
+  [0,    '즉시'],
+  [1,    '~5분'],    [299,  '~5분'],      // 4분 59초
+  [300,  '5~15분'],  [899,  '5~15분'],    // 5분 정각 ~ 14분 59초
+  [900,  '15~30분'], [1799, '15~30분'],
+  [1800, '30분+'],   [8262, '30분+'],     // 원본 export 최대값(137.7분)
+].forEach(([input, want]) => {
+  assert.strictEqual(wb(input), want, `waitBucket_(${JSON.stringify(input)})`);
+});
+
+// 대시보드 구간 이름이 집계와 어긋나면 막대가 통째로 비어버린다 — 한 번 맞춰본다
+// Array.from — vm 안에서 만든 배열은 프로토타입이 달라 그대로는 비교가 안 된다
+const dashKeys = Array.from(vm.runInContext('WAIT_BUCKETS.map(b=>b.key)', sandbox));
+const gasKeys = [0, 1, 300, 900, 1800].map(wb);
+assert.deepStrictEqual(dashKeys, gasKeys, '대시보드 구간 이름 == 집계 구간 이름');
+
+// ── 2) 렌더링
+charts.length = 0;
+sandbox.__setData({
+  week: [], tag: [], agent: [], survey: [],
+  feelwait: [
+    // 😊 빠르게 — 실제로도 빠름
+    { 주차:'07/27~08/02', 체감:'😊 빠르게 연결됐어요', 구간:'즉시',     건수: 30 },
+    { 주차:'07/27~08/02', 체감:'😊 빠르게 연결됐어요', 구간:'~5분',     건수: 10 },
+    { 주차:'07/27~08/02', 체감:'😊 빠르게 연결됐어요', 구간:'측정불가', 건수: 25 },
+    // 🙂 괜찮음
+    { 주차:'07/27~08/02', 체감:'🙂 조금 기다렸지만 괜찮았어요', 구간:'5~15분',  건수: 20 },
+    { 주차:'07/27~08/02', 체감:'🙂 조금 기다렸지만 괜찮았어요', 구간:'15~30분', 건수: 20 },
+    // 😞 너무 오래 — 절반은 실제로 15분 안에 답을 받았다 (= 어긋남)
+    { 주차:'07/27~08/02', 체감:'😞 너무 오래 기다렸어요', 구간:'즉시',   건수:  3 },
+    { 주차:'07/27~08/02', 체감:'😞 너무 오래 기다렸어요', 구간:'5~15분', 건수:  2 },
+    { 주차:'07/27~08/02', 체감:'😞 너무 오래 기다렸어요', 구간:'30분+',  건수:  5 },
+    { 주차:'07/27~08/02', 체감:'알아볼 수 없는 보기',      구간:'30분+',  건수: 99 },
+  ],
+});
+sandbox.renderFeelWait();
+
+const fw = charts[0];
+assert.strictEqual(fw.options.indexAxis, 'y', '가로 막대');
+assert.strictEqual(fw.data.datasets.length, 5, '구간 5개');
+// 측정불가는 막대에서 빠지고 건수 표기에도 안 들어간다
+assert.strictEqual(fw.data.labels[0], '😊 빠르게 연결  (40건)');
+assert.strictEqual(fw.data.labels[2], '😞 너무 오래  (10건)');
+// 😊 줄: 즉시 75% / ~5분 25%
+assert.deepStrictEqual(Array.from(fw.data.datasets[0].data), [75, 0, 30]);
+assert.deepStrictEqual(Array.from(fw.data.datasets[1].data), [25, 0, 0]);
+// 줄마다 합계 100%
+fw.data.labels.forEach((_, i) => {
+  const sum = fw.data.datasets.reduce((a, d) => a + d.data[i], 0);
+  assert.strictEqual(Math.round(sum), 100, `${i}번째 줄 합계`);
+});
+// 못 알아본 체감(99건)은 어디에도 안 섞여야 한다
+assert(!el('fw-sub').textContent.includes('99'), '알 수 없는 체감은 버린다');
+assert.strictEqual(el('fw-sub').textContent, '누적 전체 주차 · 실제 대기시간이 기록된 90건 기준');
+// 어긋남: 😞 10건 중 즉시3+5~15분2 = 5건(50%)
+assert(el('fw-insight').innerHTML.includes('10건 중 <b>5건(50%)</b>'), '어긋남 계산');
+assert(el('fw-insight').innerHTML.includes('25건'), '측정불가 건수 안내');
+
+// ── 3) 실제 대기시간이 하나도 없을 때 (전부 측정불가)
+charts.length = 0;
+sandbox.__setData({ week:[], tag:[], agent:[], survey:[], feelwait:[
+  { 주차:'07/27~08/02', 체감:'😊 빠르게 연결됐어요', 구간:'측정불가', 건수: 12 },
+]});
+sandbox.renderFeelWait();
+assert.strictEqual(charts.length, 0, '그릴 게 없으면 차트를 안 만든다');
+assert.strictEqual(el('c-feelwait').parentElement.style.display, 'none');
+assert(el('fw-insight').innerHTML.includes('12건'));
+
+// ── 4) 집계 자체가 없을 때
+charts.length = 0;
+sandbox.__setData({ week:[], tag:[], agent:[], survey:[], feelwait:[] });
+sandbox.renderFeelWait();
+assert.strictEqual(charts.length, 0);
+assert.strictEqual(el('fw-sub').textContent, '집계 없음');
+
+console.log('통과 — 구간 경계 14개, 집계↔대시보드 구간명 일치, 어긋남 계산, 측정불가 제외, 빈 데이터');
