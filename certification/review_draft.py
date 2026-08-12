@@ -7,7 +7,7 @@
 import sys
 import os
 
-TEMPLATE_PATH = "/Users/eunju/Documents/04.Git/CS/certification/template.md"
+TEMPLATE_PATH = "/Users/eunju/work/CS/certification/template.md"
 
 def load_template() -> str:
     try:

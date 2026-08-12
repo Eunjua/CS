@@ -19,9 +19,9 @@
 
 아래 파일들을 읽어 서류 구조와 문체를 파악하라.
 
-- `/Users/eunju/Documents/04.Git/CS/certification/template.md` — 운영규정 전체 템플릿
-- `/Users/eunju/Documents/04.Git/CS/certification/certification-samples/sample-노인생활지원사.pdf` — 통과 샘플 (문체 참고)
-- `/Users/eunju/Documents/04.Git/CS/certification/certification-samples/sample-병원동행매니저.pdf` — 통과 샘플 (구조 참고)
+- `/Users/eunju/work/CS/certification/template.md` — 운영규정 전체 템플릿
+- `/Users/eunju/work/CS/certification/certification-samples/sample-노인생활지원사.pdf` — 통과 샘플 (문체 참고)
+- `/Users/eunju/work/CS/certification/certification-samples/sample-병원동행매니저.pdf` — 통과 샘플 (구조 참고)
 
 ### 2단계: 사용자에게 질문 (4가지, 하나씩 순서대로)
 

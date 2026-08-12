@@ -1,0 +1,128 @@
+{
+  "id": "case-8",
+  "name": "자격증 환불 문의",
+  "category": "환불",
+  "desc": "고객이 자격증 결제 환불을 요청할 때",
+  "steps": [
+    {
+      "sid": 1,
+      "parent": null,
+      "cond": null,
+      "type": "조회",
+      "text": "어드민에서 전화번호로 고객 정보·결제 내역 조회",
+      "link": "https://bo.carepartner.kr/academy/user-activity-v2?page=1"
+    },
+    {
+      "sid": 2,
+      "parent": 1,
+      "cond": null,
+      "type": "안내",
+      "text": "\"내부 규정상 자격증 결제 후 환불이 불가능하지만, 예외적으로 환불 가능한지 확인해보겠습니다\"",
+      "link": null
+    },
+    {
+      "sid": 3,
+      "parent": 2,
+      "cond": null,
+      "type": "조회",
+      "text": "결제 날짜 확인 (오늘 결제인지 / 과거 결제인지)",
+      "link": null
+    },
+    {
+      "sid": 4,
+      "parent": 3,
+      "cond": "결제 날짜가 당일",
+      "type": "안내",
+      "text": "\"아직 제작이 들어가지 않아 환불 도와드릴 수 있어요\" 안내 → 슬랙에 환불 요청 등록",
+      "link": null
+    },
+    {
+      "sid": 5,
+      "parent": 3,
+      "cond": "결제 날짜가 과거",
+      "type": "조회",
+      "text": "드라이브에서 자격증 배송 날짜 확인",
+      "link": "https://drive.google.com/drive/folders/13dZAvuCdn4z8g5CBpYhXvzdxSXlrqodA"
+    },
+    {
+      "sid": 6,
+      "parent": 5,
+      "cond": "배송 날짜가 오늘보다 과거 (이미 배송됨)",
+      "type": "안내",
+      "text": "환불 불가 안내",
+      "link": null
+    },
+    {
+      "sid": 7,
+      "parent": 5,
+      "cond": "배송 날짜가 오늘",
+      "type": "조회",
+      "text": "오늘이 월요일인지 확인",
+      "link": null
+    },
+    {
+      "sid": 8,
+      "parent": 7,
+      "cond": "월요일 · 낮 12시 이전",
+      "type": "질문",
+      "text": "카드 결제인 경우 : 질문 없음\n\n계좌 이체한 경우: 은행, 계좌번호, 예금주 확인",
+      "link": null
+    },
+    {
+      "sid": 9,
+      "parent": 8,
+      "cond": null,
+      "type": "요청",
+      "text": "슬랙에 환불 요청 등록",
+      "link": null
+    },
+    {
+      "sid": 10,
+      "parent": 9,
+      "cond": null,
+      "type": "안내",
+      "text": "예외적으로 환불 처리 도와드릴게요.\n환불 처리는 2~3영업일 정도 걸릴 수 있습니다.",
+      "link": null
+    },
+    {
+      "sid": 11,
+      "parent": 7,
+      "cond": "월요일 · 낮 12시 이후",
+      "type": "안내",
+      "text": "환불 불가 안내",
+      "link": null
+    },
+    {
+      "sid": 12,
+      "parent": 7,
+      "cond": "월요일 아님 · 오후 3시 이전",
+      "type": "질문",
+      "text": "카드 결제인 경우 : 질문 없음\n\n계좌 이체한 경우: 은행, 계좌번호, 예금주 확인",
+      "link": null
+    },
+    {
+      "sid": 13,
+      "parent": 12,
+      "cond": null,
+      "type": "요청",
+      "text": "슬랙에 환불 요청 등록",
+      "link": null
+    },
+    {
+      "sid": 14,
+      "parent": 13,
+      "cond": null,
+      "type": "안내",
+      "text": "예외적으로 환불 처리 도와드릴게요.\n환불 처리는 2~3영업일 정도 걸릴 수 있습니다.",
+      "link": null
+    },
+    {
+      "sid": 16,
+      "parent": 7,
+      "cond": "월요일 아님 · 오후 3시 이후",
+      "type": "안내",
+      "text": "환불 불가 안내",
+      "link": null
+    }
+  ]
+}

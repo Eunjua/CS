@@ -25,7 +25,7 @@ argument-hint: "[자격증명]"
 
 ## 템플릿 참고
 
-!`cat /Users/eunju/Documents/04.Git/CS/certification/template.md`
+!`cat /Users/eunju/work/CS/certification/template.md`
 
 ---
 
@@ -98,13 +98,13 @@ argument-hint: "[자격증명]"
 
 1. 마크다운 파일 저장:
    ```
-   /Users/eunju/Documents/04.Git/CS/certification/[자격증명]-운영규정.md
+   /Users/eunju/work/CS/certification/[자격증명]-운영규정.md
    ```
 
 2. AI 검토 실행 (Bash):
    ```bash
-   python3 /Users/eunju/Documents/04.Git/CS/certification/review_draft.py \
-     "/Users/eunju/Documents/04.Git/CS/certification/[자격증명]-운영규정.md"
+   python3 /Users/eunju/work/CS/certification/review_draft.py \
+     "/Users/eunju/work/CS/certification/[자격증명]-운영규정.md"
    ```
 
 3. Gemini 검토 결과를 사용자에게 보여준다.
@@ -125,7 +125,7 @@ from bs4 import BeautifulSoup
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-MD_PATH = "/Users/eunju/Documents/04.Git/CS/certification/[자격증명]-운영규정.md"
+MD_PATH = "/Users/eunju/work/CS/certification/[자격증명]-운영규정.md"
 PDF_PATH = MD_PATH.replace(".md", ".pdf")
 
 md_text = open(MD_PATH, encoding="utf-8").read()
