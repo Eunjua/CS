@@ -10,7 +10,9 @@
  * [배포 방법] — 비개발자용 단계별
  *   ① 이 .gs 파일 내용을 은주 계정의 Apps Script 프로젝트에 그대로 붙여넣고 저장합니다.
  *      (구글 드라이브 → 새로 만들기 → 더보기 → Google Apps Script)
- *   ② 아래 SEND_PIN 값을 원하는 PIN으로 바꿉니다. (상담원 2명과 공유할 공용 PIN)
+ *   ② 프로젝트 설정 → 스크립트 속성에 SEND_PIN을 추가하고, 원하는 PIN 값을 넣습니다.
+ *      (상담원 2명과 공유할 공용 PIN. 코드가 아니라 여기에 두어야 파일을 다시
+ *       붙여넣어도 PIN이 되돌아가지 않습니다. 비즈엠 계정 정보와 같은 방식입니다.)
  *   ③ 우상단 [배포] → [새 배포] → 유형을 "웹 앱"으로 선택합니다.
  *        - 실행: 나 (은주 계정)
  *        - 액세스 권한: 링크가 있는 모든 사용자
@@ -24,11 +26,27 @@
  *   배포 → 배포 관리 → (연필) 편집 → 버전: '새 버전' → 배포   (URL 그대로 유지)
  */
 
-// 발송 권한 게이트용 공용 PIN. ── 원하는 PIN으로 바꾸세요 ──
-const SEND_PIN = "0000";
-
 // 발신자 표시명(발신 주소는 은주 계정으로 고정되며, 이름만 이 값으로 표시됩니다)
 const SENDER_NAME = "케어아카데미";
+
+/**
+ * 발송 권한 게이트용 공용 PIN을 스크립트 속성에서 읽어옵니다.
+ *
+ * PIN을 이 파일에 직접 적지 않는 이유:
+ *   이 파일은 공개 저장소에 올라갑니다. 코드에 PIN을 적어두면 누구나 볼 수 있고,
+ *   무엇보다 이 파일을 Apps Script에 다시 붙여넣는 순간 PIN이 파일에 적힌 값으로
+ *   조용히 되돌아갑니다(아무 에러도 나지 않아 알아채기 어렵습니다).
+ *   스크립트 속성에 두면 파일을 몇 번을 붙여넣어도 PIN은 그대로입니다.
+ *
+ * 설정하지 않으면 발송이 전부 막힙니다(약한 상태로 조용히 넘어가지 않게 하려는 것).
+ */
+function getSendPin_() {
+  const pin = String(PropertiesService.getScriptProperties().getProperty('SEND_PIN') || '').trim();
+  if (!pin) {
+    throw new Error('발송 PIN이 설정되지 않았습니다. Apps Script → 프로젝트 설정 → 스크립트 속성에 SEND_PIN을 넣어 주세요.');
+  }
+  return pin;
+}
 
 /* ===================== 발송 처리 ===================== */
 /**
@@ -37,7 +55,7 @@ const SENDER_NAME = "케어아카데미";
  *   "to": "customer@example.com",
  *   "subject": "제목",
  *   "body": "본문\n줄바꿈 보존",
- *   "pin": "0000",
+ *   "pin": "발송PIN",
  *   "attachments": [ { "filename":"이수증.pdf", "mimeType":"application/pdf", "dataBase64":"..." }, ... ]
  * }
  */
@@ -46,7 +64,7 @@ function doPost(e) {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
 
     // PIN 검증 (불일치 시 발송 안 함)
-    if (String(body.pin || '') !== SEND_PIN) {
+    if (String(body.pin || '') !== getSendPin_()) {
       return jsonOut_({ ok: false, error: 'PIN이 올바르지 않습니다.' });
     }
 

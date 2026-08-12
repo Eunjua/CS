@@ -62,7 +62,7 @@ function getBizmConfig_() {
  *   "message": "보낼 내용",
  *   "smsTitle": "장문 제목",        // LMS일 때만 사용, 없으면 생략
  *   "templateCode": "care_001",    // channel이 alimtalk일 때 필수
- *   "pin": "0000"
+ *   "pin": "발송PIN"
  * }
  *
  * 돌려주는 JSON 예:
