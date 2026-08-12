@@ -169,6 +169,7 @@
   .result-msg.show { display: block; }
   .result-msg.ok  { background: #e9f7ef; color: #1e7e44; border: 1px solid #b8e3c9; }
   .result-msg.err { background: #fdecec; color: #c0392b; border: 1px solid #f3c4c0; }
+  .result-msg.warn { background: #fff7e6; color: #9a6700; border: 1px solid #f5dfa8; white-space: pre-line; }
   .result-msg.loading { background: #eef4fd; color: #2e67be; border: 1px solid #cfe0f7; }
 
   /* ── 미리보기 ── */
@@ -769,6 +770,24 @@
     el.textContent = msg;
   }
 
+  /* 응답 읽기 — 실패해도 "발송 실패"로 단정하지 않습니다.
+     구글은 발송 결과를 두 단계로 돌려주는데, 두 번째 단계가 실패하면 JSON 대신 HTML이 옵니다.
+     그때 발송 자체는 이미 끝난 뒤라, 실패로 오인해 다시 누르면 고객에게 두 번 나갑니다.
+     읽지 못했으면 null을 돌려주고, 부르는 쪽에서 "확인 필요"로 안내합니다. */
+  async function readSendResult(res) {
+    const raw = await res.text();
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const UNCONFIRMED_MSG =
+    '⚠️ 발송 요청은 전달됐습니다. 다만 결과 확인에 실패했어요.\n'
+    + '받는 분에게 도착했는지 먼저 확인하시고, 안 왔을 때만 다시 보내세요.\n'
+    + '(다시 누르면 두 번 발송될 수 있습니다)';
+
   /* ── 발송 ── */
   async function sendMail() {
     const to      = document.getElementById('to').value.trim();
@@ -807,7 +826,8 @@
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const data = await readSendResult(res);
+      if (!data) return showResult('warn', UNCONFIRMED_MSG);
 
       if (data.ok) {
         showResult('ok', '✅ 발송 완료! ' + to + ' 님에게 메일을 보냈습니다.');
@@ -1056,7 +1076,8 @@
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      const data = await readSendResult(res);
+      if (!data) return showResult('warn', UNCONFIRMED_MSG);
 
       if (!data.ok && !Array.isArray(data.results)) {
         return showResult('err', '❌ 발송 실패: ' + (data.error || '알 수 없는 오류입니다.'));
