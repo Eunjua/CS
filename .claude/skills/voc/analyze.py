@@ -20,14 +20,20 @@ API = ('https://script.google.com/macros/s/'
 # 급증 감지에서 뺄 태그.
 #  · AI/*  = 워크플로우 정상 상태값이라 늘어도 문제가 아니다 (AI/상담완료가 늘면 오히려 좋은 신호)
 #  · 태그없음 = 미분류 버킷. 상시 지표로 따로 본다.
+#  · 인터뷰 = 고객 문의가 아니라 우리가 만든 인입(모집·리서치). 은주 지시로 제외(2026-08-18)
 def is_operational(tag):
-    return tag == 'AI' or tag.startswith('AI/') or tag == '태그없음'
+    return tag == 'AI' or tag.startswith('AI/') or tag in ('태그없음', '인터뷰')
 
 # 임계값 — 주 1,200건 규모에서 "회의에서 말할 가치가 있는" 크기로 잡았다.
 # 건수 조건 없이 %만 쓰면 3건→6건 같은 게 +100%로 올라와 진짜 신호를 덮는다.
 SURGE_MIN_DELTA, SURGE_MIN_PCT = 10, 30
 DROP_MIN_DELTA,  DROP_MIN_PCT  = -15, -30
 NEW_MIN, ETC_MIN = 5, 5
+# 급부상 — 직전 4주 내내 낮게 깔려 있던 태그가 몇 배로 튄 것.
+# 절대 증가가 작아 급증(10건) 문턱을 못 넘지만 신호는 강하다.
+# (2026-08-18 발견: 자격증/오배송 1·2·2·2 → 11건. +9건이라 급증에 안 걸렸다)
+SPIKE_BASE_MAX, SPIKE_MIN, SPIKE_MULT = 2, 8, 3
+TREND_MIN_DELTA = 5   # 태그 3주 연속 추세로 볼 최소 총 변화
 TOP_N = 3            # 본문에 쓸 개수. 나머지는 '그 외 변동'으로 접는다.
 
 
@@ -78,7 +84,7 @@ def main():
         tag[r['태그']][r['주차']] = r['건수']
     look = weeks[i + 1:i + 5]      # 신규 판정에 볼 직전 4주
 
-    surge, drop, new, etc = [], [], [], []
+    surge, drop, new, etc, spike = [], [], [], [], []
     for t, byw in tag.items():
         c, p = byw.get(cur_w, 0), byw.get(prev_w, 0)
         if not c and not p:
@@ -89,8 +95,12 @@ def main():
             etc.append(rec)                       # 운영 태그여도 '기타'는 본다
         if is_operational(t):
             continue
-        if c >= NEW_MIN and all(byw.get(w, 0) == 0 for w in look):
+        base = [byw.get(w, 0) for w in look]
+        if c >= NEW_MIN and all(v == 0 for v in base):
             new.append(rec)
+        elif (base and sum(base) / len(base) <= SPIKE_BASE_MAX
+              and c >= SPIKE_MIN and c >= max(p, 1) * SPIKE_MULT):
+            spike.append(rec)
         elif c - p >= SURGE_MIN_DELTA and (rec['증감률'] is None or rec['증감률'] >= SURGE_MIN_PCT):
             surge.append(rec)
         elif c - p <= DROP_MIN_DELTA and rec['증감률'] is not None and rec['증감률'] <= DROP_MIN_PCT:
@@ -100,7 +110,9 @@ def main():
     drop.sort(key=lambda x: x['증감'])
     new.sort(key=lambda x: -x['이번주'])
     etc.sort(key=lambda x: -x['증감'])
+    spike.sort(key=lambda x: -x['증감'])
     out['급증'], out['급감'], out['신규'], out['기타계열'] = surge, drop, new, etc
+    out['급부상'] = spike
 
     # ── 3. 3주 연속 추세
     #  전주 대비만 보면 -0.04 같은 변화가 아무 규칙에도 안 걸리는데,
@@ -115,6 +127,26 @@ def main():
                 elif v[0] > v[1] > v[2]:
                     trend[k] = {'방향': '3주 연속 상승', '값': v, '주차': weeks[i:i + 3]}
     out['연속추세'] = trend
+
+    # 태그도 같은 눈으로 본다. 전주 대비로는 매주 문턱 아래여도
+    # 3주를 이어 보면 굳어지는 방향이 있다 (자격증/정보수정 21→35→42).
+    tag_trend = []
+    if i + 2 < len(weeks):
+        w3 = weeks[i:i + 3]                      # [이번주, 전주, 전전주]
+        for t, byw in tag.items():
+            if is_operational(t):
+                continue
+            v = [byw.get(w, 0) for w in w3]
+            up = v[0] > v[1] > v[2] and v[0] - v[2] >= TREND_MIN_DELTA
+            down = v[0] < v[1] < v[2] and v[2] - v[0] >= TREND_MIN_DELTA
+            if up or down:
+                tag_trend.append({'태그': t,
+                                  '방향': '3주 연속 증가' if up else '3주 연속 감소',
+                                  '값': list(reversed(v)),        # 오래된 주 → 이번 주
+                                  '주차': list(reversed(w3)),
+                                  '총변화': v[0] - v[2]})
+    tag_trend.sort(key=lambda x: -abs(x['총변화']))
+    out['태그추세'] = tag_trend
 
     # ── 4. 설문 (해결여부·대기적절) — 보기 문구는 폼에서 바뀔 수 있어 들어온 값 그대로 쓴다
     sv = defaultdict(lambda: defaultdict(int))
