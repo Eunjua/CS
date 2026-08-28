@@ -1017,3 +1017,4 @@ function onEdit(e) {
     dateCell.clearContent();
   }
 }
+
