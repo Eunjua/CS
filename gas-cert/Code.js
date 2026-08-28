@@ -7,8 +7,76 @@ var TARGET_FOLDER_ID           = '13dZAvuCdn4z8g5CBpYhXvzdxSXlrqodA';
 var SOURCE_SHEET_NAME          = '제작리스트';
 var COURSE_SHEET_NAME          = '발급과정';
 var CERT_MAPPING_SHEET_NAME    = '자격증매핑';
+var SUMMARY_SHEET_NAME         = '정산집계';
 var DELIVERY_BABY_SHEET_NAME   = '[배송]베이비시터';
 var DELIVERY_NCS_SHEET_NAME    = '[배송]NCS';   // 한국검정평가원 송장도 여기 섞여 옴 (NCS로 통합 처리)
+
+// ============================================================
+//  ★ 열 위치 설정 ★
+//  헤더(1행) 이름이 아니라 "몇 번째 열인지"로 동작합니다.
+//  → 헤더 이름은 마음대로 바꿔도 됩니다.
+//  → 대신 열을 끼워넣거나 순서를 바꾸면 아래 알파벳을 고쳐주세요. 여기만 고치면 됩니다.
+// ============================================================
+
+// 제작리스트 시트
+var SRC_COL = {
+  '배송일자':          'A',
+  '제작일자':          'B',
+  'user_name':        'D',   // 이름
+  'year':             'E',   // 생년
+  'month':            'F',   // 생월
+  'day':              'G',   // 생일
+  '전화번호':          'H',
+  'title_with_grade': 'I',   // 자격증명
+  'type_code':        'J',   // 자격증형태
+  '주소':              'K',
+  'exam_score':       'M',   // 시험점수
+  '유효성검사':        'N',
+  '재발급':            'P',
+  '상세주소':          'Q',
+  '비고':              'S'
+};
+
+// 정산집계 시트 (이 스크립트가 직접 만드는 시트)
+var SUM_COL = {
+  '배송일':     'A',
+  '이름':       'B',
+  '전화번호':   'C',
+  '자격증':     'D',
+  'type_code': 'E',
+  '송장번호':   'F',
+  '재발급':     'G',
+  '취소':       'H',
+  '취소일':     'I'
+};
+
+// 발급과정 시트
+var COURSE_COL = { '과정명': 'A', '코드번호': 'B', '자격증형태': 'E', '결제금액': 'F' };
+
+// 자격증매핑 시트
+var CERTMAP_COL = { '자격증명': 'A', '종류': 'B' };
+
+// [배송]베이비시터 시트
+var DBABY_COL = { '배송일': 'A', '이름': 'D', '전화번호': 'G', '송장번호': 'H' };
+
+// [배송]NCS 시트
+var DNCS_COL = { '배송일': 'A', '송장번호': 'I', '이름': 'S', '전화번호': 'T' };
+
+// 열 알파벳 → 배열 번호 (A=0, B=1 ... Z=25, AA=26)
+function colIdx(letter) {
+  var n = 0;
+  letter.toString().trim().toUpperCase().split('').forEach(function(ch) {
+    n = n * 26 + (ch.charCodeAt(0) - 64);
+  });
+  return n - 1;
+}
+
+// 열 설정표({이름:'A'}) → 번호표({이름:0})
+function buildIdx(colMap) {
+  var idx = {};
+  Object.keys(colMap).forEach(function(k) { idx[k] = colIdx(colMap[k]); });
+  return idx;
+}
 
 // ===== 자격증매핑 시트 로드 =====
 function loadCertMapping(ss) {
@@ -19,11 +87,12 @@ function loadCertMapping(ss) {
   }
 
   var data = sheet.getDataRange().getValues();
+  var cIdx = buildIdx(CERTMAP_COL);
   var map  = {};
 
   data.slice(1).forEach(function(row) {
-    var certName = row[0] ? row[0].toString().trim() : '';
-    var certType = row[1] ? row[1].toString().trim().toLowerCase() : '';
+    var certName = row[cIdx['자격증명']] ? row[cIdx['자격증명']].toString().trim() : '';
+    var certType = row[cIdx['종류']]     ? row[cIdx['종류']].toString().trim().toLowerCase() : '';
     if (certName && certType) {
       map[certName] = certType;
     }
@@ -60,28 +129,27 @@ function createCertificationFiles() {
   if (!certMapping) return;
 
   var sourceData = sourceSheet.getDataRange().getValues();
-  var headers    = sourceData[0];
   var rows       = sourceData.slice(1).filter(function(row) {
     return row.some(function(cell) { return cell !== ''; });
   });
 
-  var idx = {};
-  headers.forEach(function(h, i) { idx[h.toString().trim()] = i; });
+  var idx = buildIdx(SRC_COL);
 
   var courseData    = courseSheet.getDataRange().getValues();
   var courseCodeMap = {};
   var typeAmountMap = {};
 
+  var crsIdx = buildIdx(COURSE_COL);
   courseData.forEach(function(row) {
-    var courseName = row[0] ? row[0].toString().trim() : '';
-    var codeNum    = row[1] ? row[1].toString().trim() : '';
-    var typeCode   = row[4] ? row[4].toString().trim() : '';
-    var amount     = row[5] !== undefined ? row[5] : '';
+    var courseName = row[crsIdx['과정명']]     ? row[crsIdx['과정명']].toString().trim()     : '';
+    var codeNum    = row[crsIdx['코드번호']]   ? row[crsIdx['코드번호']].toString().trim()   : '';
+    var typeCode   = row[crsIdx['자격증형태']] ? row[crsIdx['자격증형태']].toString().trim() : '';
+    var amount     = row[crsIdx['결제금액']] !== undefined ? row[crsIdx['결제금액']] : '';
     if (courseName && codeNum) courseCodeMap[courseName] = codeNum;
     if (typeCode && amount !== '') typeAmountMap[typeCode] = amount;
   });
 
-  var validColIdx  = idx['유효성검사'] !== undefined ? idx['유효성검사'] : 13;
+  var validColIdx  = idx['유효성검사'];
   var filteredRows = rows.filter(function(row) {
     return row[validColIdx].toString().trim() !== 'F';
   });
@@ -167,28 +235,18 @@ function updateDeliveryNCS() {
 // ===== 배송 업데이트 공통 함수 =====
   function updateDeliveryTracking(type) {
     var ss           = SpreadsheetApp.getActiveSpreadsheet();
-    var summarySheet = ss.getSheetByName('정산집계');
+    var summarySheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
 
     if (!summarySheet) {
-      SpreadsheetApp.getUi().alert('시트를 찾을 수 없습니다: 정산집계');
+      SpreadsheetApp.getUi().alert('시트를 찾을 수 없습니다: ' + SUMMARY_SHEET_NAME);
       return;
     }
 
     var certMapping = loadCertMapping(ss);
     if (!certMapping) return;
 
-    var summaryData    = summarySheet.getDataRange().getValues();
-    var summaryHeaders = summaryData[0];
-    var sIdx           = {};
-    summaryHeaders.forEach(function(h, i) { sIdx[h.toString().trim()] = i; });
-
-    var requiredCols = ['배송일', '이름', '전화번호', '자격증', '송장번호'];
-    for (var c = 0; c < requiredCols.length; c++) {
-      if (sIdx[requiredCols[c]] === undefined) {
-        SpreadsheetApp.getUi().alert('정산집계 시트에 필수 컬럼이 없습니다: ' + requiredCols[c]);
-        return;
-      }
-    }
+    var summaryData = summarySheet.getDataRange().getValues();
+    var sIdx        = buildIdx(SUM_COL);
 
     var trackingColS = sIdx['송장번호'] + 1;
 
@@ -252,16 +310,17 @@ function updateDeliveryNCS() {
       });
 
       var babyData = deliveryBabySheet.getDataRange().getValues();
+      var bIdx     = buildIdx(DBABY_COL);
       var babyRows = babyData.slice(1).filter(function(row) {
-        return row[7] && row[7].toString().trim() !== '';
+        return row[bIdx['송장번호']] && row[bIdx['송장번호']].toString().trim() !== '';
       });
       totalCount = babyRows.length;
 
       babyRows.forEach(function(dRow) {
-        var dDate     = normalizeDate(dRow[0]);
-        var dName     = dRow[3].toString().trim();
-        var dPhone    = normalizePhone(dRow[6]);
-        var dTracking = dRow[7].toString().trim();
+        var dDate     = normalizeDate(dRow[bIdx['배송일']]);
+        var dName     = dRow[bIdx['이름']].toString().trim();
+        var dPhone    = normalizePhone(dRow[bIdx['전화번호']]);
+        var dTracking = dRow[bIdx['송장번호']].toString().trim();
         var key = dDate + '|' + dName + '|' + dPhone;
         var n = applyTracking(babyMap, key, dTracking);
         if (n > 0) { matchCount++; filledCount += n; }
@@ -291,16 +350,17 @@ function updateDeliveryNCS() {
       }, ['ncs', 'korean']);
 
       var ncsData = deliveryNcsSheet.getDataRange().getValues();
+      var nIdx    = buildIdx(DNCS_COL);
       var ncsRows = ncsData.slice(1).filter(function(row) {
-        return row[8] && row[8].toString().trim() !== '';
+        return row[nIdx['송장번호']] && row[nIdx['송장번호']].toString().trim() !== '';
       });
       totalCount = ncsRows.length;
 
       ncsRows.forEach(function(nRow) {
-        var nDate     = normalizeDate(nRow[0]);
-        var nName     = nRow[18].toString().trim();
-        var nPhone7   = normalizePhone(nRow[19].toString().trim()).substring(0, 7);
-        var nTracking = nRow[8].toString().trim();
+        var nDate     = normalizeDate(nRow[nIdx['배송일']]);
+        var nName     = nRow[nIdx['이름']].toString().trim();
+        var nPhone7   = normalizePhone(nRow[nIdx['전화번호']].toString().trim()).substring(0, 7);
+        var nTracking = nRow[nIdx['송장번호']].toString().trim();
         if (nPhone7.length !== 7) return;
         var key = nDate + '|' + nName + '|' + nPhone7;
         var n = applyTracking(ncsMap, key, nTracking);
@@ -484,9 +544,9 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
 
 // ===== 정산집계 시트에 데이터 추가 =====
 function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
-  var summarySheet = ss.getSheetByName('정산집계');
+  var summarySheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
   if (!summarySheet) {
-    summarySheet = ss.insertSheet('정산집계');
+    summarySheet = ss.insertSheet(SUMMARY_SHEET_NAME);
     var headers = ['배송일', '이름', '전화번호', '자격증', 'type_code', '송장번호', '재발급'];
     summarySheet.getRange(1, 1, 1, headers.length).setValues([headers])
       .setBackground('#4472C4').setFontColor('#FFFFFF').setFontWeight('bold');
@@ -494,7 +554,8 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
 
   // 시트 전체 getLastRow()는 다른 열(송장번호 등)에 유령 값이 남으면 엉뚱하게 커져서
   // 중간에 공백이 생긴다 → 이름 열(2열) 기준으로 "값이 실제 있는 마지막 행"을 직접 찾는다
-  var nameCol     = summarySheet.getRange(1, 2, summarySheet.getMaxRows(), 1).getValues();
+  var nameColNum  = colIdx(SUM_COL['이름']) + 1;
+  var nameCol     = summarySheet.getRange(1, nameColNum, summarySheet.getMaxRows(), 1).getValues();
   var lastDataRow = 1;  // 최소 헤더(1행)
   for (var r = nameCol.length - 1; r >= 0; r--) {
     if (nameCol[r][0] !== '' && nameCol[r][0] !== null) { lastDataRow = r + 1; break; }
@@ -520,7 +581,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
       .concat(sortByName(group.ncs));
 
     allRows.forEach(function(row) {
-      var validColIdx = idx['유효성검사'] !== undefined ? idx['유효성검사'] : 13;
+      var validColIdx = idx['유효성검사'];
       if (row[validColIdx].toString().trim() === 'F') return;
 
       var phone       = formatPhone(row[idx['전화번호']]);
@@ -542,19 +603,21 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
   });
 
   if (outRows.length > 0) {
-    // 전화번호 칸(3열)은 앞자리 0 보존을 위해 텍스트 서식 → 값 입력 전에 범위 전체에 한 번만 지정
-    summarySheet.getRange(insertRow, 3, outRows.length, 1).setNumberFormat('@');
+    // 전화번호 칸은 앞자리 0 보존을 위해 텍스트 서식 → 값 입력 전에 범위 전체에 한 번만 지정
+    summarySheet.getRange(insertRow, colIdx(SUM_COL['전화번호']) + 1, outRows.length, 1).setNumberFormat('@');
     // 전체를 한 번에 입력 (통신 2번)
-    summarySheet.getRange(insertRow, 1, outRows.length, 7).setValues(outRows);
+    // ※ outRows는 배송일~재발급이 붙어 있다고 보고 한 번에 씁니다.
+    //   그 사이에 열을 끼워넣으면 이 부분도 같이 손봐야 합니다.
+    summarySheet.getRange(insertRow, 1, outRows.length, outRows[0].length).setValues(outRows);
   }
 }
 
 // ===== 유틸: 유효성검사 F인 행의 배송일자, 제작일자 삭제 =====
 function clearDatesForInvalidRows(sheet, idx) {
   var data        = sheet.getDataRange().getValues();
-  var validColIdx = idx['유효성검사'] !== undefined ? idx['유효성검사'] : 13;
-  var shipColIdx  = idx['배송일자']   !== undefined ? idx['배송일자']   : 0;
-  var makeColIdx  = idx['제작일자']   !== undefined ? idx['제작일자']   : 1;
+  var validColIdx = idx['유효성검사'];
+  var shipColIdx  = idx['배송일자'];
+  var makeColIdx  = idx['제작일자'];
 
   data.slice(1).forEach(function(row, i) {
     var rowNum      = i + 2;
@@ -749,10 +812,11 @@ function resolveAgency(row, idx, certMapping) {
 function createSettlementTable() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var ui = SpreadsheetApp.getUi();
-  var sheet = ss.getActiveSheet();
 
-  if (sheet.getName() === OUTPUT_SHEET_NAME) {
-    ui.alert('여기는 결과 탭입니다.\n원본 데이터 탭(정산집계 등)을 연 상태에서 실행해주세요.');
+  // 어느 탭에서 눌러도 항상 '정산집계' 시트를 읽는다
+  var sheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
+  if (!sheet) {
+    ui.alert('시트를 찾을 수 없습니다: ' + SUMMARY_SHEET_NAME);
     return;
   }
 
@@ -760,16 +824,7 @@ function createSettlementTable() {
 
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) { ui.alert('데이터가 없습니다.'); return; }
-  var idx = {};
-  values[0].forEach(function(h, i) { idx[h.toString().trim()] = i; });
-
-  var need = ['배송일', '자격증', 'type_code', '송장번호', '재발급'];
-  for (var c = 0; c < need.length; c++) {
-    if (idx[need[c]] === undefined) {
-      ui.alert('이 탭에 "' + need[c] + '" 컬럼이 없습니다.\n원본 데이터 탭에서 실행해주세요.');
-      return;
-    }
-  }
+  var idx = buildIdx(SUM_COL);
 
   // 송장 입력된 행만, 배송일 일자로 반월 분리
   // ★ '취소' 체크된 행은 정산에서 제외 (NCS 건수 집계에서도 자동 제외됨)
@@ -939,32 +994,26 @@ function isCancelled(v) {
   return s === 'TRUE' || s === '취소' || s === 'Y' || s === 'O' || s === 'V';
 }
 
-// 취소 체크 시 바로 옆 칸(I열)에 취소일 자동 기록 (체크 해제 시 삭제)
+// 취소 체크 시 취소일 칸에 오늘 날짜 자동 기록 (체크 해제 시 삭제)
 function onEdit(e) {
-  try {
-    if (!e || !e.range) return;
-    var sheet = e.range.getSheet();
-    if (sheet.getName() !== '정산집계') return;
+  // 에러 방지 및 기본 조건 검사 (가장 빠르게 튕겨냄)
+  if (!e || !e.range) return;
+  if (e.range.getColumn() !== colIdx(SUM_COL['취소']) + 1 || e.range.getRow() < 2) return;
 
-    var lastCol = sheet.getLastColumn();
-    if (lastCol < 1) return;
-    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-    var cancelCol = 0;
-    headers.forEach(function(h, i) { if (h.toString().trim() === '취소') cancelCol = i + 1; });
-    if (cancelCol === 0) return;   // '취소' 칸을 못 찾으면 아무것도 안 함
+  var sheet = e.source.getActiveSheet();
+  if (sheet.getName() !== SUMMARY_SHEET_NAME) return;
 
-    var row = e.range.getRow();
-    var col = e.range.getColumn();
-    if (col !== cancelCol || row < 2) return;
+  // 여러 셀을 동시에 지우거나 수정할 때 에러 방지
+  if (e.range.getNumRows() > 1) return;
 
-    var dateCol = cancelCol + 1;   // 취소 바로 옆 칸 (= I열)
-    if (isCancelled(e.range.getValue())) {   // 체크박스 TRUE 또는 '취소' 글자 모두 인정
-      var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      sheet.getRange(row, dateCol).setValue(today);
-    } else {
-      sheet.getRange(row, dateCol).clearContent();
-    }
-  } catch (err) {
-    // onEdit는 조용히 실패해도 시트 사용에 지장 없도록 무시
+  // 시트가 렉이 걸려있을 때 getValue() 대기 시간을 최소화하기 위해 e.value 우선 사용
+  var val = e.value;
+  var dateCell = sheet.getRange(e.range.getRow(), colIdx(SUM_COL['취소일']) + 1);
+
+  if (val === "TRUE" || val === "true") {
+    dateCell.setValue(Utilities.formatDate(new Date(), "Asia/Seoul", 'yyyy-MM-dd'));
+  }
+  else if (val === "FALSE" || val === "false" || val === undefined) {
+    dateCell.clearContent();
   }
 }
