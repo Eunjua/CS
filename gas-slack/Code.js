@@ -5,6 +5,11 @@
  *   새 요청   : B(요청자)·C(담당자)·D(요청 내용)가 모두 채워지는 순간 → 담당자 멘션
  *   처리 완료 : E(처리 사항)에 값이 들어오는 순간 → 요청자 멘션
  *
+ * 날짜 자동 입력
+ *   A(날짜)      : B·C·D 중 아무 칸이나 처음 입력될 때. 이미 값이 있으면 두지 않는다
+ *   G(처리 날짜) : E에 처리 사항이 들어올 때. 이미 값이 있으면 두지 않는다
+ *   ※ 스크립트가 쓴 값은 수정 시 트리거를 다시 깨우지 않으므로 반복 발송 걱정은 없다
+ *
  * 처음 한 번만 해야 하는 설정 (Apps Script 화면에서)
  *   1) 프로젝트 설정 > 스크립트 속성 두 개 등록
  *      SLACK_WEBHOOK_URL = https://hooks.slack.com/services/...
@@ -16,10 +21,12 @@
  *    반드시 설치형 트리거로 등록해야 한다. 트리거설치()가 그 일을 한다.
  */
 
+const 날짜열 = 1;
 const 요청자열 = 2;
 const 담당자열 = 3;
 const 요청내용열 = 4;
 const 처리사항열 = 5;
+const 처리날짜열 = 7;
 const 요청칸들 = [요청자열, 담당자열, 요청내용열];
 
 const 처리함수 = '시트수정감지';
@@ -51,6 +58,14 @@ function 멘션(이름) {
   return id ? '<@' + id + '>' : (정리 || '-');
 }
 
+/** 비어 있을 때만 오늘 날짜를 넣는다. 이미 적힌 날짜는 건드리지 않는다. */
+function 날짜채우기(시트, 행, 열) {
+  const 칸 = 시트.getRange(행, 열);
+  if (String(칸.getValue()).trim()) return;
+  칸.setValue(new Date());
+  칸.setNumberFormat('yyyy. m. d');   // 기존 행과 같은 모양으로
+}
+
 /** 트리거가 부르는 입구. 편집된 열을 보고 어느 알림인지 고른다. */
 function 시트수정감지(e) {
   if (!e || !e.range) return;
@@ -74,6 +89,8 @@ function 새요청알림(셀, e) {
   if (String(e.oldValue || '').trim()) return;
 
   const 시트 = 셀.getSheet();
+  날짜채우기(시트, 셀.getRow(), 날짜열);   // 요청을 쓰기 시작한 날. 알림 조건과 무관하게 먼저 찍는다
+
   const [, 요청자, 담당자, 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
   if (!String(요청자).trim() || !String(담당자).trim() || !String(요청내용).trim()) return;
 
@@ -91,6 +108,8 @@ function 처리완료알림(셀) {
   if (!값) return;                    // 값을 지웠을 땐 알림 안 보냄
 
   const 시트 = 셀.getSheet();
+  날짜채우기(시트, 셀.getRow(), 처리날짜열);
+
   const [, 요청자, , 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
 
   슬랙보내기([

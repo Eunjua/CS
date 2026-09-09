@@ -12,7 +12,8 @@ PropertiesService = { getScriptProperties: function () {
   return { getProperty: function () { return '{"홍길동":"U000TEST"}'; } };
 } };
 
-// 행 내용을 주면 그 행을 편집한 것처럼 만들어 준다
+// 행 내용을 주면 그 행을 편집한 것처럼 만들어 준다.
+// 스크립트가 시트에 쓴 값은 행값 배열에 그대로 반영돼, 날짜가 찍혔는지 확인할 수 있다.
 function 편집(행값, 행, 열, 옛값) {
   var 셀 = {
     getNumRows: function () { return 1; },
@@ -22,7 +23,14 @@ function 편집(행값, 행, 열, 옛값) {
     getValue: function () { return 행값[열 - 1]; },
     getSheet: function () {
       return {
-        getRange: function () { return { getValues: function () { return [행값.slice(0, 4)]; } }; },
+        getRange: function (r, c, numR) {
+          if (numR) return { getValues: function () { return [행값.slice(0, 4)]; } };
+          return {                                  // 단일 칸 (날짜채우기용)
+            getValue: function () { return 행값[c - 1]; },
+            setValue: function (v) { 행값[c - 1] = v; },
+            setNumberFormat: function () {}
+          };
+        },
         getParent: function () { return { getUrl: function () { return 'URL'; } }; }
       };
     }
@@ -63,3 +71,24 @@ assert.strictEqual(편집(다참, 2, 6, 빈칸), null, '비고(F)열은 무시')
 보낸것 = null;
 E열입력알림({ range: { getNumRows: function () { return 1; }, getNumColumns: function () { return 1; },
   getRow: function () { return 1; }, getColumn: function () { return 1; } } });
+
+// --- 날짜 자동 입력 ---
+var 새행 = ['', '홍길동', '홍길동', '주소 확인 부탁드립니다', '', '', ''];
+편집(새행, 2, 4 /* D 요청 내용 */, 빈칸);
+assert.ok(새행[0] instanceof Date, 'A열이 비어 있으면 오늘 날짜가 찍혀야 한다');
+
+var 날짜있는행 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '', '', ''];
+편집(날짜있는행, 2, 4 /* D 요청 내용 */, 빈칸);
+assert.strictEqual(날짜있는행[0], '2026. 9. 7', '이미 적힌 날짜는 건드리지 않는다');
+
+var 처리행 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '101동 603호', '', ''];
+편집(처리행, 2, 5 /* E 처리 사항 */, 빈칸);
+assert.ok(처리행[6] instanceof Date, 'E에 값이 들어오면 G에 처리 날짜가 찍혀야 한다');
+
+var 이미처리 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '101동 603호 수정', '', '2026. 9. 8'];
+편집(이미처리, 2, 5 /* E 처리 사항 */, '101동 603호');
+assert.strictEqual(이미처리[6], '2026. 9. 8', '처리 날짜는 처음 값을 유지한다 (가안)');
+
+var 지운행 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '', '', ''];
+편집(지운행, 2, 5 /* E 처리 사항 */, '101동 603호');
+assert.strictEqual(지운행[6], '', '처리 사항을 지웠으면 처리 날짜도 안 찍는다');
