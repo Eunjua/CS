@@ -1,22 +1,31 @@
 /**
- * Code.js — 「주소 확인 요청」 시트 E열(처리 사항) 입력 시 슬랙 #ncs-보살핌 알림
+ * Code.js — 「주소 확인 요청」 시트 → 슬랙 #ncs-보살핌 알림
+ *
+ * 알림 두 종류
+ *   새 요청   : B(요청자)·C(담당자)·D(요청 내용)가 모두 채워지는 순간 → 담당자 멘션
+ *   처리 완료 : E(처리 사항)에 값이 들어오는 순간 → 요청자 멘션
  *
  * 처음 한 번만 해야 하는 설정 (Apps Script 화면에서)
  *   1) 프로젝트 설정 > 스크립트 속성 두 개 등록
  *      SLACK_WEBHOOK_URL = https://hooks.slack.com/services/...
  *      SLACK_USER_MAP    = {"이름":"슬랙멤버ID", ...}   (멘션 안 걸 거면 생략 가능)
  *   2) 함수 목록에서 연결테스트 실행 → 슬랙에 메시지 오는지 확인
- *   3) 함수 목록에서 트리거설치 실행 → E열 감시 시작
+ *   3) 함수 목록에서 트리거설치 실행 → 시트 감시 시작
  *
  * ※ onEdit 이름의 단순 트리거는 외부 호출(UrlFetchApp)이 막혀 있어
  *    반드시 설치형 트리거로 등록해야 한다. 트리거설치()가 그 일을 한다.
  */
 
-const E열 = 5;
-const 처리함수 = 'E열입력알림';
+const 요청자열 = 2;
+const 담당자열 = 3;
+const 요청내용열 = 4;
+const 처리사항열 = 5;
+const 요청칸들 = [요청자열, 담당자열, 요청내용열];
+
+const 처리함수 = '시트수정감지';
 
 /**
- * 요청자 이름 → 슬랙 멤버 ID.
+ * 이름 → 슬랙 멤버 ID.
  * 실명이 공개 저장소에 올라가지 않도록 코드가 아니라 스크립트 속성에 둔다.
  *
  *   프로젝트 설정 > 스크립트 속성
@@ -42,20 +51,47 @@ function 멘션(이름) {
   return id ? '<@' + id + '>' : (정리 || '-');
 }
 
-function E열입력알림(e) {
+/** 트리거가 부르는 입구. 편집된 열을 보고 어느 알림인지 고른다. */
+function 시트수정감지(e) {
   if (!e || !e.range) return;
   const 셀 = e.range;
-  if (셀.getColumn() !== E열) return;
   if (셀.getNumRows() > 1 || 셀.getNumColumns() > 1) return;  // 여러 칸 붙여넣기는 무시
+  if (셀.getRow() < 2) return;                                // 헤더 행 무시
 
+  const 열 = 셀.getColumn();
+  if (열 === 처리사항열) 처리완료알림(셀);
+  else if (요청칸들.indexOf(열) !== -1) 새요청알림(셀, e);
+}
+
+/** 기존에 설치된 트리거가 옛 이름을 부르고 있을 수 있어 남겨둔다. */
+function E열입력알림(e) {
+  시트수정감지(e);
+}
+
+/** B·C·D가 모두 채워지는 순간 한 번 */
+function 새요청알림(셀, e) {
+  // 원래 값이 있던 칸을 고친 것이면 새 요청이 아니라 수정이다. 중복 발송을 여기서 막는다.
+  if (String(e.oldValue || '').trim()) return;
+
+  const 시트 = 셀.getSheet();
+  const [, 요청자, 담당자, 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
+  if (!String(요청자).trim() || !String(담당자).trim() || !String(요청내용).trim()) return;
+
+  슬랙보내기([
+    '*요청사항을 확인해주세요*',
+    '• 담당자: ' + 멘션(담당자),
+    '• 요청 내용: ' + (요청내용 || '-'),
+    '<' + 시트.getParent().getUrl() + '|시트에서 보기>'
+  ].join('\n'));
+}
+
+/** E열에 처리 사항이 들어오면 */
+function 처리완료알림(셀) {
   const 값 = String(셀.getValue()).trim();
   if (!값) return;                    // 값을 지웠을 땐 알림 안 보냄
 
-  const 행 = 셀.getRow();
-  if (행 < 2) return;                 // 헤더 행 무시
-
   const 시트 = 셀.getSheet();
-  const [, 요청자, , 요청내용] = 시트.getRange(행, 1, 1, 4).getValues()[0];
+  const [, 요청자, , 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
 
   슬랙보내기([
     '*주소확인 요청 처리 완료*',
@@ -90,11 +126,7 @@ function 연결테스트() {
 
 /** 수정 시 트리거 설치. 여러 번 실행해도 중복으로 쌓이지 않는다. */
 function 트리거설치() {
-  const 시트 = SpreadsheetApp.getActive();
-  ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 처리함수)
-    .forEach(t => ScriptApp.deleteTrigger(t));
-
-  ScriptApp.newTrigger(처리함수).forSpreadsheet(시트).onEdit().create();
-  console.log('트리거 설치 완료 — 이제 E열에 값을 넣으면 슬랙으로 갑니다.');
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));   // 옛 이름 트리거까지 정리
+  ScriptApp.newTrigger(처리함수).forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create();
+  console.log('트리거 설치 완료 — 새 요청 등록과 처리 사항 입력 모두 슬랙으로 갑니다.');
 }
