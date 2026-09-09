@@ -2,8 +2,9 @@
  * Code.js — 「주소 확인 요청」 시트 E열(처리 사항) 입력 시 슬랙 #ncs-보살핌 알림
  *
  * 처음 한 번만 해야 하는 설정 (Apps Script 화면에서)
- *   1) 프로젝트 설정 > 스크립트 속성
+ *   1) 프로젝트 설정 > 스크립트 속성 두 개 등록
  *      SLACK_WEBHOOK_URL = https://hooks.slack.com/services/...
+ *      SLACK_USER_MAP    = {"이름":"슬랙멤버ID", ...}   (멘션 안 걸 거면 생략 가능)
  *   2) 함수 목록에서 연결테스트 실행 → 슬랙에 메시지 오는지 확인
  *   3) 함수 목록에서 트리거설치 실행 → E열 감시 시작
  *
@@ -15,17 +16,30 @@ const E열 = 5;
 const 처리함수 = 'E열입력알림';
 
 /**
- * 요청자 이름 → 슬랙 멤버 ID. 여기에 있는 이름만 실제 멘션(@)이 걸린다.
- * 멤버 ID 찾는 법: 슬랙에서 그 사람 프로필 > 더보기(⋮) > '멤버 ID 복사'
+ * 요청자 이름 → 슬랙 멤버 ID.
+ * 실명이 공개 저장소에 올라가지 않도록 코드가 아니라 스크립트 속성에 둔다.
+ *
+ *   프로젝트 설정 > 스크립트 속성
+ *   SLACK_USER_MAP = {"홍길동":"U01...","길동":"U01...","김철수":"U02..."}
+ *
+ * 시트에 성을 빼고 적는 경우가 있어 '홍길동'과 '길동'처럼 두 형태를 함께 넣는다.
  * 목록에 없는 이름은 그냥 글자로 나가고, 알림은 정상 발송된다.
  */
-const 슬랙아이디 = {
-  // '한림': 'U01ABCDEFG',
-};
+function 이름표() {
+  const 원본 = String(PropertiesService.getScriptProperties().getProperty('SLACK_USER_MAP') || '').trim();
+  if (!원본) return {};
+  try {
+    return JSON.parse(원본);
+  } catch (err) {
+    console.error('SLACK_USER_MAP 형식이 잘못됐습니다. 멘션 없이 발송합니다. ' + err);
+    return {};
+  }
+}
 
 function 멘션(이름) {
-  const id = 슬랙아이디[String(이름 || '').trim()];
-  return id ? '<@' + id + '>' : (이름 || '-');
+  const 정리 = String(이름 || '').trim().replace(/^@/, '');   // 시트에 '@이름' 형태로 적는 경우 대비
+  const id = 이름표()[정리];
+  return id ? '<@' + id + '>' : (정리 || '-');
 }
 
 function E열입력알림(e) {
@@ -67,9 +81,11 @@ function 슬랙보내기(문구) {
   }
 }
 
-/** 웹훅 연결만 먼저 확인하는 함수 */
+/** 웹훅 연결 + 멘션 표시를 한 번에 확인하는 함수 */
 function 연결테스트() {
-  슬랙보내기('연결 테스트 — 이 메시지가 보이면 웹훅 정상입니다.');
+  const 이름들 = Object.keys(이름표());
+  const 멘션들 = 이름들.length ? 이름들.map(멘션).join(' ') : '(SLACK_USER_MAP 비어 있음)';
+  슬랙보내기('연결 테스트 — 이 메시지가 보이면 웹훅 정상입니다.\n멘션 확인(' + 이름들.length + '명): ' + 멘션들);
 }
 
 /** 수정 시 트리거 설치. 여러 번 실행해도 중복으로 쌓이지 않는다. */
