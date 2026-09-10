@@ -502,7 +502,7 @@
     <label for="tplSearchMail">상황 템플릿</label>
     <input type="search" id="tplSearchMail" class="tpl-search-sm" autocomplete="off"
            placeholder="🔍 템플릿 검색 (이름·문구)"
-           oninput="openTplPicker('이메일')" onfocus="openTplPicker('이메일')" onblur="blurTplPicker('이메일')">
+           oninput="openTplPicker('이메일')" onclick="openTplPicker('이메일')" onblur="blurTplPicker('이메일')">
     <div id="tplPickerMail" class="tpl-picker hidden"></div>
     <p class="hint">검색칸을 누르면 템플릿 목록이 열립니다. 이름이나 문구를 입력하면 목록이 좁혀지고,
        템플릿을 누르면 제목·본문이 자동으로 채워집니다.</p>
@@ -566,7 +566,7 @@
     <label for="tplSearchSms">자주 보내는 문자</label>
     <input type="search" id="tplSearchSms" class="tpl-search-sm" autocomplete="off"
            placeholder="🔍 템플릿 검색 (이름·문구)"
-           oninput="openTplPicker('문자')" onfocus="openTplPicker('문자')" onblur="blurTplPicker('문자')">
+           oninput="openTplPicker('문자')" onclick="openTplPicker('문자')" onblur="blurTplPicker('문자')">
     <div id="tplPickerSms" class="tpl-picker hidden"></div>
     <p class="hint">검색칸을 누르면 템플릿 목록이 열립니다. 이름이나 문구를 입력하면 목록이 좁혀지고,
        템플릿을 누르면 아래 내용이 자동으로 채워집니다.</p>
@@ -792,6 +792,15 @@
     renderTplPicker(kind);
   }
 
+  /** 템플릿을 고른 뒤 검색칸을 비우고 목록을 접습니다.
+      포커스까지 빼야 다음에 검색칸을 눌렀을 때 다시 열립니다. */
+  function closeTplSearch(kind) {
+    const el = document.getElementById(kind === '이메일' ? 'tplSearchMail' : 'tplSearchSms');
+    el.value = '';
+    if (kind === '이메일') openMail = false; else openSms = false;
+    el.blur();
+  }
+
   /** 검색칸에서 벗어나면 목록을 접습니다.
       (목록 항목은 mousedown으로 먼저 처리되므로 누르는 도중에 닫히지 않습니다.) */
   function blurTplPicker(kind) {
@@ -869,8 +878,7 @@
       subjectEl.value = t.title;
       bodyEl.value    = t.body;
       pickedMail = key;
-      document.getElementById('tplSearchMail').value = '';
-      openMail = false;
+      closeTplSearch('이메일');
       renderPreview();
     } else {
       const cur = document.getElementById('msg').value.trim();
@@ -878,8 +886,7 @@
       document.getElementById('msg').value      = t.body;
       document.getElementById('smsTitle').value = t.title;
       pickedSms = key;
-      document.getElementById('tplSearchSms').value = '';
-      openSms = false;
+      closeTplSearch('문자');
       renderSmsPreview();
     }
     renderTplPicker(kind);
