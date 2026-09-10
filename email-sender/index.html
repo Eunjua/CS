@@ -412,6 +412,22 @@
   .tpl-kind input { margin: 0; cursor: pointer; }
   .tpl-btn-row { display: flex; gap: 8px; margin-top: 14px; }
 
+  /* 문자·이메일 탭의 템플릿 목록 */
+  .tpl-picker {
+    max-height: 168px; overflow-y: auto;
+    border: 1px solid #e0e4ea; border-radius: 8px;
+    background: #fff; margin-bottom: 4px;
+  }
+  .tpl-pick {
+    padding: 9px 12px; font-size: 13.5px; cursor: pointer;
+    border-bottom: 1px solid #f1f3f6;
+  }
+  .tpl-pick:last-child { border-bottom: none; }
+  .tpl-pick:hover { background: #f5f7fa; }
+  .tpl-pick.on { background: #eaf1fc; color: #2b62a8; font-weight: 600; }
+  .tpl-pick .p { display: block; font-size: 11.5px; color: #98a2ae; font-weight: 400; margin-top: 2px; }
+  .tpl-pick-empty { padding: 14px 12px; font-size: 12.5px; color: #98a2ae; text-align: center; }
+
   /* 문자·이메일 탭의 템플릿 검색칸 */
   .tpl-search-sm {
     width: 100%; box-sizing: border-box;
@@ -483,14 +499,13 @@
   <div id="emailPane" class="hidden">
 
     <!-- 상황 템플릿 드롭다운 -->
-    <label for="tpl">상황 템플릿</label>
+    <label for="tplSearchMail">상황 템플릿</label>
     <input type="search" id="tplSearchMail" class="tpl-search-sm" autocomplete="off"
-           placeholder="🔍 템플릿 검색 (이름·문구)" oninput="rebuildDropdowns()">
-    <select id="tpl" onchange="applyTemplate()">
-      <option value="">(직접 작성)</option>
-    </select>
-    <p class="hint">상황을 고르면 제목·본문이 자동으로 채워집니다. 채워진 뒤 자유롭게 고쳐도 됩니다.
-       템플릿이 많으면 위 칸에 검색어를 넣어 목록을 좁힐 수 있습니다.</p>
+           placeholder="🔍 템플릿 검색 (이름·문구)"
+           oninput="openTplPicker('이메일')" onfocus="openTplPicker('이메일')" onblur="blurTplPicker('이메일')">
+    <div id="tplPickerMail" class="tpl-picker hidden"></div>
+    <p class="hint">검색칸을 누르면 템플릿 목록이 열립니다. 이름이나 문구를 입력하면 목록이 좁혀지고,
+       템플릿을 누르면 제목·본문이 자동으로 채워집니다.</p>
 
     <!-- 발신자(고정) -->
     <label>보내는 사람</label>
@@ -548,14 +563,13 @@
   <div id="smsPane">
 
     <!-- 자주 보내는 문자 템플릿 -->
-    <label for="smsTpl">자주 보내는 문자</label>
+    <label for="tplSearchSms">자주 보내는 문자</label>
     <input type="search" id="tplSearchSms" class="tpl-search-sm" autocomplete="off"
-           placeholder="🔍 템플릿 검색 (이름·문구)" oninput="rebuildDropdowns()">
-    <select id="smsTpl" onchange="applySmsTemplate()">
-      <option value="">(직접 작성)</option>
-    </select>
-    <p class="hint">고르면 아래 내용이 자동으로 채워집니다. 그 뒤에 자유롭게 고쳐 쓰세요.
-       템플릿이 많으면 위 칸에 검색어를 넣어 목록을 좁힐 수 있습니다.</p>
+           placeholder="🔍 템플릿 검색 (이름·문구)"
+           oninput="openTplPicker('문자')" onfocus="openTplPicker('문자')" onblur="blurTplPicker('문자')">
+    <div id="tplPickerSms" class="tpl-picker hidden"></div>
+    <p class="hint">검색칸을 누르면 템플릿 목록이 열립니다. 이름이나 문구를 입력하면 목록이 좁혀지고,
+       템플릿을 누르면 아래 내용이 자동으로 채워집니다.</p>
 
     <!-- 받는 사람 번호 -->
     <div class="label-row">
@@ -766,40 +780,109 @@
   }
 
   /** 문자·이메일 드롭다운을 현재 목록으로 다시 채웁니다. */
-  function rebuildDropdowns() {
-    [['smsTpl', '문자', 'tplSearchSms'], ['tpl', '이메일', 'tplSearchMail']].forEach(pair => {
-      const sel = document.getElementById(pair[0]);
-      const cur = sel.value;
-      const q   = (document.getElementById(pair[2]).value || '').trim().toLowerCase();
+  /* 지금 고른 템플릿 (목록에서 파랗게 표시하는 용도) */
+  let pickedSms = null, pickedMail = null;
 
-      // 검색어는 템플릿명뿐 아니라 제목·본문 문구에서도 찾습니다.
-      // 지금 고른 항목은 검색어와 안 맞아도 목록에 남겨 둡니다(선택이 풀리지 않도록).
-      const list = TPL_LIST.filter(t => {
-        if (!hasKind(t, pair[1])) return false;
-        if (!q || t.key === cur) return true;
-        return (t.name + ' ' + (t.title || '') + ' ' + (t.body || '')).toLowerCase().indexOf(q) > -1;
-      });
+  /* 목록이 열려 있는지. 평소엔 접혀 있고 검색칸을 누르거나 검색할 때만 폅니다. */
+  let openSms = false, openMail = false;
 
-      sel.innerHTML = '';
-      const blank = document.createElement('option');
-      blank.value = ''; blank.textContent = '(직접 작성)';
-      sel.appendChild(blank);
+  /** 검색칸을 누르거나 검색어를 칠 때 목록을 폅니다. */
+  function openTplPicker(kind) {
+    if (kind === '이메일') openMail = true; else openSms = true;
+    renderTplPicker(kind);
+  }
 
-      list.forEach(t => {
-        const o = document.createElement('option');
-        o.value = t.key; o.textContent = t.name;
-        sel.appendChild(o);
-      });
+  /** 검색칸에서 벗어나면 목록을 접습니다.
+      (목록 항목은 mousedown으로 먼저 처리되므로 누르는 도중에 닫히지 않습니다.) */
+  function blurTplPicker(kind) {
+    if (kind === '이메일') openMail = false; else openSms = false;
+    renderTplPicker(kind);
+  }
 
-      if (q && list.length === 0) {
-        const none = document.createElement('option');
-        none.value = ''; none.disabled = true;
-        none.textContent = '— 맞는 템플릿이 없습니다 —';
-        sel.appendChild(none);
-      }
+  /** 문자·이메일 탭의 템플릿 목록을 검색어에 맞춰 그립니다. */
+  function renderTplPicker(kind) {
+    const isMail = (kind === '이메일');
+    const box    = document.getElementById(isMail ? 'tplPickerMail' : 'tplPickerSms');
+    const q      = (document.getElementById(isMail ? 'tplSearchMail' : 'tplSearchSms').value || '')
+                     .trim().toLowerCase();
+    const picked = isMail ? pickedMail : pickedSms;
 
-      if (cur && findTpl(cur)) sel.value = cur;    // 고르던 항목은 유지
+    // 접혀 있으면 그리지 않고 감춥니다.
+    if (!(isMail ? openMail : openSms)) {
+      box.classList.add('hidden');
+      return;
+    }
+    box.classList.remove('hidden');
+
+    // 검색어는 템플릿명뿐 아니라 제목·본문 문구에서도 찾습니다.
+    const list = TPL_LIST.filter(t => {
+      if (!hasKind(t, kind)) return false;
+      if (!q) return true;
+      return (t.name + ' ' + (t.title || '') + ' ' + (t.body || '')).toLowerCase().indexOf(q) > -1;
     });
+
+    box.innerHTML = '';
+
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'tpl-pick-empty';
+      empty.textContent = q ? '"' + q + '"와 맞는 템플릿이 없습니다.' : '등록된 템플릿이 없습니다.';
+      box.appendChild(empty);
+      return;
+    }
+
+    list.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'tpl-pick' + (t.key === picked ? ' on' : '');
+      row.textContent = t.name;
+
+      // 어떤 내용인지 바로 알 수 있게 본문 앞부분을 함께 보여 줍니다.
+      const peek = document.createElement('span');
+      peek.className = 'p';
+      const oneLine = String(t.body || '').replace(/\s+/g, ' ').trim();
+      peek.textContent = oneLine.length > 42 ? oneLine.slice(0, 42) + '…' : oneLine;
+      row.appendChild(peek);
+
+      // click 대신 mousedown: 검색칸의 blur가 먼저 일어나 목록이 닫히는 것을 막습니다.
+      row.onmousedown = (e) => { e.preventDefault(); pickTemplate(kind, t.key); };
+      box.appendChild(row);
+    });
+  }
+
+  /** 문자·이메일 목록을 둘 다 다시 그립니다. */
+  function renderTplPickers() {
+    renderTplPicker('문자');
+    renderTplPicker('이메일');
+  }
+
+  /** 목록에서 고른 템플릿을 작성칸에 채웁니다. */
+  function pickTemplate(kind, key) {
+    const t = findTpl(key);
+    if (!t) return;
+
+    if (kind === '이메일') {
+      const subjectEl = document.getElementById('subject');
+      const bodyEl    = document.getElementById('body');
+      // 이미 작성 중인 내용이 있으면 덮어쓰기 전 확인
+      if ((subjectEl.value.trim() || bodyEl.value.trim()) &&
+          !confirm('현재 작성한 제목/본문을 템플릿으로 바꿀까요?')) return;
+      subjectEl.value = t.title;
+      bodyEl.value    = t.body;
+      pickedMail = key;
+      document.getElementById('tplSearchMail').value = '';
+      openMail = false;
+      renderPreview();
+    } else {
+      const cur = document.getElementById('msg').value.trim();
+      if (cur && !confirm('이미 쓰신 내용이 있습니다. 템플릿 내용으로 바꿀까요?')) return;
+      document.getElementById('msg').value      = t.body;
+      document.getElementById('smsTitle').value = t.title;
+      pickedSms = key;
+      document.getElementById('tplSearchSms').value = '';
+      openSms = false;
+      renderSmsPreview();
+    }
+    renderTplPicker(kind);
   }
 
   /** 시트에서 템플릿 목록을 받아 옵니다. 실패하면 예비본 그대로 씁니다. */
@@ -817,28 +900,8 @@
     } catch (err) {
       setTplNote('⚠️ 인터넷 문제로 시트를 읽지 못해 기본 목록을 보여 드립니다. 저장은 되지 않습니다.');
     }
-    rebuildDropdowns();
+    renderTplPickers();
     if (!$('managePane').classList.contains('hidden')) renderTemplateList();
-  }
-
-  /* ── 템플릿 선택 시 제목·본문 자동 입력 ── */
-  function applyTemplate() {
-    const key = document.getElementById('tpl').value;
-    if (!key) return;                       // (직접 작성)이면 그대로 둠
-    const t = findTpl(key);
-    if (!t) return;
-
-    const subjectEl = document.getElementById('subject');
-    const bodyEl    = document.getElementById('body');
-
-    // 이미 작성 중인 내용이 있으면 덮어쓰기 전 확인
-    if ((subjectEl.value.trim() || bodyEl.value.trim()) &&
-        !confirm('현재 작성한 제목/본문을 템플릿으로 바꿀까요?')) {
-      return;
-    }
-    subjectEl.value = t.title;
-    bodyEl.value    = t.body;
-    renderPreview();
   }
 
   /* ── 미리보기 갱신 ── */
@@ -1170,7 +1233,7 @@
 
       TPL_LIST = data.templates || TPL_LIST;
       currentTplKey = data.key || currentTplKey;
-      rebuildDropdowns();
+      renderTplPickers();
       renderTemplateList();
       $('tplPin').value = '';
       setTplMsg('✅ 저장했습니다. 상담원 모두에게 바로 반영됩니다.', 'ok');
@@ -1204,7 +1267,7 @@
 
       TPL_LIST = data.templates || TPL_LIST;
       currentTplKey = null;
-      rebuildDropdowns();
+      renderTplPickers();
       renderTemplateList();
       closeTplForm();
       setTplMsg('🗑️ 지웠습니다.', 'ok');
@@ -1234,23 +1297,6 @@
     if (!el) return;
     el.textContent = text || '';
     el.classList.toggle('hidden', !text);
-  }
-
-  /** 드롭다운에서 고른 템플릿을 내용·제목 칸에 채웁니다. */
-  function applySmsTemplate() {
-    const key = $('smsTpl').value;
-    if (!key) return;                 // (직접 작성)이면 그대로 둠
-    const t = findTpl(key);
-    if (!t) return;
-
-    const cur = $('msg').value.trim();
-    if (cur && !confirm('이미 쓰신 내용이 있습니다. 템플릿 내용으로 바꿀까요?')) {
-      $('smsTpl').value = '';
-      return;
-    }
-    $('msg').value      = t.body;
-    $('smsTitle').value = t.title;
-    renderSmsPreview();
   }
 
   /* ── 문자 맨 끝에 자동으로 붙는 안내 문구 ──
@@ -1425,7 +1471,7 @@
     document.getElementById('senderNumDisplay').textContent = SENDER_NUM_DISPLAY;
   }
   renderPreview();
-  rebuildDropdowns();   // 우선 예비 목록으로 그려 두고,
+  renderTplPickers();   // 우선 예비 목록으로 그려 두고,
   loadTemplates();      // 시트에서 실제 목록을 받아 갱신합니다
   selectTab('sms');     // 화면을 열면 문자 탭이 먼저 보입니다
 </script>
