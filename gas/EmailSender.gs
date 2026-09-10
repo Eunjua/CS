@@ -123,6 +123,20 @@ function doPost(e) {
  */
 const TPL_HEADER = ['key', '구분', '템플릿명', '제목', '본문', '수정일시'];
 
+/**
+ * 구분 값을 정리합니다. 한 템플릿을 문자·이메일 양쪽에서 쓸 수 있어
+ * "문자", "이메일", "문자,이메일" 세 가지가 나옵니다.
+ * (예전에 저장된 "문자"/"이메일" 값도 그대로 읽힙니다.)
+ */
+function normKind_(v) {
+  const s    = String(v || '');
+  const sms  = s.indexOf('문자')   > -1;
+  const mail = s.indexOf('이메일') > -1;
+  if (sms && mail) return '문자,이메일';
+  if (mail)        return '이메일';
+  return '문자';                       // 값이 이상하면 문자로 둡니다
+}
+
 /** 템플릿 시트를 열어 옵니다(없으면 제목줄·기본 템플릿을 만들어 둡니다). */
 function getTemplateSheet_() {
   const id = String(PropertiesService.getScriptProperties().getProperty('TEMPLATE_SHEET_ID') || '').trim();
@@ -158,7 +172,7 @@ function readTemplates_() {
     .map(function (r) {
       return {
         key:   String(r[0]).trim(),
-        kind:  String(r[1]).trim() === '이메일' ? '이메일' : '문자',
+        kind:  normKind_(r[1]),
         name:  String(r[2]),
         title: String(r[3]),
         body:  String(r[4])
@@ -175,7 +189,7 @@ function saveTemplate_(t) {
   if (!body.trim()) return { ok: false, error: '내용이 없습니다.' };
 
   const sh   = getTemplateSheet_();
-  const kind = (String(t.kind || '').trim() === '이메일') ? '이메일' : '문자';
+  const kind = normKind_(t.kind);
   const key  = String(t.key || '').trim() || ('t' + Date.now());
   const row  = [key, kind, name, String(t.title || ''), body, new Date()];
 

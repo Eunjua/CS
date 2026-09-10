@@ -263,7 +263,7 @@
     color: #555;
   }
 
-  /* ── 탭 (이메일 / 문자·알림톡) ── */
+  /* ── 탭 (문자 / 이메일 / 템플릿 관리) ── */
   .tabs {
     max-width: 1100px;
     margin: 0 auto 20px;
@@ -289,31 +289,6 @@
 
   .tab:hover { color: #333; background: #f5f7fa; }
   .tab[aria-selected="true"] { color: #3b7dd8; border-bottom-color: #3b7dd8; }
-
-  /* ── 발송 방식 선택 (문자만 / 알림톡) ── */
-  .choice-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .choice {
-    display: flex;
-    align-items: flex-start;
-    gap: 9px;
-    padding: 13px 14px;
-    border: 1.5px solid #dde1e7;
-    border-radius: 10px;
-    cursor: pointer;
-    background: #fff;
-    transition: border-color .15s, background .15s;
-  }
-
-  .choice:hover { border-color: #3b7dd8; }
-  .choice.on { border-color: #3b7dd8; background: #eef4fd; }
-  .choice input { margin-top: 3px; flex-shrink: 0; accent-color: #3b7dd8; }
-  .choice .t { display: block; font-size: 14px; font-weight: 600; color: #1a1a2e; }
-  .choice .d { display: block; font-size: 11.5px; color: #888; margin-top: 3px; line-height: 1.5; }
 
   /* ── 글자수 미터 + 문자 종류 뱃지 ── */
   .label-row {
@@ -353,18 +328,6 @@
   /* 번호 입력칸은 본문보다 짧게 (전역 textarea min-height 상쇄) */
   textarea.short { min-height: 84px; }
 
-  /* 안내 박스 (알림톡 주의사항) */
-  .notice {
-    margin-top: 8px;
-    padding: 11px 13px;
-    background: #fff8e6;
-    border: 1px solid #f0dca6;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #9a6b00;
-    line-height: 1.6;
-  }
-
   /* ── 문자 미리보기(휴대폰 화면) ── */
   .phone-card {
     border: 1px solid #e0e4ea;
@@ -402,7 +365,6 @@
     word-break: break-word;
   }
 
-  .bubble.kakao { background: #fee500; border-color: #e6cf00; color: #3c1e1e; }
   .bubble.placeholder { color: #bbb; }
 
   .bubble .lms-title {
@@ -411,17 +373,6 @@
     margin-bottom: 7px;
     padding-bottom: 7px;
     border-bottom: 1px dashed rgba(0,0,0,.18);
-  }
-
-  .fallback-note {
-    margin-top: auto;
-    padding: 10px 12px;
-    background: #fff;
-    border: 1px dashed #dde1e7;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #888;
-    line-height: 1.6;
   }
 
   /* 발송 결과 목록 */
@@ -451,7 +402,24 @@
   .tpl-msg.ok  { color: #2e7d4f; }
   .tpl-msg.err { color: #c0392b; }
   .tpl-form-head { font-weight: 700; font-size: 14.5px; margin-bottom: 12px; }
+  .tpl-kind-row { display: flex; gap: 10px; }
+  .tpl-kind {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border: 1px solid #d7dde5; border-radius: 8px;
+    font-size: 13.5px; cursor: pointer; user-select: none;
+  }
+  .tpl-kind:hover { background: #f5f7fa; }
+  .tpl-kind input { margin: 0; cursor: pointer; }
   .tpl-btn-row { display: flex; gap: 8px; margin-top: 14px; }
+
+  /* 문자·이메일 탭의 템플릿 검색칸 */
+  .tpl-search-sm {
+    width: 100%; box-sizing: border-box;
+    padding: 8px 11px; margin-bottom: 7px;
+    border: 1px solid #d7dde5; border-radius: 8px;
+    font-size: 13px; font-family: inherit;
+  }
+  .tpl-search-sm:focus { outline: none; border-color: #3b7dd8; box-shadow: 0 0 0 3px rgba(59,125,216,.12); }
 
   /* 템플릿 검색창 */
   .tpl-search {
@@ -473,6 +441,7 @@
   .tpl-table tbody tr:hover td { background: #f5f7fa; }
   .tpl-table tbody tr.sel td { background: #eaf1fc; }
   .tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11.5px; font-weight: 600; }
+  .tag + .tag { margin-left: 4px; }   /* 구분이 둘일 때 태그가 붙어 보이지 않게 */
   .tag.sms  { background: #e8f4ea; color: #2e7d4f; }
   .tag.mail { background: #eaf1fc; color: #3b7dd8; }
 
@@ -487,7 +456,6 @@
   @media (max-width: 880px) {
     .page-wrap { grid-template-columns: 1fr; }
     .preview-wrap { position: static; }
-    .choice-row { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -500,7 +468,7 @@
 
 <!-- ═══ 탭 ═══ -->
 <div class="tabs" role="tablist">
-  <button class="tab" role="tab" aria-selected="true"  id="tabSms"   onclick="selectTab('sms')">💬 문자 · 알림톡</button>
+  <button class="tab" role="tab" aria-selected="true"  id="tabSms"   onclick="selectTab('sms')">💬 문자</button>
   <button class="tab" role="tab" aria-selected="false" id="tabEmail" onclick="selectTab('email')">✉️ 이메일</button>
   <button class="tab" role="tab" aria-selected="false" id="tabManage" onclick="selectTab('manage')">📋 템플릿 관리</button>
 </div>
@@ -509,17 +477,20 @@
 
   <!-- ═══ 왼쪽: 입력 폼 ═══ -->
   <aside class="form-panel">
-    <h2 id="formTitle">문자 · 알림톡 작성</h2>
+    <h2 id="formTitle">문자 작성</h2>
 
   <!-- ─── 이메일 탭 ─── -->
   <div id="emailPane" class="hidden">
 
     <!-- 상황 템플릿 드롭다운 -->
     <label for="tpl">상황 템플릿</label>
+    <input type="search" id="tplSearchMail" class="tpl-search-sm" autocomplete="off"
+           placeholder="🔍 템플릿 검색 (이름·문구)" oninput="rebuildDropdowns()">
     <select id="tpl" onchange="applyTemplate()">
       <option value="">(직접 작성)</option>
     </select>
-    <p class="hint">상황을 고르면 제목·본문이 자동으로 채워집니다. 채워진 뒤 자유롭게 고쳐도 됩니다.</p>
+    <p class="hint">상황을 고르면 제목·본문이 자동으로 채워집니다. 채워진 뒤 자유롭게 고쳐도 됩니다.
+       템플릿이 많으면 위 칸에 검색어를 넣어 목록을 좁힐 수 있습니다.</p>
 
     <!-- 발신자(고정) -->
     <label>보내는 사람</label>
@@ -573,34 +544,18 @@
     </p>
   </div><!-- /managePane -->
 
-  <!-- ─── 문자 · 알림톡 탭 ─── -->
+  <!-- ─── 문자 탭 ─── -->
   <div id="smsPane">
 
     <!-- 자주 보내는 문자 템플릿 -->
     <label for="smsTpl">자주 보내는 문자</label>
+    <input type="search" id="tplSearchSms" class="tpl-search-sm" autocomplete="off"
+           placeholder="🔍 템플릿 검색 (이름·문구)" oninput="rebuildDropdowns()">
     <select id="smsTpl" onchange="applySmsTemplate()">
       <option value="">(직접 작성)</option>
     </select>
-    <p class="hint">고르면 아래 내용이 자동으로 채워집니다. 그 뒤에 자유롭게 고쳐 쓰세요.</p>
-
-    <!-- 발송 방식 -->
-    <label>발송 방식</label>
-    <div class="choice-row">
-      <label class="choice on" id="chSms">
-        <input type="radio" name="channel" value="sms" checked onchange="onChannelChange()">
-        <span>
-          <span class="t">문자만 보내기</span>
-          <span class="d">카카오를 거치지 않고 바로 문자. 문구를 자유롭게 씁니다.</span>
-        </span>
-      </label>
-      <label class="choice" id="chAlim">
-        <input type="radio" name="channel" value="alimtalk" onchange="onChannelChange()">
-        <span>
-          <span class="t">알림톡 → 실패 시 문자</span>
-          <span class="d">카톡으로 먼저 보내고, 안 되면 문자로 대체. 승인된 템플릿만 가능.</span>
-        </span>
-      </label>
-    </div>
+    <p class="hint">고르면 아래 내용이 자동으로 채워집니다. 그 뒤에 자유롭게 고쳐 쓰세요.
+       템플릿이 많으면 위 칸에 검색어를 넣어 목록을 좁힐 수 있습니다.</p>
 
     <!-- 받는 사람 번호 -->
     <div class="label-row">
@@ -609,17 +564,6 @@
     </div>
     <textarea id="nums" class="short" placeholder="01012345678&#10;01098765432" oninput="renderSmsPreview()"></textarea>
     <p class="hint">여러 명에게 보낼 때는 줄을 바꿔 입력하세요. 한 번에 100명까지 가능합니다. 하이픈(-)은 있어도 됩니다.</p>
-
-    <!-- 템플릿 코드 (알림톡일 때만) -->
-    <div id="tmplField" class="hidden">
-      <label for="tmpl">템플릿 코드</label>
-      <input type="text" id="tmpl" placeholder="예: care_cert_001" autocomplete="off">
-      <div class="notice">
-        알림톡은 <b>비즈엠에서 승인받은 템플릿 문구와 글자가 정확히 같아야</b> 발송됩니다.
-        아래 내용 칸에 승인된 템플릿 문구를 그대로 붙여넣고, 이름·날짜 같은 변수 자리만 바꿔 주세요.
-        문구가 다르면 알림톡이 실패하고 문자로 대체 발송됩니다.
-      </div>
-    </div>
 
     <!-- 문자 제목 (LMS일 때만) -->
     <div id="titleField" class="hidden">
@@ -679,15 +623,11 @@
       </div>
     </div>
 
-    <!-- 문자·알림톡 미리보기 (고객 휴대폰 화면) -->
+    <!-- 문자 미리보기 (고객 휴대폰 화면) -->
     <div class="phone-card" id="smsPreview">
       <div class="phone-bar" id="phoneBar">문자 메시지</div>
       <div class="sender-tag" id="senderTag">케어아카데미</div>
       <div class="bubble placeholder" id="bubble">내용을 입력하면 여기에 미리보기가 나타납니다.</div>
-      <div class="fallback-note hidden" id="fallbackNote">
-        카톡을 쓰지 않거나 채널을 추가하지 않은 고객에게는 같은 내용이 <b>문자로 다시</b> 나갑니다.
-        이 경우 알림톡이 아니라 문자 요금이 청구됩니다.
-      </div>
     </div>
 
     <!-- 템플릿 내용 보기·고치기 -->
@@ -704,12 +644,12 @@
         <input type="text" id="tplName" placeholder="예: 교재 발송 안내" autocomplete="off">
         <p class="hint">목록과 드롭다운에 보이는 이름입니다.</p>
 
-        <label for="tplKind">구분</label>
-        <select id="tplKind" onchange="onTplKindChange()">
-          <option value="문자">문자</option>
-          <option value="이메일">이메일</option>
-        </select>
-        <p class="hint">어느 탭의 템플릿으로 쓸지 고릅니다.</p>
+        <label>구분</label>
+        <div class="tpl-kind-row">
+          <label class="tpl-kind"><input type="checkbox" id="tplKindSms"  onchange="onTplKindChange()"> 문자</label>
+          <label class="tpl-kind"><input type="checkbox" id="tplKindMail" onchange="onTplKindChange()"> 이메일</label>
+        </div>
+        <p class="hint">둘 다 고르면 문자 탭과 이메일 탭 양쪽 드롭다운에 나옵니다.</p>
 
         <label for="tplTitle">제목</label>
         <input type="text" id="tplTitle" placeholder="제목" autocomplete="off">
@@ -819,20 +759,45 @@
     return TPL_LIST.filter(t => t.key === key)[0] || null;
   }
 
+  /** 이 템플릿이 해당 구분('문자'/'이메일')에서 쓰이는지 봅니다.
+      한 템플릿을 양쪽에서 쓸 수 있어 구분은 "문자,이메일"처럼 두 개일 수 있습니다. */
+  function hasKind(t, kind) {
+    return String(t.kind || '').indexOf(kind) > -1;
+  }
+
   /** 문자·이메일 드롭다운을 현재 목록으로 다시 채웁니다. */
   function rebuildDropdowns() {
-    [['smsTpl', '문자'], ['tpl', '이메일']].forEach(pair => {
+    [['smsTpl', '문자', 'tplSearchSms'], ['tpl', '이메일', 'tplSearchMail']].forEach(pair => {
       const sel = document.getElementById(pair[0]);
       const cur = sel.value;
+      const q   = (document.getElementById(pair[2]).value || '').trim().toLowerCase();
+
+      // 검색어는 템플릿명뿐 아니라 제목·본문 문구에서도 찾습니다.
+      // 지금 고른 항목은 검색어와 안 맞아도 목록에 남겨 둡니다(선택이 풀리지 않도록).
+      const list = TPL_LIST.filter(t => {
+        if (!hasKind(t, pair[1])) return false;
+        if (!q || t.key === cur) return true;
+        return (t.name + ' ' + (t.title || '') + ' ' + (t.body || '')).toLowerCase().indexOf(q) > -1;
+      });
+
       sel.innerHTML = '';
       const blank = document.createElement('option');
       blank.value = ''; blank.textContent = '(직접 작성)';
       sel.appendChild(blank);
-      TPL_LIST.filter(t => t.kind === pair[1]).forEach(t => {
+
+      list.forEach(t => {
         const o = document.createElement('option');
         o.value = t.key; o.textContent = t.name;
         sel.appendChild(o);
       });
+
+      if (q && list.length === 0) {
+        const none = document.createElement('option');
+        none.value = ''; none.disabled = true;
+        none.textContent = '— 맞는 템플릿이 없습니다 —';
+        sel.appendChild(none);
+      }
+
       if (cur && findTpl(cur)) sel.value = cur;    // 고르던 항목은 유지
     });
   }
@@ -1024,7 +989,7 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     문자 · 알림톡 탭
+     문자 탭
      ═══════════════════════════════════════════════════════════ */
 
   /* 화면에 표시할 발신번호. 비즈엠에 승인받은 번호로 바꿔 주세요.
@@ -1055,7 +1020,7 @@
     // 템플릿 관리 탭은 보기 전용이라 발송 버튼을 숨깁니다.
     $('sendBtn').classList.toggle('hidden', isManage);
 
-    $('formTitle').textContent    = isSms ? '문자 · 알림톡 작성' : isEmail ? '메일 작성' : '템플릿 목록';
+    $('formTitle').textContent    = isSms ? '문자 작성' : isEmail ? '메일 작성' : '템플릿 목록';
     $('previewTitle').textContent = isSms ? '고객 휴대폰에 보이는 모습' : isEmail ? '보낼 메일 미리보기' : '템플릿 내용';
     $('sendBtn').textContent      = isSms ? '💬 발송하기' : '✉️ 발송하기';
 
@@ -1086,10 +1051,14 @@
       tdName.textContent = t.name;
 
       const tdKind = document.createElement('td');
-      const tag = document.createElement('span');
-      tag.className = 'tag ' + (t.kind === '이메일' ? 'mail' : 'sms');
-      tag.textContent = t.kind;
-      tdKind.appendChild(tag);
+      String(t.kind || '').split(',').forEach(k => {
+        k = k.trim();
+        if (!k) return;
+        const tag = document.createElement('span');
+        tag.className = 'tag ' + (k === '이메일' ? 'mail' : 'sms');
+        tag.textContent = k;
+        tdKind.appendChild(tag);
+      });
 
       tr.appendChild(tdName);
       tr.appendChild(tdKind);
@@ -1126,7 +1095,7 @@
   /** 빈 편집 칸을 열어 새 템플릿을 만듭니다. */
   function newTemplate() {
     currentTplKey = null;
-    fillTplForm({ kind: '문자', name: '', title: '', body: '' });
+    fillTplForm({ kind: '문자', name: '', title: '', body: '' });   // 새로 만들 땐 문자에 체크
     renderTemplateList();
     $('tplName').focus();
   }
@@ -1136,7 +1105,8 @@
     $('tplFormEmpty').classList.add('hidden');
     $('tplForm').classList.remove('hidden');
     $('tplName').value  = t.name  || '';
-    $('tplKind').value  = t.kind  || '문자';
+    $('tplKindSms').checked  = hasKind(t, '문자');
+    $('tplKindMail').checked = hasKind(t, '이메일');
     $('tplTitle').value = t.title || '';
     $('tplBody').value  = t.body  || '';
     $('tplDelBtn').classList.toggle('hidden', !currentTplKey);   // 새 템플릿엔 삭제 없음
@@ -1147,10 +1117,20 @@
 
   /** 구분(문자/이메일)에 따라 제목칸 안내를 바꿉니다. */
   function onTplKindChange() {
-    const isMail = ($('tplKind').value === '이메일');
-    $('tplTitleHint').textContent = isMail
-      ? '메일 제목으로 들어갑니다.'
-      : '장문(LMS)으로 나갈 때만 문자 제목으로 들어갑니다. 30자까지.';
+    const sms  = $('tplKindSms').checked;
+    const mail = $('tplKindMail').checked;
+    $('tplTitleHint').textContent =
+      (sms && mail) ? '메일 제목으로 쓰이고, 문자로 보낼 때는 장문(LMS) 제목으로 들어갑니다.'
+      : mail        ? '메일 제목으로 들어갑니다.'
+                    : '장문(LMS)으로 나갈 때만 문자 제목으로 들어갑니다. 30자까지.';
+  }
+
+  /** 편집 칸에서 고른 구분을 "문자,이메일" 꼴로 만듭니다. */
+  function selectedKind() {
+    const picked = [];
+    if ($('tplKindSms').checked)  picked.push('문자');
+    if ($('tplKindMail').checked) picked.push('이메일');
+    return picked.join(',');
   }
 
   /** 편집 칸의 내용을 시트에 저장합니다. */
@@ -1159,9 +1139,10 @@
     const body = $('tplBody').value;
     const pin  = $('tplPin').value.trim();
 
-    if (!name)        return setTplMsg('❌ 템플릿명을 입력해 주세요.', 'err');
-    if (!body.trim()) return setTplMsg('❌ 내용을 입력해 주세요.', 'err');
-    if (!pin)         return setTplMsg('❌ 발송 PIN을 입력해 주세요.', 'err');
+    if (!name)          return setTplMsg('❌ 템플릿명을 입력해 주세요.', 'err');
+    if (!selectedKind()) return setTplMsg('❌ 구분을 하나 이상 골라 주세요. (문자 / 이메일)', 'err');
+    if (!body.trim())   return setTplMsg('❌ 내용을 입력해 주세요.', 'err');
+    if (!pin)           return setTplMsg('❌ 발송 PIN을 입력해 주세요.', 'err');
 
     const btn = $('tplSaveBtn');
     btn.disabled = true;
@@ -1176,7 +1157,7 @@
           pin: pin,
           template: {
             key:   currentTplKey || '',
-            kind:  $('tplKind').value,
+            kind:  selectedKind(),
             name:  name,
             title: $('tplTitle').value,
             body:  body
@@ -1255,21 +1236,6 @@
     el.classList.toggle('hidden', !text);
   }
 
-  /* ── 현재 선택된 발송 방식 ── */
-  function currentChannel() {
-    const el = document.querySelector('input[name="channel"]:checked');
-    return el ? el.value : 'sms';
-  }
-
-  /* ── 발송 방식(문자만 / 알림톡) 변경 ── */
-  function onChannelChange() {
-    const isAlim = (currentChannel() === 'alimtalk');
-    $('chSms').classList.toggle('on', !isAlim);
-    $('chAlim').classList.toggle('on', isAlim);
-    $('tmplField').classList.toggle('hidden', !isAlim);
-    renderSmsPreview();
-  }
-
   /** 드롭다운에서 고른 템플릿을 내용·제목 칸에 채웁니다. */
   function applySmsTemplate() {
     const key = $('smsTpl').value;
@@ -1288,13 +1254,11 @@
   }
 
   /* ── 문자 맨 끝에 자동으로 붙는 안내 문구 ──
-     이 번호로 답장해도 받을 수 없다는 것을 고객에게 알려줍니다.
-     ※ 알림톡은 승인된 템플릿과 글자가 정확히 같아야 발송되므로 붙이지 않습니다. */
+     이 번호로 답장해도 받을 수 없다는 것을 고객에게 알려줍니다. */
   const SMS_FOOTER = '※ 본 문자는 발신전용으로 회신을 받지 않습니다.';
 
-  /** 문자일 때만 본문 끝에 안내 문구를 붙여 돌려줍니다. */
-  function withFooter(text, isAlim) {
-    if (isAlim) return text;                  // 알림톡은 그대로
+  /** 본문 끝에 안내 문구를 붙여 돌려줍니다. */
+  function withFooter(text) {
     const body = text.replace(/\s+$/, '');    // 끝 공백·줄바꿈 정리
     if (!body) return text;                   // 아직 안 쓴 상태면 그대로
     return body + '\n\n' + SMS_FOOTER;
@@ -1322,9 +1286,8 @@
 
   /* ── 문자 미리보기 갱신 ── */
   function renderSmsPreview() {
-    const isAlim = (currentChannel() === 'alimtalk');
     const typed  = $('msg').value;
-    const text   = withFooter(typed, isAlim);   // 실제로 나가는 내용(안내 문구 포함)
+    const text   = withFooter(typed);   // 실제로 나가는 내용(안내 문구 포함)
     const bytes  = byteLen(text);
     const isLms  = bytes > 90;
 
@@ -1338,7 +1301,7 @@
     pill.className   = 'pill ' + (isLms ? 'lms' : 'sms');
 
     $('titleField').classList.toggle('hidden', !isLms);
-    const footerNote = isAlim ? '' : ' 맨 끝의 "' + SMS_FOOTER + '" 는 자동으로 붙으며, 위 글자수에 포함되어 있습니다.';
+    const footerNote = ' 맨 끝의 "' + SMS_FOOTER + '" 는 자동으로 붙으며, 위 글자수에 포함되어 있습니다.';
     $('byteHint').textContent = (isLms
       ? '90byte를 넘어 장문(LMS)으로 발송됩니다. 위에 제목을 넣어 주세요. 이모지는 넣을 수 없습니다.'
       : '한글은 1자에 2byte입니다. 90byte(한글 45자)를 넘으면 자동으로 장문(LMS)으로 보냅니다. 문자에는 이모지를 넣을 수 없습니다.'
@@ -1348,12 +1311,11 @@
     $('numCount').textContent = parseNumbers().length + '명';
 
     // 휴대폰 화면
-    $('phoneBar').textContent  = isAlim ? '카카오톡' : (SENDER_NUM_DISPLAY || '문자 메시지');
-    $('senderTag').textContent = isAlim ? '케어아카데미 채널' : '케어아카데미';
-    $('fallbackNote').classList.toggle('hidden', !isAlim);
+    $('phoneBar').textContent  = SENDER_NUM_DISPLAY || '문자 메시지';
+    $('senderTag').textContent = '케어아카데미';
 
     const bubble = $('bubble');
-    bubble.className = 'bubble' + (isAlim ? ' kakao' : '');
+    bubble.className = 'bubble';
     bubble.textContent = '';
 
     if (!text.trim()) {
@@ -1364,7 +1326,7 @@
 
     // 장문(LMS)이면 제목이 본문 위에 붙습니다
     const title = $('smsTitle').value.trim();
-    if (isLms && !isAlim && title) {
+    if (isLms && title) {
       const t = document.createElement('span');
       t.className = 'lms-title';
       t.textContent = title;
@@ -1379,13 +1341,11 @@
     else sendMail();
   }
 
-  /* ── 문자·알림톡 발송 ── */
+  /* ── 문자 발송 ── */
   async function sendSms() {
-    const channel = currentChannel();
     const numbers = parseNumbers();
     const message = $('msg').value;
     const pin     = $('smsPin').value.trim();
-    const tmpl    = $('tmpl').value.trim();
     const title   = $('smsTitle').value.trim();
     const btn     = $('sendBtn');
 
@@ -1397,9 +1357,6 @@
     const bad = numbers.filter(n => !/^0\d{8,10}$/.test(n));
     if (bad.length)       return showResult('err', '❌ 번호 형식이 올바르지 않습니다: ' + bad.join(', '));
     if (!message.trim())  return showResult('err', '❌ 보낼 내용을 입력해 주세요.');
-    if (channel === 'alimtalk' && !tmpl) {
-      return showResult('err', '❌ 알림톡은 템플릿 코드를 입력해야 합니다.');
-    }
     if (!pin)             return showResult('err', '❌ 발송 PIN을 입력해 주세요.');
 
     btn.disabled = true;
@@ -1407,11 +1364,10 @@
 
     try {
       const payload = {
-        channel:      channel,
+        channel:      'sms',            // 백엔드(BizmSender)가 문자 발송으로 넘기는 표시
         numbers:      numbers,
-        message:      withFooter(message, channel === 'alimtalk'),   // 문자면 안내 문구 자동 첨부
+        message:      withFooter(message),   // 끝에 발신전용 안내 문구 자동 첨부
         smsTitle:     title,
-        templateCode: tmpl,
         pin:          pin
       };
 
