@@ -572,7 +572,7 @@ function buildItemName(orderIds) {
     var no = certNo(id);
     if (no && nos.indexOf(no) === -1) nos.push(no);
   });
-  return orderCode(orderIds[0]) + '(' + nos.join(', ') + ')';
+  return orderCode(orderIds[0]) + '(' + nos.join(',') + ')';
 }
 
 // 정렬된 rows → 송장업로드 출력 행 배열 (사람 단위로 묶음)

@@ -123,7 +123,7 @@ assert.strictEqual(buildItemName(['01M2-certification-51-6owmlpj2tp']), '6owmlpj
 // 자격증 여러 개 → 번호를 나열, 주문코드는 첫 건 것
 assert.strictEqual(
   buildItemName(['01M2-certification-51-6owmlpj2tp', '01M3-certification-52-abc123']),
-  '6owmlpj2tp(51, 52)'
+  '6owmlpj2tp(51,52)'
 );
 // 같은 번호가 두 번 나오면 한 번만
 assert.strictEqual(
@@ -153,7 +153,7 @@ assert.deepStrictEqual(
     행3('최수민', '01055556666', '서울시 강남구', '병원동행매니저 1급', ORD),
     행3('최수민', '01055556666', '서울시 강남구', '학교안전지도사 1급', ORD2)
   ], si),
-  [['최수민', '01055556666', '', '서울시 강남구', 'zf1ngxq1d8(47, 52)', '']]
+  [['최수민', '01055556666', '', '서울시 강남구', 'zf1ngxq1d8(47,52)', '']]
 );
 
 // 동명이인(번호 다름) → 각각 1행
