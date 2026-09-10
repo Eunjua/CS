@@ -30,11 +30,13 @@ var SRC_COL = {
   'title_with_grade': 'I',   // 자격증명
   'type_code':        'J',   // 자격증형태
   '주소':              'K',
+  'order_id':         'L',   // 주문번호 (송장업로드 품목명에 사용)
   'exam_score':       'M',   // 시험점수
   '유효성검사':        'N',
   '재발급':            'P',
-  '상세주소':          'Q',
-  '비고':              'S'
+  '재발급 사유':       'Q',
+  '상세주소':          'R',
+  '비고':              'T'
 };
 
 // 정산집계 시트 (이 스크립트가 직접 만드는 시트)
@@ -213,7 +215,10 @@ function createCertificationFiles() {
     if (ncsRows.length > 0) { createNCSFile(folder, mmdd + '_보살핌_NCS', ncsRows, idx, courseCodeMap, typeAmountMap); createdCount++; }
 
     var nonBaby = group.korean.concat(group.ncs);
-    if (nonBaby.length > 0) { createDeliveryCheckFile(folder, mmdd + '_배송확인리스트', nonBaby, idx); createdCount++; }
+    if (nonBaby.length > 0) {
+      createDeliveryCheckFile(folder, mmdd + '_배송확인리스트', nonBaby, idx);  createdCount++;
+      createInvoiceUploadFile(folder, mmdd + '_송장업로드',     nonBaby, idx);  createdCount++;
+    }
   });
 
   clearDatesForInvalidRows(sourceSheet, idx);
@@ -390,13 +395,14 @@ function isReissueValue(v) {
   return s === 'TRUE' || s === 'T';
 }
 
-// ===== 재발급/비고 remark 생성 유틸 =====
+// ===== 재발급 remark 생성 유틸 =====
+//  재발급 건만 "재발급/사유" 로 표시 (사유가 비면 "재발급"만)
 function buildRemark(row, idx) {
-  var bigoVal = (row[idx['비고']] || '').toString().trim();
-  var remark  = '';
+  var reason = (row[idx['재발급 사유']] || '').toString().trim();
+  var remark = '';
 
   if (isReissueValue(row[idx['재발급']])) {
-    remark = bigoVal ? '재발급/' + bigoVal : '재발급';
+    remark = reason ? '재발급/' + reason : '재발급';
   }
 
   return remark;
@@ -451,7 +457,7 @@ function createBabyOrKoreanFile(folder, fileName, rows, idx) {
     sheet.getRange(rowNum, 10).setValue(remark);
   });
 
-  highlightDuplicates(sheet, rows.length + 1, 4, 7);
+  paintPersonRows(sheet, rows, idx, headers.length);   // 같은 사람·동명이인 색칠 (행 전체)
   sheet.autoResizeColumns(1, headers.length);
   moveFileTofolder(newSS.getId(), folder);
 }
@@ -491,7 +497,7 @@ function createNCSFile(folder, fileName, rows, idx, courseCodeMap, typeAmountMap
     sheet.getRange(rowNum, 12).setValue(remark);
   });
 
-  highlightDuplicates(sheet, rows.length + 1, 1, 5);
+  paintPersonRows(sheet, rows, idx, headers.length);   // 같은 사람·동명이인 색칠 (행 전체)
   sheet.autoResizeColumns(1, headers.length);
   moveFileTofolder(newSS.getId(), folder);
 }
@@ -502,7 +508,7 @@ function formatIssueType(typeCodeRaw) {
   var prefix = code.split('|')[0].trim();   // "01|상장" → "01"
   if (prefix === '01') return '상장';
   if (prefix === '02') return '카드';
-  if (prefix === '03') return '상장+카드';
+  if (prefix === '03') return '';        // 상장+카드는 표시하지 않음 (기본형이라 굳이 안 봄)
   return code;   // 01/02/03 외 값은 원래대로 표시
 }
 
@@ -511,14 +517,13 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
   rows = sortRowsByName(rows, idx);
   var newSS   = SpreadsheetApp.create(fileName);
   var sheet   = newSS.getActiveSheet();
-  var headers = ['제작일자', '이름', '생년월일', '전화번호', '종목', '발급형태', '주소', '재발급', '상세주소'];
+  var headers = ['이름', '생년월일', '종목', '주소', '발급형태', '재발급', '', '전화번호'];   // 7번째는 빈 열
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers])
     .setBackground('#4472C4').setFontColor('#FFFFFF').setFontWeight('bold');
 
   rows.forEach(function(row, i) {
     var rowNum    = i + 2;
-    var makeDate  = normalizeDate(row[idx['제작일자']]);
     var yearVal   = row[idx['year']]  ? row[idx['year']].toString().trim() : '';
     var monthVal  = row[idx['month']] ? String(Number(row[idx['month']])).padStart(2, '0') : '';
     var dayVal    = row[idx['day']]   ? String(Number(row[idx['day']])).padStart(2, '0')   : '';
@@ -526,20 +531,168 @@ function createDeliveryCheckFile(folder, fileName, rows, idx) {
     var phone     = formatPhone(row[idx['전화번호']]);
     var issueType = formatIssueType(row[idx['type_code']]);
 
-    sheet.getRange(rowNum, 1).setValue(makeDate);
-    sheet.getRange(rowNum, 2).setValue(row[idx['user_name']] || '');
-    setCellText(sheet, rowNum, 3, birthday);   // 앞자리 0 보존 위해 텍스트
-    setCellText(sheet, rowNum, 4, phone);      // 앞자리 0 보존 위해 텍스트
-    sheet.getRange(rowNum, 5).setValue(row[idx['title_with_grade']] || '');
-    sheet.getRange(rowNum, 6).setValue(issueType);
-    sheet.getRange(rowNum, 7).setValue(row[idx['주소']] || '');
-    sheet.getRange(rowNum, 8).setValue(reissueFlag(row, idx));
-    sheet.getRange(rowNum, 9).setValue(row[idx['상세주소']] || '');
+    sheet.getRange(rowNum, 1).setValue(row[idx['user_name']] || '');
+    setCellText(sheet, rowNum, 2, birthday);   // 앞자리 0 보존 위해 텍스트
+    sheet.getRange(rowNum, 3).setValue(row[idx['title_with_grade']] || '');
+    sheet.getRange(rowNum, 4).setValue(row[idx['주소']] || '');
+    sheet.getRange(rowNum, 5).setValue(issueType);
+    sheet.getRange(rowNum, 6).setValue(reissueFlag(row, idx));
+    // 7번째 열은 비워 둠
+    setCellText(sheet, rowNum, 8, phone);      // 앞자리 0 보존 위해 텍스트
   });
 
-  highlightDuplicates(sheet, rows.length + 1, 2, 4);   // 이름(2)+전화번호(4) 같으면 이름열 색칠
+  paintPersonRows(sheet, rows, idx, headers.length);   // 같은 사람·동명이인 색칠 (행 전체)
   sheet.autoResizeColumns(1, headers.length);
   moveFileTofolder(newSS.getId(), folder);
+}
+
+// ===== 송장업로드 파일 생성 (베이비시터 제외, 사람 단위로 1행) =====
+//  한 사람이 자격증 여러 개를 받아도 택배는 한 상자 → 송장도 한 줄
+
+// order_id "01M1...-certification-47-zf1ngxq1d8" → 맨 뒤 조각 "zf1ngxq1d8"
+function orderCode(orderIdRaw) {
+  var s = (orderIdRaw || '').toString().trim();
+  if (!s) return '';
+  var parts = s.split('-');
+  return parts[parts.length - 1].trim();
+}
+
+// order_id "01M1...-certification-51-6owmlpj2tp" → "51" (형식이 다르면 빈 문자열)
+function certNo(orderIdRaw) {
+  var m = (orderIdRaw || '').toString().match(/certification-(\d+)/);
+  return m ? m[1] : '';
+}
+
+// 품목명: 주문코드(자격증번호, 자격증번호 ...)
+// 한 사람이 자격증 여러 개면 order_id도 여러 개 → 번호를 중복 없이 나열
+// 주문코드나 번호가 없으면 그 자리만 비어서 나옴
+function buildItemName(orderIds) {
+  var nos = [];
+  orderIds.forEach(function(id) {
+    var no = certNo(id);
+    if (no && nos.indexOf(no) === -1) nos.push(no);
+  });
+  return orderCode(orderIds[0]) + '(' + nos.join(', ') + ')';
+}
+
+// 정렬된 rows → 송장업로드 출력 행 배열 (사람 단위로 묶음)
+function buildInvoiceRows(rows, idx) {
+  var order  = [];   // 처음 나온 순서 유지
+  var people = {};   // 이름|전화번호 -> 사람 정보
+
+  rows.forEach(function(row) {
+    var name = (row[idx['user_name']] || '').toString().trim();
+    if (!name) return;   // 이름 없는 행은 건너뜀
+
+    var phone = normalizePhone(row[idx['전화번호']]);
+    var key   = name + '|' + phone;
+
+    if (!people[key]) {
+      people[key] = {
+        name:     name,
+        phone:    phone,
+        addr:     (row[idx['주소']] || '').toString().trim(),
+        orderIds: []
+      };
+      order.push(key);
+    }
+
+    // 자격증마다 order_id가 다르므로 그 사람의 것을 모두 모은다 (빈 값은 버림)
+    var orderId = (row[idx['order_id']] || '').toString().trim();
+    if (orderId) people[key].orderIds.push(orderId);
+  });
+
+  return order.map(function(key) {
+    var p = people[key];
+    return [
+      p.name,                                  // 받는분 성명
+      p.phone,                                 // 받는분 전화번호
+      '',                                      // 받는분 기타 전화번호
+      p.addr,                                  // 받는분 주소
+      buildItemName(p.orderIds),               // 품목명
+      ''                                       // 배송메세지
+    ];
+  });
+}
+
+function createInvoiceUploadFile(folder, fileName, rows, idx) {
+  rows = sortRowsByName(rows, idx);
+  var outRows = buildInvoiceRows(rows, idx);
+
+  var newSS   = SpreadsheetApp.create(fileName);
+  var sheet   = newSS.getActiveSheet();
+  var headers = ['받는분 성명', '받는분 전화번호', '받는분 기타 전화번호', '받는분 주소', '품목명', '배송메세지'];
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setBackground('#4472C4').setFontColor('#FFFFFF').setFontWeight('bold');
+
+  if (outRows.length > 0) {
+    // 전화번호 칸은 앞자리 0 보존 위해 텍스트 서식 → 값은 한 번에 입력
+    sheet.getRange(2, 2, outRows.length, 1).setNumberFormat('@');
+    sheet.getRange(2, 1, outRows.length, headers.length).setValues(outRows);
+  }
+
+  sheet.autoResizeColumns(1, headers.length);
+  moveFileTofolder(newSS.getId(), folder);
+}
+
+// ===== 배송확인리스트 색칠: 사람(이름+전화번호) 단위 =====
+//  같은 사람이 2건 이상  → 연한 하늘색
+//  동명이인(이름 같고 번호 다름) → 사람마다 다른 색, 한 사람의 여러 건은 같은 색
+var SAME_PERSON_COLOR = '#CCE5FF';   // 연한 하늘색
+var SAME_NAME_COLORS  = ['#FFE0B2', '#E1BEE7', '#C8E6C9', '#FFCDD2', '#FFF9C4', '#D7CCC8'];
+
+// 정렬된 rows → 행마다 배경색(색 없으면 null) 배열
+function personRowColors(rows, idx) {
+  var groups = {};   // 이름 -> { 전화번호 -> [행 위치...] }
+
+  rows.forEach(function(row, i) {
+    var name = (row[idx['user_name']] || '').toString().trim();
+    if (!name) return;   // 이름 없는 행은 묶지 않음
+    var phone = normalizePhone(row[idx['전화번호']]);
+    if (!groups[name])        groups[name] = {};
+    if (!groups[name][phone]) groups[name][phone] = [];
+    groups[name][phone].push(i);
+  });
+
+  var colors  = rows.map(function() { return null; });
+  var palette = 0;   // 동명이인 색은 전체에서 이어서 돌림 → 붙어 있는 그룹끼리 색이 안 겹침
+
+  Object.keys(groups).forEach(function(name) {
+    var phones = Object.keys(groups[name]);
+
+    if (phones.length === 1) {
+      // 동명이인 없음 → 2건 이상일 때만 하늘색
+      var rowsOfPerson = groups[name][phones[0]];
+      if (rowsOfPerson.length > 1) {
+        rowsOfPerson.forEach(function(i) { colors[i] = SAME_PERSON_COLOR; });
+      }
+      return;
+    }
+
+    // 동명이인 → 사람마다 다른 색
+    phones.forEach(function(p) {
+      var c = SAME_NAME_COLORS[palette % SAME_NAME_COLORS.length];
+      palette++;
+      groups[name][p].forEach(function(i) { colors[i] = c; });
+    });
+  });
+
+  return colors;
+}
+
+// 색 배열을 시트에 한 번에 칠하기 (행 전체)
+function paintPersonRows(sheet, rows, idx, colCount) {
+  var colors = personRowColors(rows, idx);
+  if (colors.length === 0) return;
+
+  var bg = colors.map(function(c) {
+    var line = [];
+    for (var k = 0; k < colCount; k++) line.push(c);
+    return line;
+  });
+
+  sheet.getRange(2, 1, bg.length, colCount).setBackgrounds(bg);
 }
 
 // ===== 정산집계 시트에 데이터 추가 =====
@@ -628,31 +781,6 @@ function clearDatesForInvalidRows(sheet, idx) {
     if (isInvalid) {
       if (hasShipDate) sheet.getRange(rowNum, shipColIdx + 1).clearContent();
       if (hasMakeDate) sheet.getRange(rowNum, makeColIdx + 1).clearContent();
-    }
-  });
-}
-
-// ===== 유틸: 중복 행 연한 노랑 표시 =====
-function highlightDuplicates(sheet, lastDataRow, nameCol, phoneCol) {
-  if (lastDataRow < 3) return;
-
-  var nameRange  = sheet.getRange(2, nameCol,  lastDataRow - 1, 1).getValues();
-  var phoneRange = sheet.getRange(2, phoneCol, lastDataRow - 1, 1).getValues();
-
-  var keys = nameRange.map(function(r, i) {
-    return r[0].toString().trim() + '|' + phoneRange[i][0].toString().trim();
-  });
-
-  var seen          = {};
-  var duplicateKeys = {};
-  keys.forEach(function(key) {
-    if (seen[key]) { duplicateKeys[key] = true; }
-    else           { seen[key] = true; }
-  });
-
-  keys.forEach(function(key, i) {
-    if (duplicateKeys[key]) {
-      sheet.getRange(i + 2, nameCol).setBackground('#FFFF99');
     }
   });
 }
