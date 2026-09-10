@@ -428,6 +428,41 @@
   .result-msg ul { margin: 7px 0 0; padding-left: 18px; }
   .result-msg li { line-height: 1.7; }
 
+  /* 템플릿 관리: 검색줄·버튼·메시지 */
+  .tpl-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tpl-toolbar .tpl-search { margin-bottom: 0; flex: 1; }
+  .btn-mini {
+    padding: 9px 14px; border: 1px solid #d7dde5; border-radius: 8px;
+    background: #fff; color: #333; font-size: 13px; font-family: inherit;
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn-mini:hover { background: #f5f7fa; }
+  .btn-mini.primary { background: #3b7dd8; border-color: #3b7dd8; color: #fff; }
+  .btn-mini.primary:hover { background: #3370c4; }
+  .btn-mini.danger { color: #c0392b; border-color: #e8c4bf; }
+  .btn-mini.danger:hover { background: #fdf2f0; }
+  .btn-mini:disabled { opacity: .55; cursor: default; }
+
+  .tpl-note {
+    background: #fff8e6; border: 1px solid #f0dfae; color: #7a5c14;
+    border-radius: 8px; padding: 9px 11px; font-size: 12.5px; margin-bottom: 10px;
+  }
+  .tpl-msg { margin-top: 10px; font-size: 13px; color: #6b7683; min-height: 18px; }
+  .tpl-msg.ok  { color: #2e7d4f; }
+  .tpl-msg.err { color: #c0392b; }
+  .tpl-form-head { font-weight: 700; font-size: 14.5px; margin-bottom: 12px; }
+  .tpl-btn-row { display: flex; gap: 8px; margin-top: 14px; }
+
+  /* 템플릿 검색창 */
+  .tpl-search {
+    width: 100%; box-sizing: border-box;
+    padding: 10px 12px; margin-bottom: 12px;
+    border: 1px solid #d7dde5; border-radius: 8px;
+    font-size: 13.5px; font-family: inherit;
+  }
+  .tpl-search:focus { outline: none; border-color: #3b7dd8; box-shadow: 0 0 0 3px rgba(59,125,216,.12); }
+  .tpl-empty { padding: 22px 10px; text-align: center; color: #98a2ae; font-size: 13px; }
+
   /* 템플릿 관리 표 */
   .tpl-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .tpl-table th {
@@ -483,10 +518,6 @@
     <label for="tpl">상황 템플릿</label>
     <select id="tpl" onchange="applyTemplate()">
       <option value="">(직접 작성)</option>
-      <option value="book">교재 발송 안내</option>
-      <option value="cert">이수증·확인서 첨부</option>
-      <option value="scan">자격증 스캔본 전달</option>
-      <option value="receipt">결제 영수증 전달</option>
     </select>
     <p class="hint">상황을 고르면 제목·본문이 자동으로 채워집니다. 채워진 뒤 자유롭게 고쳐도 됩니다.</p>
 
@@ -524,6 +555,12 @@
 
   <!-- ─── 템플릿 관리 탭 ─── -->
   <div id="managePane" class="hidden">
+    <div id="tplNote" class="tpl-note hidden"></div>
+    <div class="tpl-toolbar">
+      <input type="search" id="tplSearch" class="tpl-search" autocomplete="off"
+             placeholder="🔍 템플릿명이나 문구로 검색" oninput="renderTemplateList()">
+      <button class="btn-mini primary" onclick="newTemplate()">+ 새 템플릿</button>
+    </div>
     <table class="tpl-table">
       <thead>
         <tr><th>템플릿명</th><th style="width: 84px;">구분</th></tr>
@@ -543,10 +580,6 @@
     <label for="smsTpl">자주 보내는 문자</label>
     <select id="smsTpl" onchange="applySmsTemplate()">
       <option value="">(직접 작성)</option>
-      <option value="app">앱 다운로드 안내</option>
-      <option value="chat">채팅 상담 안내</option>
-      <option value="job">일자리 확인 방법</option>
-      <option value="refund">자격증 환불 안내(예외)</option>
     </select>
     <p class="hint">고르면 아래 내용이 자동으로 채워집니다. 그 뒤에 자유롭게 고쳐 쓰세요.</p>
 
@@ -657,10 +690,45 @@
       </div>
     </div>
 
-    <!-- 템플릿 내용 보기 -->
+    <!-- 템플릿 내용 보기·고치기 -->
     <div class="tpl-view hidden" id="managePreview">
-      <div class="t" id="tplViewTitle">템플릿을 골라 주세요</div>
-      <div class="b ph" id="tplViewBody">왼쪽 표에서 템플릿을 누르면 실제 문구가 여기에 표시됩니다.</div>
+      <div class="b ph" id="tplFormEmpty">
+        왼쪽 표에서 템플릿을 누르면 내용을 보고 고칠 수 있습니다.
+        새로 만들려면 [+ 새 템플릿]을 누르세요.
+      </div>
+
+      <div id="tplForm" class="hidden">
+        <div class="tpl-form-head" id="tplFormHead">템플릿 고치기</div>
+
+        <label for="tplName">템플릿명</label>
+        <input type="text" id="tplName" placeholder="예: 교재 발송 안내" autocomplete="off">
+        <p class="hint">목록과 드롭다운에 보이는 이름입니다.</p>
+
+        <label for="tplKind">구분</label>
+        <select id="tplKind" onchange="onTplKindChange()">
+          <option value="문자">문자</option>
+          <option value="이메일">이메일</option>
+        </select>
+        <p class="hint">어느 탭의 템플릿으로 쓸지 고릅니다.</p>
+
+        <label for="tplTitle">제목</label>
+        <input type="text" id="tplTitle" placeholder="제목" autocomplete="off">
+        <p class="hint" id="tplTitleHint"></p>
+
+        <label for="tplBody">내용</label>
+        <textarea id="tplBody" placeholder="고객에게 나갈 문구를 입력하세요."></textarea>
+
+        <label for="tplPin">발송 PIN</label>
+        <input type="password" id="tplPin" placeholder="공용 PIN 입력" autocomplete="off">
+        <p class="hint">템플릿을 고치거나 지울 때도 발송과 같은 PIN이 필요합니다.</p>
+
+        <div class="tpl-btn-row">
+          <button class="btn-mini primary" id="tplSaveBtn" onclick="saveTemplate()">저장</button>
+          <button class="btn-mini" onclick="closeTplForm()">닫기</button>
+          <button class="btn-mini danger hidden" id="tplDelBtn" onclick="deleteTemplate()">삭제</button>
+        </div>
+        <div class="tpl-msg" id="tplMsg"></div>
+      </div>
     </div>
   </main>
 
@@ -678,53 +746,121 @@
   const SENDER_NAME  = "케어아카데미";
   const SENDER_EMAIL = "eju@bosalpim.co.kr";
 
-  /* ── 상황 템플릿 3종 (제목/본문 초안) ──
-     [고객명] 같은 자리표시자를 상담원이 채워 보냅니다. 끝에는 서명 포함. */
-  const TEMPLATES = {
-    book: {
-      subject: "[케어아카데미] 교재 발송 안내",
+  /* ── 템플릿 목록 ──
+     원본은 구글시트입니다. 화면을 열 때 시트에서 받아와 TPL_LIST에 담습니다.
+     아래 DEFAULT_TPL_LIST는 시트를 못 읽을 때만 쓰는 비상용 예비본이라,
+     발송 기능이 통신 문제로 멈추지 않게 해 줍니다. */
+  const DEFAULT_TPL_LIST = [
+    { key:'app', kind:'문자', name:'앱 다운로드 안내', title:'케어파트너 앱 설치 안내',
       body:
-"안녕하세요 케어아카데미입니다.\n\n" +
-"요청해 주신 교재 발송 안내드립니다. 수강에 많은 도움 되시길 바랍니다.☺️\n\n" +
-"감사합니다.\n" +
-"케어아카데미 드림"
-    },
-    cert: {
-      subject: "[케어아카데미] 요청하신 증명 서류 첨부 안내",
+        "안녕하세요, 케어파트너입니다.\n" +
+        "케어파트너 어플 다운 받는 링크 전달드려요.\n" +
+        "아래 영어를 눌러 어플을 설치해주세요.\n\n" +
+        "https://play.google.com/store/search?q=케어파트너&c=apps&hl=ko\n\n" +
+        "※ 아이폰(아이패드)에서는 앱을 설치하실 수 없습니다.\n" +
+        "아이폰을 쓰신다면 인터넷에 \"케어파트너\"를 검색해주세요." },
+    { key:'chat', kind:'문자', name:'채팅 상담 안내', title:'케어파트너 상담 안내',
       body:
-"안녕하세요 케어아카데미입니다.\n\n" +
-"요청해 주신 확인서 메일에 첨부하여 보내드립니다.\n" +
-"첨부된 PDF 파일을 확인해 주세요.\n\n" +
-"감사합니다.\n\n" +
-"케어아카데미 드림"
-    },
-    scan: {
-      subject: "[케어아카데미] 요청하신 자격증 스캔본 전달",
+        "문의 주신 내용은 채팅으로 자세히 도와드리고 있습니다.\n" +
+        "아래 링크 눌러주시면 카카오톡 문의로 바로 연결 됩니다.\n\n" +
+        "http://pf.kakao.com/_jixkfG/chat" },
+    { key:'job', kind:'문자', name:'일자리 확인 방법', title:'일자리 확인 방법 안내',
       body:
-"안녕하세요 케어아카데미입니다.\n\n" +
-"요청해 주신 자격증 스캔본을 메일에 첨부하여 보내드립니다.\n" +
-"첨부된 PDF 파일을 확인해 주세요.\n\n" +
-"스캔본 관련하여 궁금한 점이 있으시면 편하게 문의해 주세요.\n" +
-"감사합니다.\n\n" +
-"케어아카데미 드림"
-    },
-    receipt: {
-      subject: "[케어아카데미] 결제 영수증 전달",
+        "일자리는 아래 방법을 통해 알아보시는 걸 추천드려요!\n\n" +
+        "- 고용24 (www.work24.go.kr)\n" +
+        "- 서울교육청 구인구직 (https://work.sen.go.kr/work/index.do)\n" +
+        "- 고용노동부 고객센터 국번없이 1350\n" +
+        "- 거주 지역 일자리센터\n" +
+        "모두 무료로 이용하실 수 있어요" },
+    { key:'refund', kind:'문자', name:'자격증 환불 안내(예외)', title:'자격증 환불 안내',
       body:
-"안녕하세요 케어아카데미입니다.\n\n" +
-"요청해 주신 결제 영수증을 메일에 첨부하여 보내드립니다.\n" +
-"첨부된 파일에서 결제 내역을 확인하실 수 있습니다.\n\n" +
-"영수증 관련하여 궁금한 점이 있으시면 편하게 문의해 주세요.\n" +
-"감사합니다.\n\n" +
-"케어아카데미 드림"
+        "안녕하세요 케어파트너입니다.\n\n" +
+        "자격증은 발급과 동시에 효력이 발생하여, 자격증 자체의 하자나 안내 오류가 없는 경우 규정상 환불이 어렵습니다. 자격증의 활용 범위는 고객님의 상황에 따라 다르게 느껴지실 수 있는 부분입니다. 다만 고객님의 상황을 고려하여, 내부 논의를 거쳐 이번 건에 한해 예외적으로 환불을 도와드리기로 하였습니다.\n\n" +
+        "환불은 배송비를 제외한 자격증 발급비용만 환불 될 예정이며,\n" +
+        "도착 후 7일 내 환불 처리될 예정입니다.\n\n" +
+        "반송지: 서울특별시 강남구 역삼동 641-10, 2층\n" +
+        "받는 사람: 보살핌\n" +
+        "택배는 선불로 보내주셔야 합니다." },
+    { key:'book', kind:'이메일', name:'교재 발송 안내', title:'[케어아카데미] 교재 발송 안내',
+      body:
+        "안녕하세요 케어아카데미입니다.\n\n" +
+        "요청해 주신 교재 발송 안내드립니다. 수강에 많은 도움 되시길 바랍니다.☺️\n\n" +
+        "감사합니다.\n" +
+        "케어아카데미 드림" },
+    { key:'cert', kind:'이메일', name:'이수증·확인서 첨부', title:'[케어아카데미] 요청하신 증명 서류 첨부 안내',
+      body:
+        "안녕하세요 케어아카데미입니다.\n\n" +
+        "요청해 주신 확인서 메일에 첨부하여 보내드립니다.\n" +
+        "첨부된 PDF 파일을 확인해 주세요.\n\n" +
+        "감사합니다.\n\n" +
+        "케어아카데미 드림" },
+    { key:'scan', kind:'이메일', name:'자격증 스캔본 전달', title:'[케어아카데미] 요청하신 자격증 스캔본 전달',
+      body:
+        "안녕하세요 케어아카데미입니다.\n\n" +
+        "요청해 주신 자격증 스캔본을 메일에 첨부하여 보내드립니다.\n" +
+        "첨부된 PDF 파일을 확인해 주세요.\n\n" +
+        "스캔본 관련하여 궁금한 점이 있으시면 편하게 문의해 주세요.\n" +
+        "감사합니다.\n\n" +
+        "케어아카데미 드림" },
+    { key:'receipt', kind:'이메일', name:'결제 영수증 전달', title:'[케어아카데미] 결제 영수증 전달',
+      body:
+        "안녕하세요 케어아카데미입니다.\n\n" +
+        "요청해 주신 결제 영수증을 메일에 첨부하여 보내드립니다.\n" +
+        "첨부된 파일에서 결제 내역을 확인하실 수 있습니다.\n\n" +
+        "영수증 관련하여 궁금한 점이 있으시면 편하게 문의해 주세요.\n" +
+        "감사합니다.\n\n" +
+        "케어아카데미 드림" }
+  ];
+
+  let TPL_LIST = DEFAULT_TPL_LIST.slice();
+
+  /** key로 템플릿 한 건을 찾습니다. */
+  function findTpl(key) {
+    return TPL_LIST.filter(t => t.key === key)[0] || null;
+  }
+
+  /** 문자·이메일 드롭다운을 현재 목록으로 다시 채웁니다. */
+  function rebuildDropdowns() {
+    [['smsTpl', '문자'], ['tpl', '이메일']].forEach(pair => {
+      const sel = document.getElementById(pair[0]);
+      const cur = sel.value;
+      sel.innerHTML = '';
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '(직접 작성)';
+      sel.appendChild(blank);
+      TPL_LIST.filter(t => t.kind === pair[1]).forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.key; o.textContent = t.name;
+        sel.appendChild(o);
+      });
+      if (cur && findTpl(cur)) sel.value = cur;    // 고르던 항목은 유지
+    });
+  }
+
+  /** 시트에서 템플릿 목록을 받아 옵니다. 실패하면 예비본 그대로 씁니다. */
+  async function loadTemplates() {
+    try {
+      const res  = await fetch(GAS_URL);
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.templates) && data.templates.length) {
+        TPL_LIST = data.templates;
+        setTplNote('');
+      } else {
+        setTplNote('⚠️ 시트에서 템플릿을 받지 못해 기본 목록을 보여 드립니다. ' +
+                   ((data && data.error) ? '(' + data.error + ')' : ''));
+      }
+    } catch (err) {
+      setTplNote('⚠️ 인터넷 문제로 시트를 읽지 못해 기본 목록을 보여 드립니다. 저장은 되지 않습니다.');
     }
-  };
+    rebuildDropdowns();
+    if (!$('managePane').classList.contains('hidden')) renderTemplateList();
+  }
 
   /* ── 템플릿 선택 시 제목·본문 자동 입력 ── */
   function applyTemplate() {
     const key = document.getElementById('tpl').value;
     if (!key) return;                       // (직접 작성)이면 그대로 둠
-    const t = TEMPLATES[key];
+    const t = findTpl(key);
     if (!t) return;
 
     const subjectEl = document.getElementById('subject');
@@ -735,7 +871,7 @@
         !confirm('현재 작성한 제목/본문을 템플릿으로 바꿀까요?')) {
       return;
     }
-    subjectEl.value = t.subject;
+    subjectEl.value = t.title;
     bodyEl.value    = t.body;
     renderPreview();
   }
@@ -935,43 +1071,188 @@
     const tbody = $('tplTableBody');
     tbody.innerHTML = '';
 
-    const addRows = (selectId, src, label, cls) => {
-      Array.from($(selectId).options).forEach(opt => {
-        if (!opt.value) return;                       // "(직접 작성)"은 제외
-        const tr = document.createElement('tr');
+    // 검색어: 템플릿명과 문구(제목·본문) 양쪽에서 찾습니다. 비워두면 전체를 보여줍니다.
+    const q = ($('tplSearch').value || '').trim().toLowerCase();
 
-        const tdName = document.createElement('td');
-        tdName.textContent = opt.textContent;
+    const list = TPL_LIST.filter(t => {
+      if (!q) return true;
+      return (t.name + ' ' + (t.title || '') + ' ' + (t.body || '')).toLowerCase().indexOf(q) > -1;
+    });
 
-        const tdKind = document.createElement('td');
-        const tag = document.createElement('span');
-        tag.className = 'tag ' + cls;
-        tag.textContent = label;
-        tdKind.appendChild(tag);
+    list.forEach(t => {
+      const tr = document.createElement('tr');
 
-        tr.appendChild(tdName);
-        tr.appendChild(tdKind);
-        tr.onclick = () => showTemplate(src, opt.value, tr);
-        tbody.appendChild(tr);
-      });
-    };
+      const tdName = document.createElement('td');
+      tdName.textContent = t.name;
 
-    addRows('smsTpl', 'sms',   '문자',   'sms');
-    addRows('tpl',    'email', '이메일', 'mail');
+      const tdKind = document.createElement('td');
+      const tag = document.createElement('span');
+      tag.className = 'tag ' + (t.kind === '이메일' ? 'mail' : 'sms');
+      tag.textContent = t.kind;
+      tdKind.appendChild(tag);
+
+      tr.appendChild(tdName);
+      tr.appendChild(tdKind);
+      if (t.key === currentTplKey) tr.classList.add('sel');
+      tr.onclick = () => openTemplate(t.key);
+      tbody.appendChild(tr);
+    });
+
+    if (list.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2;
+      td.className = 'tpl-empty';
+      td.textContent = q ? '"' + q + '"와 맞는 템플릿이 없습니다.' : '등록된 템플릿이 없습니다.';
+      td.style.cursor = 'default';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
   }
 
-  /** 표에서 고른 템플릿의 실제 문구를 오른쪽에 보여줍니다. */
-  function showTemplate(src, key, tr) {
-    Array.from($('tplTableBody').children).forEach(r => r.classList.remove('sel'));
-    tr.classList.add('sel');
+  /* ── 템플릿 추가·수정 ──
+     currentTplKey 가 null 이면 "새로 만드는 중", 값이 있으면 그 템플릿을 고치는 중입니다. */
+  let currentTplKey = null;
 
-    const t = (src === 'sms') ? SMS_TEMPLATES[key] : TEMPLATES[key];
+  /** 표에서 고른 템플릿을 오른쪽 편집 칸에 펼칩니다. */
+  function openTemplate(key) {
+    const t = findTpl(key);
     if (!t) return;
+    currentTplKey = key;
+    fillTplForm(t);
+    renderTemplateList();          // 선택 표시 갱신
+  }
 
-    $('tplViewTitle').textContent = (src === 'sms') ? (t.title || '(제목 없음)') : t.subject;
-    const body = $('tplViewBody');
-    body.textContent = t.body;
-    body.classList.remove('ph');
+  /** 빈 편집 칸을 열어 새 템플릿을 만듭니다. */
+  function newTemplate() {
+    currentTplKey = null;
+    fillTplForm({ kind: '문자', name: '', title: '', body: '' });
+    renderTemplateList();
+    $('tplName').focus();
+  }
+
+  /** 편집 칸에 값을 채웁니다. */
+  function fillTplForm(t) {
+    $('tplFormEmpty').classList.add('hidden');
+    $('tplForm').classList.remove('hidden');
+    $('tplName').value  = t.name  || '';
+    $('tplKind').value  = t.kind  || '문자';
+    $('tplTitle').value = t.title || '';
+    $('tplBody').value  = t.body  || '';
+    $('tplDelBtn').classList.toggle('hidden', !currentTplKey);   // 새 템플릿엔 삭제 없음
+    $('tplFormHead').textContent = currentTplKey ? '템플릿 고치기' : '새 템플릿';
+    onTplKindChange();
+    setTplMsg('');
+  }
+
+  /** 구분(문자/이메일)에 따라 제목칸 안내를 바꿉니다. */
+  function onTplKindChange() {
+    const isMail = ($('tplKind').value === '이메일');
+    $('tplTitleHint').textContent = isMail
+      ? '메일 제목으로 들어갑니다.'
+      : '장문(LMS)으로 나갈 때만 문자 제목으로 들어갑니다. 30자까지.';
+  }
+
+  /** 편집 칸의 내용을 시트에 저장합니다. */
+  async function saveTemplate() {
+    const name = $('tplName').value.trim();
+    const body = $('tplBody').value;
+    const pin  = $('tplPin').value.trim();
+
+    if (!name)        return setTplMsg('❌ 템플릿명을 입력해 주세요.', 'err');
+    if (!body.trim()) return setTplMsg('❌ 내용을 입력해 주세요.', 'err');
+    if (!pin)         return setTplMsg('❌ 발송 PIN을 입력해 주세요.', 'err');
+
+    const btn = $('tplSaveBtn');
+    btn.disabled = true;
+    setTplMsg('저장하는 중…');
+
+    try {
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveTemplate',
+          pin: pin,
+          template: {
+            key:   currentTplKey || '',
+            kind:  $('tplKind').value,
+            name:  name,
+            title: $('tplTitle').value,
+            body:  body
+          }
+        })
+      });
+      const data = await res.json();
+
+      if (!data.ok) return setTplMsg('❌ 저장 실패: ' + (data.error || '알 수 없는 오류입니다.'), 'err');
+
+      TPL_LIST = data.templates || TPL_LIST;
+      currentTplKey = data.key || currentTplKey;
+      rebuildDropdowns();
+      renderTemplateList();
+      $('tplPin').value = '';
+      setTplMsg('✅ 저장했습니다. 상담원 모두에게 바로 반영됩니다.', 'ok');
+    } catch (err) {
+      setTplMsg('❌ 저장 중 오류가 났습니다: ' + err.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /** 지금 열려 있는 템플릿을 지웁니다. */
+  async function deleteTemplate() {
+    if (!currentTplKey) return;
+    const pin = $('tplPin').value.trim();
+    if (!pin) return setTplMsg('❌ 지우려면 발송 PIN을 입력해 주세요.', 'err');
+    if (!confirm('"' + $('tplName').value + '" 템플릿을 지울까요?\n지우면 상담원 모두의 목록에서 사라집니다.')) return;
+
+    const btn = $('tplDelBtn');
+    btn.disabled = true;
+    setTplMsg('지우는 중…');
+
+    try {
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'deleteTemplate', pin: pin, key: currentTplKey })
+      });
+      const data = await res.json();
+
+      if (!data.ok) return setTplMsg('❌ 삭제 실패: ' + (data.error || '알 수 없는 오류입니다.'), 'err');
+
+      TPL_LIST = data.templates || TPL_LIST;
+      currentTplKey = null;
+      rebuildDropdowns();
+      renderTemplateList();
+      closeTplForm();
+      setTplMsg('🗑️ 지웠습니다.', 'ok');
+    } catch (err) {
+      setTplMsg('❌ 삭제 중 오류가 났습니다: ' + err.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /** 편집 칸을 닫고 안내 문구로 되돌립니다. */
+  function closeTplForm() {
+    $('tplForm').classList.add('hidden');
+    $('tplFormEmpty').classList.remove('hidden');
+  }
+
+  /** 편집 칸 아래 안내 메시지 */
+  function setTplMsg(text, kind) {
+    const el = $('tplMsg');
+    el.textContent = text || '';
+    el.className = 'tpl-msg' + (kind ? ' ' + kind : '');
+  }
+
+  /** 목록을 시트에서 못 받았을 때 표 위에 띄우는 알림 */
+  function setTplNote(text) {
+    const el = $('tplNote');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('hidden', !text);
   }
 
   /* ── 현재 선택된 발송 방식 ── */
@@ -989,55 +1270,11 @@
     renderSmsPreview();
   }
 
-  /* ── 자주 보내는 문자 템플릿 ──
-     title = 장문(LMS)일 때 문자 제목으로 들어갑니다.
-     내용을 바꾸려면 아래 body 안의 글자만 고치면 됩니다. */
-  const SMS_TEMPLATES = {
-    app: {
-      title: "케어파트너 앱 설치 안내",
-      body:
-        "안녕하세요, 케어파트너입니다.\n" +
-        "케어파트너 어플 다운 받는 링크 전달드려요.\n" +
-        "아래 영어를 눌러 어플을 설치해주세요.\n\n" +
-        "https://play.google.com/store/search?q=케어파트너&c=apps&hl=ko\n\n" +
-        "※ 아이폰(아이패드)에서는 앱을 설치하실 수 없습니다.\n" +
-        "아이폰을 쓰신다면 인터넷에 \"케어파트너\"를 검색해주세요."
-    },
-    chat: {
-      title: "케어파트너 상담 안내",
-      body:
-        "문의 주신 내용은 채팅으로 자세히 도와드리고 있습니다.\n" +
-        "아래 링크 눌러주시면 카카오톡 문의로 바로 연결 됩니다.\n\n" +
-        "http://pf.kakao.com/_jixkfG/chat"
-    },
-    job: {
-      title: "일자리 확인 방법 안내",
-      body:
-        "일자리는 아래 방법을 통해 알아보시는 걸 추천드려요!\n\n" +
-        "- 고용24 (www.work24.go.kr)\n" +
-        "- 서울교육청 구인구직 (https://work.sen.go.kr/work/index.do)\n" +
-        "- 고용노동부 고객센터 국번없이 1350\n" +
-        "- 거주 지역 일자리센터\n" +
-        "모두 무료로 이용하실 수 있어요"
-    },
-    refund: {
-      title: "자격증 환불 안내",
-      body:
-        "안녕하세요 케어파트너입니다.\n\n" +
-        "자격증은 발급과 동시에 효력이 발생하여, 자격증 자체의 하자나 안내 오류가 없는 경우 규정상 환불이 어렵습니다. 자격증의 활용 범위는 고객님의 상황에 따라 다르게 느껴지실 수 있는 부분입니다. 다만 고객님의 상황을 고려하여, 내부 논의를 거쳐 이번 건에 한해 예외적으로 환불을 도와드리기로 하였습니다.\n\n" +
-        "환불은 배송비를 제외한 자격증 발급비용만 환불 될 예정이며,\n" +
-        "도착 후 7일 내 환불 처리될 예정입니다.\n\n" +
-        "반송지: 서울특별시 강남구 역삼동 641-10, 2층\n" +
-        "받는 사람: 보살핌\n" +
-        "택배는 선불로 보내주셔야 합니다."
-    }
-  };
-
   /** 드롭다운에서 고른 템플릿을 내용·제목 칸에 채웁니다. */
   function applySmsTemplate() {
     const key = $('smsTpl').value;
     if (!key) return;                 // (직접 작성)이면 그대로 둠
-    const t = SMS_TEMPLATES[key];
+    const t = findTpl(key);
     if (!t) return;
 
     const cur = $('msg').value.trim();
@@ -1232,7 +1469,9 @@
     document.getElementById('senderNumDisplay').textContent = SENDER_NUM_DISPLAY;
   }
   renderPreview();
-  selectTab('sms');   // 화면을 열면 문자 탭이 먼저 보입니다
+  rebuildDropdowns();   // 우선 예비 목록으로 그려 두고,
+  loadTemplates();      // 시트에서 실제 목록을 받아 갱신합니다
+  selectTab('sms');     // 화면을 열면 문자 탭이 먼저 보입니다
 </script>
 </body>
 </html>
