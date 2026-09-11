@@ -25,3 +25,6 @@ cs-triage/케어아카데미_AI사람_기준표_통합본.xlsx
 
 # 아카이브 스크립트가 만드는 임시 백업
 *.md.bak
+
+# 채널톡 ALF 태스크 export (사내 API 키·토큰 평문 포함 — 로컬 보관만)
+cs-triage/ALF_task/
