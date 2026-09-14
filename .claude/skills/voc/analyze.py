@@ -11,7 +11,7 @@ VOC 주간 리포트 — 숫자 계산기
 숫자를 여기서만 계산하는 이유: 대시보드와 리포트가 따로 계산하면
 언젠가 두 숫자가 어긋나고, 그러면 리포트를 아무도 안 믿는다.
 """
-import json, sys, urllib.request
+import json, sys, time, urllib.request
 from collections import defaultdict
 
 API = ('https://script.google.com/macros/s/'
@@ -46,9 +46,20 @@ def fmt_delta(cur, prev):
     return f"{prev} → {cur} ({d:+}, {'신규' if p is None else f'{p:+.0f}%'})"
 
 
+def fetch():
+    """대시보드 웹앱 JSON. 구글 웹앱은 가끔 500을 내서(2026-09-14) 3번까지 다시 시도한다."""
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(API, timeout=180) as r:
+                return json.load(r)
+        except OSError as e:          # HTTPError·URLError·timeout 모두 OSError 계열
+            if attempt == 2:
+                sys.exit(f"대시보드 웹앱 응답 실패 (3번 시도): {e}")
+            time.sleep(10 * (attempt + 1))
+
+
 def main():
-    with urllib.request.urlopen(API) as r:
-        d = json.load(r)
+    d = fetch()
 
     weeks = [w['주차'] for w in d['week']]          # API가 최신순으로 준다
     target = sys.argv[1] if len(sys.argv) > 1 else weeks[0]
@@ -70,6 +81,9 @@ def main():
                           '전주': P['AI완결'] / P['총건수'] * 100}
     summary['부재중률'] = {'이번주': C['부재중'] / C['총건수'] * 100,
                           '전주': P['부재중'] / P['총건수'] * 100}
+    # 부재중은 사실상 전화에서만 생긴다 — 전체 대비만 쓰면 심각도가 절반으로 보인다
+    summary['전화대비부재중률'] = {'이번주': C['부재중'] / C['전화'] * 100,
+                                '전주': P['부재중'] / P['전화'] * 100}
     for k in ['만족도평균', '친절도평균', '만족도응답수']:
         summary[k] = {'이번주': C[k], '전주': P[k]}
     summary['만족도응답률'] = {'이번주': C['만족도응답수'] / C['총건수'] * 100,
