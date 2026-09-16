@@ -1,0 +1,29 @@
+#!/bin/sh
+# 공개 저장소 — 비밀값이 커밋되지 않게 커밋 직전에 막는다.
+# 켜기: git config core.hooksPath .githooks
+# 오탐이면: git commit --no-verify (값이 진짜 비밀이 아닌지 먼저 확인할 것)
+
+fail=0
+
+if git -c core.quotepath=false diff --cached --name-only | grep -q '^cs-triage/ALF_task/'; then
+  echo "❌ cs-triage/ALF_task/ 파일은 커밋할 수 없어요 (사내 API 키가 들어 있음)"
+  fail=1
+fi
+
+# 새로 추가된 줄에서 KEY/TOKEN/SECRET/PASSWORD = '긴 값' 형태를 찾는다. 값은 출력하지 않는다.
+hits=$(git -c core.quotepath=false diff --cached -U0 --no-color | awk '
+  /^\+\+\+ /   { f = substr($0, 7); next }
+  /^@@/        { split($3, a, /[+,]/); n = a[2]; next }
+  /^\+/        { if ($0 ~ /[A-Za-z_]*(KEY|TOKEN|SECRET|PASSWORD)[A-Za-z_]*["\047]? *[:=] *["\047][^"\047 ]{16,}["\047]/ && $0 !~ /STORAGE_KEY/)
+                   print "   " f ":" n
+                 n++ }
+')
+
+if [ -n "$hits" ]; then
+  echo "❌ 비밀값으로 보이는 줄이 있어요 (값은 가림):"
+  echo "$hits"
+  fail=1
+fi
+
+[ $fail -eq 0 ] || echo "→ 비밀값은 스크립트 속성이나 .gitignore 된 파일로 옮긴 뒤 다시 커밋하세요."
+exit $fail

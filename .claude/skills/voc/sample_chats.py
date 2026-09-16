@@ -1,11 +1,12 @@
 """채널톡 export에서 주제별 원문 표본을 뽑고 긴 숫자(전화번호·계좌)를 가린다.
 
 사용법:
-  python3 sample_chats.py voc-원문/0914 "A=환불수강취소" "B=자격증신뢰" --n 30 --out /tmp/voc
+  python3 sample_chats.py voc-원문/0914 "A=환불수강취소" "B=자격증신뢰" --n all --chunk 40 --out /tmp/voc
   python3 sample_chats.py --selftest
 
 - 주제=파일 이름 앞부분. 앞부분이 같은 파일(환불수강취소.xlsx, 환불수강취소2.xlsx)을 한 주제로 묶는다.
-- 채널톡은 채널별로 파일을 나눠 준다. 파일별 상담 수 비율대로 N건을 나눠 뽑는다(전체가 N 이하면 전부).
+- --n all(기본)이면 전체, 숫자면 파일별 상담 수 비율대로 그만큼만 뽑는다(채널톡은 채널별로 파일을 나눠 준다).
+- --chunk K: 하위 에이전트에게 나눠 맡기도록 chunk_<주제><번호>.txt를 K건씩 추가로 쓴다.
 - 결과는 --out 폴더에 raw_<주제>.txt(대화)·links_<주제>.md(상담 링크). 공개 저장소라 저장소 안에는 쓰지 않는다.
 - 못 가리는 것: 사람 이름, 전화 상담에서 한글로 읽은 숫자("공일공…"), 도로명·지번 주소 앞부분. 인용 전에 직접 확인한다.
 """
@@ -48,6 +49,10 @@ def channel(messages):
     return 'carepartner-academy' if academy > partner else 'carepartner'
 
 
+def chunks(items, k):
+    return [items[i:i + k] for i in range(0, len(items), k)]
+
+
 def selftest():
     assert '[숫자]' in mask('010~1234~5678') and not re.search(r'\d{4}', mask('010-1234-5678'))
     assert '456789' not in mask('테스트은행 123 456789 01234')
@@ -58,6 +63,8 @@ def selftest():
     assert allocate([27, 57], 30) == [10, 20]
     assert allocate([90, 28], 30) == [23, 7]
     assert allocate([5, 3], 30) == [5, 3]
+    assert [len(c) for c in chunks(list(range(84)), 42)] == [42, 42]
+    assert [len(c) for c in chunks(list(range(118)), 40)] == [40, 40, 38]
     print('sample_chats.py selftest ok')
 
 
@@ -66,9 +73,12 @@ def main(argv):
         return selftest()
     import pandas as pd
 
-    n, out = 30, None
+    n, out, size = None, None, None       # n=None → 전체
     if '--n' in argv:
-        n = int(argv.pop(argv.index('--n') + 1)); argv.remove('--n')
+        v = argv.pop(argv.index('--n') + 1); argv.remove('--n')
+        n = None if v == 'all' else int(v)
+    if '--chunk' in argv:
+        size = int(argv.pop(argv.index('--chunk') + 1)); argv.remove('--chunk')
     if '--out' in argv:
         out = argv.pop(argv.index('--out') + 1); argv.remove('--out')
     if not out or len(argv) < 2 or any('=' not in t for t in argv[1:]):
@@ -95,12 +105,13 @@ def main(argv):
 
         lines, links = [], []
         rng = random.Random(SEED)
-        for (name, chats, msgs, ch), k in zip(books, allocate([len(b[1]) for b in books], n)):
+        sizes = [len(b[1]) for b in books]
+        for (name, chats, msgs, ch), k in zip(books, allocate(sizes, n if n is not None else sum(sizes))):
             picked = chats.iloc[sorted(rng.sample(range(len(chats)), k))]
             print(f"{topic} · {name} · 채널 {ch} · 상담 {len(chats)}건 중 {k}건")
             for _, c in picked.iterrows():
                 cid = str(c['id'])
-                lines.append(f"\n#### {topic} chat={cid[-8:]} channel={ch} medium={c.get('mediumType')} "
+                lines.append(f"#### {topic} chat={cid[-8:]} channel={ch} medium={c.get('mediumType')} "
                              f"managed={str(c.get('managedAt'))[:16]} tags=[{c.get('tags')}]")
                 for _, m in msgs[msgs.chatId == c['id']].iterrows():
                     if pd.notna(m.plainText):
@@ -109,6 +120,12 @@ def main(argv):
                 links.append(f"- {cid[-8:]} https://desk.channel.io/{ch}/user-chats/{cid}")
         with open(os.path.join(out, f'raw_{topic}.txt'), 'w') as f:
             f.write('\n'.join(lines))
+        if size:
+            blocks = re.split(r'\n(?=#### )', '\n'.join(lines))
+            for i, part in enumerate(chunks(blocks, size), 1):
+                with open(os.path.join(out, f'chunk_{topic}{i}.txt'), 'w') as f:
+                    f.write('\n\n'.join(part))
+                print(f"  chunk_{topic}{i}.txt {len(part)}건")
         with open(os.path.join(out, f'links_{topic}.md'), 'w') as f:
             f.write('\n'.join(links) + '\n')
         print(f"→ {out}/raw_{topic}.txt · links_{topic}.md")

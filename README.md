@@ -13,7 +13,6 @@ GitHub Pages로 배포됩니다 (`main` 브랜치 루트).
 | 주소 | 폴더 | 화면 |
 |---|---|---|
 | https://eunjua.github.io/CS/dashboard-v2/ | `dashboard-v2/` | VOC 대시보드 v2 — **현재 사용** |
-| https://eunjua.github.io/CS/cs-guide/ | `cs-guide/` | CS 응대 가이드 (신입 교육용 흐름도) |
 | https://eunjua.github.io/CS/email-sender/ | `email-sender/` | 발송 도구 (메일 · 문자 · 알림톡) |
 | https://eunjua.github.io/CS/cert/ | `cert/` | 증명서 발급 (교육 이수증 · 시험응시 확인서) |
 | https://eunjua.github.io/CS/dashboard/ | `dashboard/` | VOC 주간 대시보드 — **구버전** |
@@ -25,7 +24,6 @@ Apps Script 프로젝트 5개가 돌아갑니다. **폴더 경계와 프로젝�
 | 화면 | 백엔드 파일 | 배포 |
 |---|---|---|
 | `email-sender/` | `gas/EmailSender.gs` + `gas/BizmSender.gs` | 수동 복붙 |
-| `cs-guide/` | `gas/CSGuide.gs` → 구글시트 '케이스' 탭 | 수동 복붙 |
 | `dashboard-v2/` | `gas-v2/` 전체 (`WebApp.gs`가 진입점) | clasp 자동 |
 | (화면 없음) | `gas-cert/Code.js` → 자격증 기준 시트 | clasp 자동 |
 | `dashboard/` (구버전) | `gas/VOC_통합스크립트.gs` + `gas/Categorizer.gs` | 수동 복붙 |
@@ -41,7 +39,6 @@ Apps Script 프로젝트 5개가 돌아갑니다. **폴더 경계와 프로젝�
 |---|---|
 | `cs-triage/` | ALF(AI 상담봇) 개선 사이클 — 규칙·정책 문서, 상담내역 판정, 개선로그 |
 | `dashboard-v2/` + `gas-v2/` | VOC 대시보드 v2 — **현재 사용** |
-| `cs-guide/` | CS 응대 가이드 화면 (`/case` 스킬로 케이스 추가) |
 | `email-sender/` | 발송 도구 화면 (메일 · 문자 · 알림톡) |
 | `cert/` | 증명서 발급 화면 — 고객에게 주는 이수증 · 시험응시 확인서 |
 | `certification/` | 민간자격 **운영규정** 생성 (`/certification` 스킬) — 자격증 신규 등록 시 심사기관 제출용 |
@@ -62,7 +59,7 @@ VOC 파이프라인은 v2로 옮겨졌습니다. 구버전 백엔드는 **2026-0
 
 폴더를 남겨둔 이유는 웹 주소가 깨지지 않게 하기 위해서입니다.
 
-`gas/`의 나머지 3개(`BizmSender.gs`·`EmailSender.gs`·`CSGuide.gs`)는 **현역**이니 지우지 마세요.
+`gas/`의 `BizmSender.gs`·`EmailSender.gs`는 **현역**이니 지우지 마세요.
 
 ## 저장소에 올리지 않는 것
 
