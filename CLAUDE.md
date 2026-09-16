@@ -13,11 +13,17 @@
 - CX 팀 주요 인입 채널: 채팅(ChannelTalk) 중심, 전화 오버플로우
 
 # 프로젝트 구조
-- dashboard/              : VOC 대시보드 (GitHub Pages)
-- certification/          : 민간자격 규정 문서 생성
-- completion-certificates/: 이수증·확인서 발급
-- gas/                    : Google Apps Script 파일 (WeeklyReport.gs, Categorizer.gs)
-- 주간 리포트는 Google Sheets [▶ 리포트 생성] 버튼 사용
+- cs-triage/              : ALF(AI 상담봇) 개선 — 규칙·docs·상담내역 판정·개선로그
+- dashboard-v2/ + gas-v2/ : VOC 대시보드 — **현재 사용** (clasp 배포)
+- certification/          : 민간자격 운영규정 생성 (`/certification`) — 심사기관 제출용
+- cert/                   : 증명서 발급 화면 — 고객에게 주는 이수증·시험응시 확인서
+- gas-cert/               : 자격증 발급·배송·정산 스크립트 (기준 시트, clasp)
+- email-sender/ + gas/    : 발송 도구 화면(메일·문자·알림톡)과 그 백엔드
+- b2g_2026/               : B2G 현장점검 대응 (매년 반복)
+- voc-원문/               : VOC 원문 엑셀 보관 — 개인정보라 git에 올리지 않음
+- dashboard/ + gas/VOC_통합스크립트.gs·Categorizer.gs : VOC **구버전, 수정하지 말 것** (2026-07-20 이후 데이터 안 들어옴)
+- 폴더 지도·화면↔백엔드 연결·배포 방식은 README.md
+- 주간 VOC 리포트는 `/voc` 스킬. 드라이브 업로드 → 앱스크립트 버튼 → 대시보드 집계가 **먼저** 돌아야 함
 
 # 작업 환경
 - 비개발자 (기술 용어는 쉽게 설명할 것)

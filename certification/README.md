@@ -65,8 +65,10 @@
 - **Claude Code**
 
 ### 이 명령이 쓰지 않는 파일
-`certification/SKILL.md`(옛 버전, 실행 안 됨) · `review_draft.py` · `review-criteria.md` · `certification-writing-guide.pdf` · 나머지 샘플 3개 · `2603 신청자격증/` 폴더
+`review_draft.py` · `review-criteria.md` · `certification-writing-guide.pdf` · 나머지 샘플 3개 · `2603 신청자격증/` 폴더
 → 명령이 읽지 않을 뿐, 사람이 참고하는 자료로는 쓸 수 있습니다.
+
+> 옛 설명서 `certification/SKILL.md`는 **2026-09-16에 삭제**했습니다. 명령이 읽지 않는데 설명서처럼 생겨서, 나중에 그 파일을 보고 옛 절차(틀린 홈페이지 주소·weasyprint 방식)대로 작업할 위험이 있었습니다. 되살리려면 git 이력에 있습니다.
 
 ---
 
