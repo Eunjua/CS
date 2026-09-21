@@ -1,8 +1,11 @@
 /**
- * 문자·알림톡 발송 백엔드 — 화면(email-sender/index.html "문자·알림톡" 탭) ↔ 비즈엠 API
+ * 문자·알림톡 발송 백엔드 — 화면(email-sender/index.html "문자·알림톡" 탭) ↔ bbas 중계 API ↔ 비즈엠 API
  *
  * [하는 일]
  *   CS 상담원이 화면에서 입력한 번호·내용을 받아 비즈엠(스윗트래커) API로 발송합니다.
+ *   비즈엠은 등록된 IP의 요청만 받는데 Apps Script는 IP가 매번 바뀌므로,
+ *   IP가 고정된 사내 서버(bbas)의 중계 API를 거쳐 보냅니다.
+ *   bbas는 보낸 내용을 그대로 비즈엠에 넘기고, 비즈엠의 응답도 그대로 돌려줍니다.
  *   - "문자만 보내기"  : 카카오를 거치지 않고 바로 SMS/LMS 발송 (문구 자유)
  *   - "알림톡 → 문자"  : 승인된 템플릿으로 알림톡 발송, 실패하면 문자로 자동 대체
  *
@@ -13,10 +16,12 @@
  *   (이 폴더는 GitHub에 올라가므로, 코드에 적으면 키가 그대로 공개됩니다.)
  *   대신 Apps Script의 "스크립트 속성"에 저장합니다.
  *     ① Apps Script 편집기 왼쪽 ⚙️ [프로젝트 설정] 클릭
- *     ② 맨 아래 [스크립트 속성] → [스크립트 속성 추가] 를 눌러 아래 3개를 넣고 저장
+ *     ② 맨 아래 [스크립트 속성] → [스크립트 속성 추가] 를 눌러 아래 5개를 넣고 저장
  *          BIZM_USERID       = 비즈엠 로그인 계정명        (예: bosalpim21)
  *          BIZM_PROFILE_KEY  = 발신프로필키               (영문+숫자 40자)
  *          BIZM_SENDER_NUM   = 승인된 발신번호, 하이픈 없이 (예: 15881234)
+ *          BBAS_RELAY_URL    = bbas 중계 API 주소
+ *          BBAS_RELAY_KEY    = bbas 중계 키 (별도 전달, 코드·로그·메신저에 남기지 말 것)
  *     ③ 넣은 뒤 checkBizmConfig() 를 실행하면 제대로 들어갔는지 확인할 수 있습니다.
  * ─────────────────────────────────────────────────────────────
  *
@@ -29,9 +34,6 @@
  */
 
 /* ===================== 설정 ===================== */
-
-// 비즈엠 API 서버 (운영)
-const BIZM_HOST = 'https://alimtalk-api.sweettracker.net';
 
 // 한 번에 보낼 수 있는 최대 인원 (비즈엠 API 제한)
 const BIZM_MAX_RECIPIENTS = 100;
@@ -49,6 +51,19 @@ function getBizmConfig_() {
   };
   if (!cfg.userid || !cfg.profileKey || !cfg.senderNum) {
     throw new Error('비즈엠 계정 정보가 설정되지 않았습니다. Apps Script → 프로젝트 설정 → 스크립트 속성에 BIZM_USERID, BIZM_PROFILE_KEY, BIZM_SENDER_NUM을 넣어 주세요.');
+  }
+  return cfg;
+}
+
+/** 스크립트 속성에서 bbas 중계 API 설정을 읽어옵니다. */
+function getRelayConfig_() {
+  const p = PropertiesService.getScriptProperties();
+  const cfg = {
+    url: String(p.getProperty('BBAS_RELAY_URL') || '').trim(),
+    key: String(p.getProperty('BBAS_RELAY_KEY') || '').trim()
+  };
+  if (!cfg.url || !cfg.key) {
+    throw new Error('bbas 중계 설정이 없습니다. 스크립트 속성에 BBAS_RELAY_URL, BBAS_RELAY_KEY를 넣어 주세요.');
   }
   return cfg;
 }
@@ -94,6 +109,7 @@ function sendBizm_(body) {
   }
 
   const cfg   = getBizmConfig_();
+  const relay = getRelayConfig_();
   const bytes = byteLen_(message);
   const isLms = bytes > SMS_BYTE_LIMIT;
   const kind  = isLms ? 'L' : 'S';   // S: SMS(단문), L: LMS(장문)
@@ -131,22 +147,38 @@ function sendBizm_(body) {
     return msg;
   });
 
-  // ── 비즈엠 API 호출 ──
+  // ── bbas 중계 API 호출 (bbas가 비즈엠에 그대로 전달) ──
+  // 실패해도 자동으로 다시 보내지 않습니다. 문자가 두 번 나갈 수 있습니다.
   let res;
   try {
-    res = UrlFetchApp.fetch(BIZM_HOST + '/v2/' + cfg.profileKey + '/sendMessage', {
+    res = UrlFetchApp.fetch(relay.url, {
       method: 'post',
       contentType: 'application/json',
-      headers: { userid: cfg.userid },
-      payload: JSON.stringify(payload),
+      headers: { 'x-bizm-relay-key': relay.key },
+      payload: JSON.stringify({
+        userid: cfg.userid,
+        profileKey: cfg.profileKey,
+        messages: payload
+      }),
       muteHttpExceptions: true
     });
   } catch (err) {
-    return { ok: false, error: '비즈엠 서버에 연결하지 못했습니다: ' + String(err) };
+    return { ok: false, error: 'bbas 중계 서버에 연결하지 못했습니다: ' + String(err) };
   }
 
   const status = res.getResponseCode();
   const raw    = res.getContentText();
+  // 504 = 실패가 아니라 "결과를 모름". 비즈엠이 이미 보냈을 수 있습니다.
+  if (status === 504) {
+    return { ok: false, error: '발송 결과를 확인하지 못했습니다. 문자가 이미 나갔을 수 있으니, 받는 분에게 도착했는지 확인한 뒤 안 왔을 때만 다시 보내세요.' };
+  }
+  if (status === 403) {
+    return { ok: false, error: 'bbas 중계 키가 맞지 않습니다. 스크립트 속성 BBAS_RELAY_KEY를 확인해 주세요.' };
+  }
+  if (status === 502) {
+    return { ok: false, error: '비즈엠 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.' };
+  }
+  // 400(요청 형식 오류)이나 비즈엠 자체 오류
   if (status !== 200) {
     return { ok: false, error: '비즈엠 서버 오류(' + status + '): ' + raw.slice(0, 300) };
   }
@@ -317,25 +349,28 @@ function logSend_(results, isAlim, isLms, message) {
 /* ===================== 테스트 (Apps Script 편집기에서 직접 실행) ===================== */
 
 /**
- * [1단계] 설정 확인 — 문자를 보내지 않고, 스크립트 속성 3개가 제대로 들어갔는지만 봅니다.
+ * [1단계] 설정 확인 — 문자를 보내지 않고, 스크립트 속성 5개가 제대로 들어갔는지만 봅니다.
  *
  * 실행 방법: 편집기 위쪽 함수 목록에서 checkBizmConfig 선택 → [실행]
  *           → 아래 "실행 로그"에 결과가 나옵니다.
  * 보안을 위해 값 전체가 아니라 앞뒤 일부만 보여줍니다.
  */
 function checkBizmConfig() {
-  let cfg;
+  let cfg, relay;
   try {
-    cfg = getBizmConfig_();
+    cfg   = getBizmConfig_();
+    relay = getRelayConfig_();
   } catch (err) {
     console.log('❌ ' + err.message);
     return;
   }
 
-  console.log('✅ 설정 3개가 모두 들어와 있습니다.');
+  console.log('✅ 설정 5개가 모두 들어와 있습니다.');
   console.log('  BIZM_USERID      : ' + mask_(cfg.userid));
   console.log('  BIZM_PROFILE_KEY : ' + mask_(cfg.profileKey) + '  (길이 ' + cfg.profileKey.length + '자)');
   console.log('  BIZM_SENDER_NUM  : ' + cfg.senderNum);
+  console.log('  BBAS_RELAY_URL   : ' + relay.url);
+  console.log('  BBAS_RELAY_KEY   : ' + mask_(relay.key) + '  (길이 ' + relay.key.length + '자, 정상이면 64자)');
 
   if (cfg.profileKey.length !== 40) {
     console.log('⚠️ 발신프로필 키는 보통 40자입니다. 지금 ' + cfg.profileKey.length +
