@@ -246,6 +246,44 @@
     margin-top: -10px;
   }
 
+  .top-link {
+    margin-left: auto; align-self: center; font-size: 13px; color: #3b7dd8;
+    text-decoration: none; font-weight: 500;
+  }
+  .top-link:hover { text-decoration: underline; }
+  .list-status { margin-left: auto; align-self: center; font-size: 12px; color: #999; }
+  .list-status + .top-link { margin-left: 14px; }
+  .list-status.warn { color: #c0392b; }
+  .list-status a { color: #3b7dd8; font-weight: 500; }
+
+  /* ── 검색 선택칸 ── */
+  .combo { position: relative; }
+  .combo-list {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 10;
+    background: #fff; border: 1.5px solid #dde1e7; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.1); max-height: 240px; overflow-y: auto;
+  }
+  .combo-item {
+    padding: 9px 14px; font-size: 14px; cursor: pointer;
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .combo-item:hover, .combo-item.on { background: #eef4fc; }
+  .combo-item small { color: #999; font-size: 12px; white-space: nowrap; }
+  .combo-item mark { background: none; color: #3b7dd8; font-weight: 600; }
+  .combo-empty { padding: 10px 14px; font-size: 12px; color: #999; line-height: 1.5; }
+
+  /* ── 시간 입력 ── */
+  .time-row { display: flex; align-items: center; gap: 6px; }
+  .time-row input[type="number"] {
+    width: 72px; padding: 10px 12px; border: 1.5px solid #dde1e7; border-radius: 8px;
+    font-size: 14px; font-family: inherit; outline: none; text-align: right;
+  }
+  .time-row span { font-size: 13px; color: #555; margin-right: 8px; }
+  .auto-tag {
+    font-size: 11px; color: #2e8b57; background: #e8f6ee; border-radius: 4px;
+    padding: 2px 6px; margin-left: 6px; font-weight: 500;
+  }
+
   /* ── 숨김 ── */
   .hidden { display: none !important; }
 
@@ -299,6 +337,8 @@
 <div class="type-tabs">
   <button class="tab-btn active" id="tab-edu" onclick="switchType('edu')">📋 교육 이수증</button>
   <button class="tab-btn" id="tab-exam" onclick="switchType('exam')">📝 시험응시 확인서</button>
+  <span class="list-status" id="list-status"></span>
+  <a class="top-link" href="https://docs.google.com/spreadsheets/d/1jXPEfaol5hhIklzjTa8INudskEnVvKo9urHr7vO9MSg/edit" target="_blank" rel="noopener">⚙ 과목 목록 관리 (시트) →</a>
 </div>
 
 <div class="page-wrap">
@@ -315,7 +355,18 @@
     <p class="hint">8자리 입력 (예: 19961019 → 1996년 10월 19일)</p>
 
     <label for="edu-course">과정명</label>
-    <input type="text" id="edu-course" placeholder="예: 요양보호사 직무교육" oninput="renderEdu()">
+    <div class="combo">
+      <input type="text" id="edu-course" placeholder="과정명 검색 (예: 요양)" autocomplete="off">
+      <div class="combo-list hidden" id="edu-course-list"></div>
+    </div>
+    <p class="hint">몇 글자만 치면 목록이 떠요. 고르면 교육 시간이 자동으로 들어가요.</p>
+
+    <label>교육 시간 <span class="auto-tag hidden" id="auto-tag">자동 입력됨</span></label>
+    <div class="time-row">
+      <input type="number" id="edu-hours" min="0" placeholder="0" oninput="onHoursEdit()"><span>시간</span>
+      <input type="number" id="edu-minutes" min="0" max="59" placeholder="0" oninput="onHoursEdit()"><span>분</span>
+    </div>
+    <p class="hint">직접 고칠 수 있어요. 비워두면 이수증에 교육 시간 줄이 안 나와요.</p>
 
     <label for="edu-end">수강 만료일</label>
     <input type="date" id="edu-end" oninput="renderEdu()">
@@ -336,7 +387,10 @@
     <p class="hint">8자리 입력 (예: 19961019 → 1996년 10월 19일)</p>
 
     <label for="exam-name2">시험명</label>
-    <input type="text" id="exam-name2" placeholder="예: 베이비시터 1급 자격검정" oninput="renderExam()">
+    <div class="combo">
+      <input type="text" id="exam-name2" placeholder="시험명 검색 (예: 베이비)" autocomplete="off">
+      <div class="combo-list hidden" id="exam-name2-list"></div>
+    </div>
 
     <label for="exam-date">응시일</label>
     <input type="date" id="exam-date" oninput="renderExam()">
@@ -380,6 +434,11 @@
         <span class="field">수 강 기 간</span>
         <span> : </span>
         <span class="value" id="edu-out-period">—</span>
+      </div>
+      <div class="cert-row" id="edu-row-hours">
+        <span class="field">교 육 시 간</span>
+        <span> : </span>
+        <span class="value" id="edu-out-hours">—</span>
       </div>
 
       <hr class="cert-divider" style="margin-top:24px;">
@@ -516,8 +575,156 @@
       document.getElementById('edu-out-period').textContent = '—';
     }
 
+    const hoursText = fmtHours(document.getElementById('edu-hours').value,
+                               document.getElementById('edu-minutes').value);
+    document.getElementById('edu-out-hours').textContent = hoursText;
+    document.getElementById('edu-row-hours').classList.toggle('hidden', !hoursText);
+
     document.getElementById('edu-out-date').textContent = todayStr();
   }
+
+  function onHoursEdit() {
+    document.getElementById('auto-tag').classList.add('hidden');
+    renderEdu();
+  }
+
+  /* ── 검색 선택칸 ── */
+  function esc(s) {
+    return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  function setupCombo(inputId, getItems, sub, onPick, onType) {
+    const input = document.getElementById(inputId);
+    const box   = document.getElementById(inputId + '-list');
+    let shown = [], on = -1;
+
+    function draw() {
+      const q = input.value.trim();
+      shown = getItems().filter(it => it.name.includes(q));
+      on = -1;
+      if (!shown.length) {
+        box.innerHTML = `<div class="combo-empty">목록에 없는 이름이에요. 그대로 쓰시거나,<br>과목 목록 시트에 추가한 뒤 새로고침해 주세요.</div>`;
+      } else {
+        box.innerHTML = shown.map((it, i) => {
+          const name = q ? esc(it.name).split(esc(q)).join(`<mark>${esc(q)}</mark>`) : esc(it.name);
+          return `<div class="combo-item" data-i="${i}"><span>${name}</span><small>${sub(it)}</small></div>`;
+        }).join('');
+      }
+      box.classList.remove('hidden');
+    }
+    function pick(i) {
+      input.value = shown[i].name;
+      box.classList.add('hidden');
+      onPick(shown[i]);
+    }
+    function highlight() {
+      box.querySelectorAll('.combo-item').forEach((el, i) => el.classList.toggle('on', i === on));
+    }
+
+    input.addEventListener('focus', draw);
+    input.addEventListener('input', () => { draw(); onType(); });
+    input.addEventListener('keydown', e => {
+      if (box.classList.contains('hidden') || !shown.length) return;
+      if (e.key === 'ArrowDown') { on = Math.min(on + 1, shown.length - 1); highlight(); e.preventDefault(); }
+      if (e.key === 'ArrowUp')   { on = Math.max(on - 1, 0); highlight(); e.preventDefault(); }
+      if (e.key === 'Enter' && on >= 0) { pick(on); e.preventDefault(); }
+      if (e.key === 'Escape') box.classList.add('hidden');
+    });
+    box.addEventListener('mousedown', e => {
+      const el = e.target.closest('.combo-item');
+      if (el) { pick(Number(el.dataset.i)); e.preventDefault(); }
+    });
+    input.addEventListener('blur', () => box.classList.add('hidden'));
+  }
+
+  /* ── 과목 목록 (구글 시트 A열 과정명 · D열 강의 시간) ── */
+  const LIST_API = 'https://script.google.com/macros/s/AKfycbwtdxJzJChHxckjD369sBGHUOrVGb6_HX3mPVTMpaxcHiD2xp8U9fEpZgRohJYFqYgd/exec';   // gas-cert-list/ 웹앱 주소
+  const LIST = { courses: [], exams: [] };
+
+  // D열 강의 시간 → {hours, minutes}. "1시간 30분" · "40시간" · "30분" · "1:30" · "40"(=시간) · "1.5"(=1시간 30분)
+  function parseTime(raw) {
+    const s = String(raw || '').replace(/\s/g, '');
+    if (!s) return null;
+    let m;
+    if ((m = s.match(/^(\d+):(\d{1,2})(:\d{2})?$/))) return { hours: +m[1], minutes: +m[2] };
+    if ((m = s.match(/^(\d+(?:\.\d+)?)$/))) {
+      const total = Math.round(parseFloat(m[1]) * 60);
+      return { hours: Math.floor(total / 60), minutes: total % 60 };
+    }
+    const h = s.match(/(\d+)시간/), mi = s.match(/(\d+)분/);
+    if (h || mi) return { hours: h ? +h[1] : 0, minutes: mi ? +mi[1] : 0 };
+    return null;   // 못 읽는 모양 → 자동 입력 안 함
+  }
+
+  function fmtHours(h, m) {
+    h = Number(h) || 0; m = Number(m) || 0;
+    if (!h && !m) return '';
+    if (h && m) return `총 ${h}시간 ${m}분`;
+    return h ? `총 ${h}시간` : `총 ${m}분`;
+  }
+
+  async function fetchList(timeoutMs) {
+    // 한동안 안 쓰인 앱스크립트는 깨어나는 데 10초 넘게 걸림 → 넉넉히 기다리되 무한정은 아니게
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res  = await fetch(LIST_API, { signal: ctrl.signal });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function loadList() {
+    const status = document.getElementById('list-status');
+    status.textContent = '과목 목록 불러오는 중…';
+    try {
+      let data;
+      try {
+        data = await fetchList(25000);
+      } catch (first) {
+        // 구글 쪽이 잠깐 실패하는 일이 있어 한 번 더 시도
+        status.textContent = '과목 목록 다시 불러오는 중…';
+        await new Promise(r => setTimeout(r, 2000));
+        data = await fetchList(45000);
+      }
+      LIST.courses = data.courses.map(c => {
+        const t = parseTime(c.time);
+        return { name: c.name, hours: t ? t.hours : 0, minutes: t ? t.minutes : 0 };
+      });
+      // 시험명도 과정명 목록에서 검색 (시트에 시험명 칸이 따로 없음)
+      LIST.exams = LIST.courses.map(c => ({ name: c.name }));
+      status.textContent = `과목 ${LIST.courses.length}개`;
+      status.classList.remove('warn');
+    } catch (e) {
+      // 목록을 못 받아와도 직접 입력으로 계속 발급할 수 있게
+      console.warn('[cert] 과목 목록 불러오기 실패', e);
+      status.innerHTML = '⚠ 과목 목록을 못 불러왔어요 — 직접 입력하거나 <a href="#" onclick="loadList();return false;">다시 불러오기</a>';
+      status.classList.add('warn');
+    }
+  }
+
+  setupCombo('edu-course', () => LIST.courses, it => fmtHours(it.hours, it.minutes).replace('총 ', ''),
+    it => {
+      document.getElementById('edu-hours').value   = it.hours   || '';
+      document.getElementById('edu-minutes').value = it.minutes || '';
+      document.getElementById('auto-tag').classList.remove('hidden');
+      renderEdu();
+    },
+    () => {
+      // 자동으로 넣은 시간이 있는데 과정명을 다시 치면 → 이전 과정 시간이 남지 않게 비움
+      const tag = document.getElementById('auto-tag');
+      if (!tag.classList.contains('hidden')) {
+        document.getElementById('edu-hours').value = '';
+        document.getElementById('edu-minutes').value = '';
+        tag.classList.add('hidden');
+      }
+      renderEdu();
+    });
+
+  setupCombo('exam-name2', () => LIST.exams, () => '', () => renderExam(), renderExam);
 
   /* ── 시험응시 확인서 렌더 ── */
   function renderExam() {
@@ -538,6 +745,7 @@
   /* ── 초기 렌더 ── */
   renderEdu();
   renderExam();
+  loadList();
 </script>
 </body>
 </html>

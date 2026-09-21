@@ -19,15 +19,16 @@ GitHub Pages로 배포됩니다 (`main` 브랜치 루트).
 
 ## 화면 ↔ 백엔드 연결
 
-Apps Script 프로젝트 5개가 돌아갑니다. **폴더 경계와 프로젝트 경계가 다르니 주의하세요.**
+Apps Script 프로젝트 7개가 돌아갑니다. **폴더 경계와 프로젝트 경계가 다르니 주의하세요.**
 
 | 화면 | 백엔드 파일 | 배포 |
 |---|---|---|
 | `email-sender/` | `gas/EmailSender.gs` + `gas/BizmSender.gs` | 수동 복붙 |
 | `dashboard-v2/` | `gas-v2/` 전체 (`WebApp.gs`가 진입점) | clasp 자동 |
 | (화면 없음) | `gas-cert/Code.js` → 자격증 기준 시트 | clasp 자동 |
+| (화면 없음) | `gas-cert-detail/Code.js` → 과목 관리 시트에 과정 한 줄 쓰기 (`/cert-detail` 스킬이 호출, 주소·열쇠는 `.local.json`) | clasp 자동 |
 | `dashboard/` (구버전) | `gas/VOC_통합스크립트.gs` + `gas/Categorizer.gs` | 수동 복붙 |
-| `cert/` | **없음** — 브라우저에서 바로 PDF 생성 | — |
+| `cert/` | `gas-cert-list/Code.js` — 과목 목록 시트 A열(과정명)·D열(강의 시간)만 읽어줌. PDF는 브라우저에서 바로 생성 | clasp 자동 |
 
 **`gas/` 폴더 주의** — 한 폴더에 서로 다른 구글 프로젝트 3개가 섞여 있습니다.
 `EmailSender.gs`와 `BizmSender.gs`는 **반드시 같은 프로젝트에 함께** 넣으세요
@@ -43,6 +44,8 @@ Apps Script 프로젝트 5개가 돌아갑니다. **폴더 경계와 프로젝�
 | `cert/` | 증명서 발급 화면 — 고객에게 주는 이수증 · 시험응시 확인서 |
 | `certification/` | 민간자격 **운영규정** 생성 (`/certification` 스킬) — 자격증 신규 등록 시 심사기관 제출용 |
 | `gas-cert/` | 자격증 기준 시트 스크립트 (배송확인리스트) |
+| `gas-cert-list/` | 이수증 과목 목록 API — 「과목 관리 페이지」 시트에서 과정명·강의 시간을 `cert/`로 보냄 |
+| `gas-cert-detail/` | 과목 관리 시트 입력 웹앱 — `/cert-detail`로 신규 과정 추가 시 과정명·기관·강의 수·강의 시간·링크를 시트에 적음 |
 | `b2g_2026/` | B2G 현장점검 대응 — 취업확인서 일괄 수정, 소명서 |
 | `gas/` | 백엔드 모음 — 위 "화면 ↔ 백엔드 연결" 참고 |
 | `dashboard/` | VOC 주간 대시보드 — **구버전** |

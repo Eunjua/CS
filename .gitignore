@@ -31,3 +31,11 @@ cs-triage/ALF_task/
 
 # VOC 리포트용 채널톡 원문 export (고객 개인정보 — 로컬 보관만)
 voc-원문/
+
+# 이수증 과목 목록 API (clasp 식별자)
+gas-cert-list/.clasp.json
+gas-cert-list/.stray-clasp.json
+
+# 자격증 상세 시트 입력 웹앱 (clasp 식별자 · 웹앱 주소·열쇠)
+gas-cert-detail/.clasp.json
+gas-cert-detail/.local.json
