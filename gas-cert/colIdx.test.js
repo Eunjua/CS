@@ -33,7 +33,7 @@ assert.strictEqual(src_idx['비고'], 19);              // T
 
 // 정산집계: 스크립트가 쓰는 순서(A~I) 그대로인지
 var sum_idx = buildIdx(SUM_COL);
-['배송일','이름','전화번호','자격증','type_code','송장번호','재발급','취소','취소일']
+['배송일','이름','전화번호','자격증','type_code','송장번호','재발급','취소','취소일','order_id']
   .forEach(function(name, i) { assert.strictEqual(sum_idx[name], i, name); });
 
 // 배송 시트: 바꾸기 전 코드가 쓰던 번호와 같은지 (동작 안 바뀌었는지 확인)
@@ -41,6 +41,7 @@ var b = buildIdx(DBABY_COL);
 assert.deepStrictEqual([b['배송일'], b['이름'], b['전화번호'], b['송장번호']], [0, 3, 6, 7]);
 var nn = buildIdx(DNCS_COL);
 assert.deepStrictEqual([nn['배송일'], nn['송장번호'], nn['이름'], nn['전화번호']], [0, 8, 18, 19]);
+assert.strictEqual(nn['품목'], 15);   // P
 var c = buildIdx(COURSE_COL);
 assert.deepStrictEqual([c['과정명'], c['코드번호'], c['자격증형태'], c['결제금액']], [0, 1, 4, 5]);
 
@@ -217,3 +218,19 @@ assert.strictEqual(buildRemark(행4('', '분실', ''), si), '');
 assert.strictEqual(buildRemark(행4(false, '분실', ''), si), '');
 // 비고 열은 더 이상 remark에 안 들어감
 assert.strictEqual(buildRemark(행4(true, '', '비고내용'), si), '재발급');
+
+// ===== NCS 배송 업데이트: 품목명 해석 =====
+assert.deepStrictEqual(parseItemName('lrmrvbm5i5(7)'), { code: 'lrmrvbm5i5', nos: ['7'] });
+assert.deepStrictEqual(parseItemName('lrmrvbm5i5(7,51)'), { code: 'lrmrvbm5i5', nos: ['7', '51'] });
+assert.deepStrictEqual(parseItemName(' lrmrvbm5i5 ( 7, 51 ) '), { code: 'lrmrvbm5i5', nos: ['7', '51'] });
+// 우리가 만든 품목명을 그대로 되돌려 읽을 수 있어야 함
+assert.deepStrictEqual(
+  parseItemName(buildItemName(['01M2-certification-51-6owmlpj2tp', '01M3-certification-52-abc123'])),
+  { code: '6owmlpj2tp', nos: ['51', '52'] }
+);
+// 형식이 다르거나 번호가 없으면 null → 이름·전화번호로 매칭
+assert.strictEqual(parseItemName('code1()'), null);
+assert.strictEqual(parseItemName('()'), null);
+assert.strictEqual(parseItemName(''), null);
+assert.strictEqual(parseItemName(null), null);
+assert.strictEqual(parseItemName('자격증'), null);

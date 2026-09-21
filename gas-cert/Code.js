@@ -49,7 +49,8 @@ var SUM_COL = {
   '송장번호':   'F',
   '재발급':     'G',
   '취소':       'H',
-  '취소일':     'I'
+  '취소일':     'I',
+  'order_id':  'J'    // 송장 매칭용 (고객id·과정코드가 들어 있음)
 };
 
 // 발급과정 시트
@@ -62,7 +63,7 @@ var CERTMAP_COL = { '자격증명': 'A', '종류': 'B' };
 var DBABY_COL = { '배송일': 'A', '이름': 'D', '전화번호': 'G', '송장번호': 'H' };
 
 // [배송]NCS 시트
-var DNCS_COL = { '배송일': 'A', '송장번호': 'I', '이름': 'S', '전화번호': 'T' };
+var DNCS_COL = { '배송일': 'A', '송장번호': 'I', '품목': 'P', '이름': 'S', '전화번호': 'T' };
 
 // 열 알파벳 → 배열 번호 (A=0, B=1 ... Z=25, AA=26)
 function colIdx(letter) {
@@ -345,15 +346,6 @@ function updateDeliveryNCS() {
         return;
       }
 
-      // NCS 배송리스트에 한국검정평가원 자격증 송장이 섞여 오므로 둘 다 후보로 포함
-      var ncsMap = buildSummaryMap(function(sRow) {
-        var sDate   = normalizeDate(sRow[sIdx['배송일']]);
-        var sName   = sRow[sIdx['이름']] ? sRow[sIdx['이름']].toString().trim() : '';
-        var sPhone7 = normalizePhone(sRow[sIdx['전화번호']]).substring(0, 7);
-        if (!sDate || !sName || sPhone7.length !== 7) return null;
-        return sDate + '|' + sName + '|' + sPhone7;
-      }, ['ncs', 'korean']);
-
       var ncsData = deliveryNcsSheet.getDataRange().getValues();
       var nIdx    = buildIdx(DNCS_COL);
       var ncsRows = ncsData.slice(1).filter(function(row) {
@@ -361,7 +353,59 @@ function updateDeliveryNCS() {
       });
       totalCount = ncsRows.length;
 
+      // 정산집계에 이미 들어간 송장은 건너뜀 (버튼을 다시 눌렀을 때 "못 찾음"으로 세지 않도록)
+      var doneTracking = {};
+      summaryData.slice(1).forEach(function(sRow) {
+        var t = sRow[sIdx['송장번호']] ? sRow[sIdx['송장번호']].toString().trim() : '';
+        if (t) doneTracking[t] = true;
+      });
+      var alreadyCount = 0;
+      ncsRows = ncsRows.filter(function(nRow) {
+        if (doneTracking[nRow[nIdx['송장번호']].toString().trim()]) { alreadyCount++; return false; }
+        return true;
+      });
+
+      // NCS 배송리스트에 한국검정평가원 자격증 송장이 섞여 오므로 둘 다 후보로 포함
+      var NCS_TYPES = ['ncs', 'korean'];
+
+      // 1차: 배송일 + 품목명(고객id·과정코드) — order_id가 있는 정산집계 줄만
+      var itemMap = buildSummaryMap(function(sRow) {
+        var sDate   = normalizeDate(sRow[sIdx['배송일']]);
+        var orderId = sRow[sIdx['order_id']];
+        var code    = orderCode(orderId);
+        var no      = certNo(orderId);
+        if (!sDate || !code || !no) return null;
+        return sDate + '|' + code + '|' + no;
+      }, NCS_TYPES);
+
+      var itemMatch = 0;
+      var leftRows  = [];   // 1차에서 못 찾은 배송 줄 → 2차로
       ncsRows.forEach(function(nRow) {
+        var nDate     = normalizeDate(nRow[nIdx['배송일']]);
+        var nTracking = nRow[nIdx['송장번호']].toString().trim();
+        var parsed    = parseItemName(nRow[nIdx['품목']]);
+        var n = 0;
+        if (parsed && nDate) {
+          parsed.nos.forEach(function(no) {
+            n += applyTracking(itemMap, nDate + '|' + parsed.code + '|' + no, nTracking);
+          });
+        }
+        if (n > 0) { itemMatch++; matchCount++; filledCount += n; }
+        else leftRows.push(nRow);
+      });
+
+      // 2차 (예비): 기존 방식 — 배송일 + 이름 + 전화번호 앞 7자리
+      // 1차에서 송장이 들어간 줄은 buildSummaryMap이 빈 송장만 보므로 자동으로 빠짐
+      var ncsMap = buildSummaryMap(function(sRow) {
+        var sDate   = normalizeDate(sRow[sIdx['배송일']]);
+        var sName   = sRow[sIdx['이름']] ? sRow[sIdx['이름']].toString().trim() : '';
+        var sPhone7 = normalizePhone(sRow[sIdx['전화번호']]).substring(0, 7);
+        if (!sDate || !sName || sPhone7.length !== 7) return null;
+        return sDate + '|' + sName + '|' + sPhone7;
+      }, NCS_TYPES);
+
+      var nameMatch = 0;
+      leftRows.forEach(function(nRow) {
         var nDate     = normalizeDate(nRow[nIdx['배송일']]);
         var nName     = nRow[nIdx['이름']].toString().trim();
         var nPhone7   = normalizePhone(nRow[nIdx['전화번호']].toString().trim()).substring(0, 7);
@@ -369,13 +413,17 @@ function updateDeliveryNCS() {
         if (nPhone7.length !== 7) return;
         var key = nDate + '|' + nName + '|' + nPhone7;
         var n = applyTracking(ncsMap, key, nTracking);
-        if (n > 0) { matchCount++; filledCount += n; }
+        if (n > 0) { nameMatch++; matchCount++; filledCount += n; }
       });
 
       SpreadsheetApp.getUi().alert(
         'NCS 배송 업데이트 완료!\n\n' +
         '✅ 송장 입력: ' + filledCount + '건 (합배송 포함)\n' +
-        '✅ 매칭된 배송: ' + matchCount + ' / ' + totalCount + '건'
+        '✅ 이번에 매칭: ' + matchCount + ' / ' + totalCount + '건\n' +
+        '   · 품목명으로: ' + itemMatch + '건\n' +
+        '   · 이름·전화번호로: ' + nameMatch + '건\n' +
+        '☑️ 이미 입력됨: ' + alreadyCount + '건\n' +
+        '⚠️ 못 찾음: ' + (totalCount - alreadyCount - matchCount) + '건'
       );
     }
 
@@ -575,6 +623,17 @@ function buildItemName(orderIds) {
   return orderCode(orderIds[0]) + '(' + nos.join(',') + ')';
 }
 
+// 품목명 "lrmrvbm5i5(7,51)" → { code: 'lrmrvbm5i5', nos: ['7','51'] }
+// 형식이 다르거나 번호가 없으면 null (→ 이름·전화번호로 매칭)
+function parseItemName(item) {
+  var m = (item || '').toString().trim().match(/^([^\s()]+)\s*\(([^)]*)\)$/);
+  if (!m) return null;
+  var nos = m[2].split(',').map(function(n) { return n.trim(); })
+    .filter(function(n) { return n !== ''; });
+  if (nos.length === 0) return null;
+  return { code: m[1], nos: nos };
+}
+
 // 정렬된 rows → 송장업로드 출력 행 배열 (사람 단위로 묶음)
 function buildInvoiceRows(rows, idx) {
   var order  = [];   // 처음 나온 순서 유지
@@ -726,6 +785,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
   // 입력할 모든 줄을 먼저 메모리에서 표(배열)로 만든 뒤, 한 번에 setValues로 입력
   // (칸마다 setValue 하면 구글 서버와 매번 통신 → 건수 많으면 수십 분 소요)
   var outRows = [];   // [배송일, 이름, 전화번호, 자격증, type_code, 송장번호(빈칸), 재발급]
+  var orderIds = [];  // 같은 순서로 order_id (J열, 취소 체크칸 H·I는 건드리지 않으려고 따로 씀)
 
   selectedDates.forEach(function(mmdd) {
     var group   = dateGroups[mmdd];
@@ -752,6 +812,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
         '',        // 송장번호: 배송 업데이트 때 채워짐 (지금은 빈칸)
         reissueFlag(row, idx)
       ]);
+      orderIds.push([(row[idx['order_id']] || '').toString().trim()]);
     });
   });
 
@@ -762,6 +823,11 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
     // ※ outRows는 배송일~재발급이 붙어 있다고 보고 한 번에 씁니다.
     //   그 사이에 열을 끼워넣으면 이 부분도 같이 손봐야 합니다.
     summarySheet.getRange(insertRow, 1, outRows.length, outRows[0].length).setValues(outRows);
+
+    var orderColNum = colIdx(SUM_COL['order_id']) + 1;
+    var orderHeader = summarySheet.getRange(1, orderColNum);
+    if (orderHeader.getValue() === '') orderHeader.setValue('order_id');   // 기존 시트엔 제목이 없으니 채움
+    summarySheet.getRange(insertRow, orderColNum, orderIds.length, 1).setValues(orderIds);
   }
 }
 
