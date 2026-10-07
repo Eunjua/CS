@@ -1,0 +1,4 @@
+# Apps Script에 올리지 않을 파일
+# (.local.json에는 웹앱 주소·열쇠가 들어 있어 절대 올리면 안 됩니다)
+.local.json
+README.md
