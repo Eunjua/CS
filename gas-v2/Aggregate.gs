@@ -53,7 +53,7 @@ const AGG_AGENT_HEADERS = [
 ];
 
 function buildAggregates() {
-  const ui = SpreadsheetApp.getUi();
+  const ui = ui_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureTimeZone_(ss);
 

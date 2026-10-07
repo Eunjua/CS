@@ -1,7 +1,7 @@
 """ALF 회차 지표 — 채널톡 export에서 분모·봇완결률·이탈률을 직접 센다.
 
 사용법:
-  python3 measure.py cs-triage/상담내역/*.xlsx --out <저장소 밖 폴더>
+  python3 measure.py 채널톡/<파일>.xlsx --out <저장소 밖 폴더>
   python3 measure.py --selftest
 
 - 지표는 이 스크립트 출력에서만 가져온다. 손으로 세지 않는다.

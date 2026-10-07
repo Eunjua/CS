@@ -3,7 +3,7 @@
 숫자는 `measure.py` 출력에서만 가져온다. 손으로 세지 않는다.
 
 ```bash
-python3 .claude/skills/alf/measure.py cs-triage/상담내역/*.xlsx --out <저장소 밖 폴더>
+python3 .claude/skills/alf/measure.py 채널톡/<파일>.xlsx --out <저장소 밖 폴더>
 ```
 
 ## 계산식 (2026-09-07 개정 — 두 지표는 항상 짝으로 본다)

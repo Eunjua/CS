@@ -1,10 +1,12 @@
 """채널톡 export에서 주제별 원문 표본을 뽑고 긴 숫자(전화번호·계좌)를 가린다.
 
 사용법:
-  python3 sample_chats.py voc-원문/0914 "A=환불수강취소" "B=자격증신뢰" --n all --chunk 40 --out /tmp/voc
+  python3 sample_chats.py 채널톡 --by-tag "A=아카데미_환불,아카데미_수강취소" "B=아카데미_자격증가치/효용성" --chunk 40 --out /tmp/voc
+  python3 sample_chats.py voc-원문/0914 "A=환불수강취소" "B=자격증신뢰" --n all --chunk 40 --out /tmp/voc   # 10/7 이전 방식
   python3 sample_chats.py --selftest
 
-- 주제=파일 이름 앞부분. 앞부분이 같은 파일(환불수강취소.xlsx, 환불수강취소2.xlsx)을 한 주제로 묶는다.
+- --by-tag: 주제=태그 묶음(쉼표). 폴더의 전체 export(채널별 파일 전부)에서 그 태그가 하나라도 붙은 상담만 고른다.
+- --by-tag 없으면 주제=파일 이름 앞부분. 앞부분이 같은 파일(환불수강취소.xlsx, 환불수강취소2.xlsx)을 한 주제로 묶는다.
 - --n all(기본)이면 전체, 숫자면 파일별 상담 수 비율대로 그만큼만 뽑는다(채널톡은 채널별로 파일을 나눠 준다).
 - --chunk K: 하위 에이전트에게 나눠 맡기도록 chunk_<주제><번호>.txt를 K건씩 추가로 쓴다.
 - 결과는 --out 폴더에 raw_<주제>.txt(대화)·links_<주제>.md(상담 링크). 공개 저장소라 저장소 안에는 쓰지 않는다.
@@ -49,6 +51,13 @@ def channel(messages):
     return 'carepartner-academy' if academy > partner else 'carepartner'
 
 
+def has_tag(cell, wanted):
+    """채널톡 tags 칸(쉼표 구분)에 wanted 태그가 하나라도 있나."""
+    if not isinstance(cell, str):
+        return False
+    return any(t.strip() in wanted for t in cell.split(','))
+
+
 def chunks(items, k):
     return [items[i:i + k] for i in range(0, len(items), k)]
 
@@ -63,6 +72,8 @@ def selftest():
     assert allocate([27, 57], 30) == [10, 20]
     assert allocate([90, 28], 30) == [23, 7]
     assert allocate([5, 3], 30) == [5, 3]
+    assert has_tag('아카데미_환불, 아카데미_시험', {'아카데미_시험'})
+    assert not has_tag('아카데미_환불취소', {'아카데미_환불'}) and not has_tag(float('nan'), {'x'})
     assert [len(c) for c in chunks(list(range(84)), 42)] == [42, 42]
     assert [len(c) for c in chunks(list(range(118)), 40)] == [40, 40, 38]
     print('sample_chats.py selftest ok')
@@ -79,6 +90,9 @@ def main(argv):
         n = None if v == 'all' else int(v)
     if '--chunk' in argv:
         size = int(argv.pop(argv.index('--chunk') + 1)); argv.remove('--chunk')
+    by_tag = '--by-tag' in argv
+    if by_tag:
+        argv.remove('--by-tag')
     if '--out' in argv:
         out = argv.pop(argv.index('--out') + 1); argv.remove('--out')
     if not out or len(argv) < 2 or any('=' not in t for t in argv[1:]):
@@ -93,7 +107,8 @@ def main(argv):
              for f in glob.glob(os.path.join(folder, '*.xlsx'))}
     for spec in argv[1:]:
         topic, prefix = [x.strip() for x in spec.split('=', 1)]
-        mine = sorted(name for name in files if name.startswith(prefix))
+        wanted = {t.strip() for t in prefix.split(',') if t.strip()}
+        mine = sorted(files) if by_tag else sorted(name for name in files if name.startswith(prefix))
         if not mine:
             sys.exit(f"'{prefix}'로 시작하는 파일이 {folder}에 없어요. 있는 파일: {', '.join(files)}")
         books = []
@@ -101,8 +116,14 @@ def main(argv):
             x = pd.ExcelFile(files[name])
             chats, msgs = x.parse('UserChat'), x.parse('Message data')
             msgs = msgs[msgs.isPrivate != True].sort_values('createdAt')
+            if by_tag:
+                chats = chats[chats['tags'].apply(lambda c: has_tag(c, wanted))].reset_index(drop=True)
+                if chats.empty:
+                    continue
             books.append((name, chats, msgs, channel(msgs)))
 
+        if not books:
+            sys.exit(f"{topic}: {', '.join(sorted(wanted))} 태그가 붙은 상담이 {folder}에 없어요.")
         lines, links = [], []
         rng = random.Random(SEED)
         sizes = [len(b[1]) for b in books]

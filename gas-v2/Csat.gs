@@ -9,7 +9,7 @@
 // ============================================================
 
 function importCsat() {
-  const ui = SpreadsheetApp.getUi();
+  const ui = ui_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureTimeZone_(ss);
 

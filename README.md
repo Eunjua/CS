@@ -24,7 +24,7 @@ Apps Script 프로젝트 8개가 돌아갑니다. **폴더 경계와 프로젝�
 | 화면 | 백엔드 파일 | 배포 |
 |---|---|---|
 | `email-sender/` | `gas/EmailSender.gs` + `gas/BizmSender.gs` | 수동 복붙 |
-| `dashboard-v2/` | `gas-v2/` 전체 (`WebApp.gs`가 진입점) | clasp 자동 |
+| `dashboard-v2/` | `gas-v2/` 전체 (`WebApp.gs`가 진입점, `Remote.gs`는 `/월요일`이 부르는 업로드·집계 입구 — 주소·열쇠는 `.local.json`) | clasp 자동 |
 | (화면 없음) | `gas-cert/Code.js` → 자격증 기준 시트 | clasp 자동 |
 | (화면 없음) | `gas-cert-detail/Code.js` → 과목 관리 시트에 과정 한 줄 쓰기 (`/cert-detail` 스킬이 호출, 주소·열쇠는 `.local.json`) | clasp 자동 |
 | `dashboard/` (구버전) | `gas/VOC_통합스크립트.gs` + `gas/Categorizer.gs` | 수동 복붙 |
@@ -76,6 +76,7 @@ VOC 파이프라인은 v2로 옮겨졌습니다. 구버전 백엔드는 **2026-0
 | `cs-triage/ALF_docs_미검색_추출_*.xlsx` | 상담 링크 포함 |
 | `cs-triage/케어아카데미_AI사람_기준표_통합본.xlsx` | 상담 링크 1,885건 포함 |
 | `b2g_2026/*.csv` | 성명 · 전화번호 · 생년월일 포함 |
+| `채널톡/` · `voc-원문/` | 채널톡 export 원문 — 고객 개인정보 |
 | `.omc/` | 작업 도구 임시 상태 |
 | `*/.clasp.json` | Apps Script 배포 식별자 |
 

@@ -43,3 +43,9 @@ gas-cert-detail/.local.json
 # 은주에게 요청한 것들 시트 입력 웹앱 (clasp 식별자 · 웹앱 주소·열쇠)
 gas-request-log/.clasp.json
 gas-request-log/.local.json
+
+# 월요일 채널톡 export 단일 보관 폴더 (고객 개인정보 — 로컬 보관만)
+채널톡/
+
+# VOC v2 원격 실행 웹앱 주소·열쇠
+gas-v2/.local.json

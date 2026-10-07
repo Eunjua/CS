@@ -40,7 +40,7 @@ function ensureTimeZone_(ss) {
 // xlsx를 읽으려고 만든 '[임시] ...' 사본이 남아 있으면 휴지통으로 보낸다.
 // 원본은 처리완료 폴더에 그대로 있으므로 지워도 안전하다.
 function cleanupTempFiles() {
-  const ui = SpreadsheetApp.getUi();
+  const ui = ui_();
   const found = findTempFiles_();
 
   if (!found.length) {
@@ -107,7 +107,7 @@ function ensureSheet_(ss, name, headers) {
 
 // ── 메인: 폴더의 xlsx를 모두 읽어 누적
 function importChats() {
-  const ui = SpreadsheetApp.getUi();
+  const ui = ui_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureTimeZone_(ss);
 
