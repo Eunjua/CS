@@ -5,7 +5,8 @@
   python3 measure.py --selftest
 
 - 지표는 이 스크립트 출력에서만 가져온다. 손으로 세지 않는다.
-- 판정 정의는 reference/metrics.md. 2026-09-11 개정(15차~) 기준이다.
+- 판정 정의는 reference/metrics.md. 2026-10-08 개정(18차~) 기준이다.
+  봇완결 = 상담원이 고객에게 보이는 발화(personType=manager · isPrivate=False)를 하나도 안 남긴 상담.
 - 건별 CSV에는 상담 링크·태그가 들어간다 → 저장소 밖에만 쓴다(--out 필수).
 """
 import collections
@@ -58,12 +59,15 @@ def load(path):
             'tags': [t.strip() for t in (r[idx['tags']] or '').split(',') if t.strip()],
             'alf': str(r[idx['alfTriggered']]).lower() == 'true',
             'assigned': any(r[idx[c]] not in (None, '') for c in ASSIGN_COLS),
+            'agent_public': None,  # Message data가 있어야 판정된다 (None = 판정 불가)
             'bot_msgs': 0,
             'last_type': '',
             'last_bot_text': '',
         }
 
     md = sheets.get('Message data')
+    if md is None:
+        sys.exit(f'{os.path.basename(path)}: Message data 시트가 없어 봇완결(상담원 공개 발화 여부)을 판정할 수 없습니다')
     if md is not None:
         mrows = list(md.iter_rows(values_only=True))
         mi = {h: i for i, h in enumerate(mrows[0])}
@@ -75,8 +79,11 @@ def load(path):
                 if str(r[mi['isPrivate']]).lower() == 'true':
                     continue
                 msgs[cid].append((str(r[mi['createdAt']] or ''), n, r[mi['personType']], r[mi['plainText']] or ''))
+        for c in chats.values():
+            c['agent_public'] = False
         for cid, ms in msgs.items():
             ms.sort()
+            chats[cid]['agent_public'] = any(m[2] == 'manager' for m in ms)
             chats[cid]['bot_msgs'] = sum(1 for m in ms if m[2] == 'bot')
             chats[cid]['last_type'] = ms[-1][2]
             if ms[-1][2] == 'bot':
@@ -88,7 +95,9 @@ def measure(chats):
     """상담 dict들 → 지표. 판정 결과를 각 상담에 써 넣는다."""
     total = len(chats)
     for c in chats.values():
-        c['done'] = c['alf'] and not c['assigned']
+        # 18차~: 상담원이 고객에게 보이는 발화를 했는지로 가른다(배정 여부 아님). 내부 메모만 있으면 봇완결.
+        c['done'] = c['alf'] and not c['agent_public']
+        c['done_by_assign'] = c['alf'] and not c['assigned']  # 17차까지 기준 — 차이 확인용
         c['bounce'] = c['done'] and c['last_type'] == 'bot' and is_bounce(c['last_bot_text'])
     alf = [c for c in chats.values() if c['alf']]
     done = [c for c in alf if c['done']]
@@ -104,14 +113,21 @@ def measure(chats):
         'bounce_rate': len(bounce) / len(alf) if alf else 0,
         'bot_msgs': sum(c['bot_msgs'] for c in chats.values()),
         'ai_tags': tags,
+        'done_by_assign': sum(1 for c in alf if c['done_by_assign']),
+        'assigned_silent': sum(1 for c in alf if c['assigned'] and not c['agent_public']),
+        'public_unassigned': sum(1 for c in alf if not c['assigned'] and c['agent_public']),
     }
 
 
 def report(m, chats):
     print(f"\n분모 산출: 전체 {m['total']} → alf발동 {m['alf']}(미발동 {m['no_alf']})"
-          f" → 봇완결(미배정) {m['done']}")
+          f" → 봇완결(상담원 공개 발화 없음) {m['done']}")
     print(f"결과: 완결률 {m['done_rate']:.1%}({m['done']}/{m['alf']})"
           f" · 이탈률 {m['bounce_rate']:.1%}({m['bounce']}건, 행동 기준)")
+    if m['alf']:
+        print(f"참고(17차까지 기준): 봇완결(미배정) {m['done_by_assign']} = {m['done_by_assign'] / m['alf']:.1%}"
+              f" · 차이 {m['done'] - m['done_by_assign']:+d}건"
+              f" (배정됐지만 상담원 공개 발화 없음 {m['assigned_silent']} · 미배정인데 공개 발화 있음 {m['public_unassigned']})")
 
     print(f"\n검증: alf발동 {m['alf']} + 미발동 {m['no_alf']} = {m['alf'] + m['no_alf']}"
           f" (총 상담 {m['total']}) → {'OK' if m['alf'] + m['no_alf'] == m['total'] else '❌ 불일치'}")
@@ -141,7 +157,7 @@ def write_csv(chats, out):
         sys.exit(f'--out은 저장소 밖이어야 합니다(상담 링크 포함). 지금 값: {out}')
     os.makedirs(out, exist_ok=True)
     path = os.path.join(out, 'alf_건별.csv')
-    cols = ['id', 'url', 'createdAt', 'tags', 'alfTriggered', '배정', '봇완결', '이탈',
+    cols = ['id', 'url', 'createdAt', 'tags', 'alfTriggered', '배정', '상담원공개발화', '봇완결', '이탈',
             '봇발화수', '마지막발화', '마지막봇발화']
     with open(path, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.writer(f)
@@ -149,6 +165,7 @@ def write_csv(chats, out):
         for c in sorted(chats.values(), key=lambda x: x['createdAt']):
             w.writerow([c['id'], c['url'], c['createdAt'], ', '.join(c['tags']),
                         'Y' if c['alf'] else 'N', 'Y' if c['assigned'] else '',
+                        'Y' if c['agent_public'] else '',
                         'Y' if c['done'] else '', 'Y' if c['bounce'] else '',
                         c['bot_msgs'], c['last_type'], (c['last_bot_text'] or '')[:60].replace('\n', ' ')])
     print(f'\n건별 판정표 {len(chats)}행 → {path}')
@@ -164,14 +181,17 @@ def selftest():
     assert not is_bounce('발급비는 93,000원입니다.')
 
     chats = {
-        'a': {'alf': True, 'assigned': False, 'last_type': 'bot', 'last_bot_text': '전화번호를 다시 알려주세요', 'tags': [], 'bot_msgs': 2, 'createdAt': '2026-09-01'},
-        'b': {'alf': True, 'assigned': False, 'last_type': 'user', 'last_bot_text': '', 'tags': ['AI상담/오안내'], 'bot_msgs': 3, 'createdAt': '2026-09-01'},
-        'c': {'alf': True, 'assigned': True, 'last_type': 'manager', 'last_bot_text': '', 'tags': [], 'bot_msgs': 1, 'createdAt': '2026-09-01'},
-        'd': {'alf': False, 'assigned': True, 'last_type': 'manager', 'last_bot_text': '', 'tags': [], 'bot_msgs': 0, 'createdAt': '2026-09-01'},
+        'a': {'alf': True, 'assigned': False, 'agent_public': False, 'last_type': 'bot', 'last_bot_text': '전화번호를 다시 알려주세요', 'tags': [], 'bot_msgs': 2, 'createdAt': '2026-09-01'},
+        'b': {'alf': True, 'assigned': False, 'agent_public': False, 'last_type': 'user', 'last_bot_text': '', 'tags': ['AI상담/오안내'], 'bot_msgs': 3, 'createdAt': '2026-09-01'},
+        'c': {'alf': True, 'assigned': True, 'agent_public': True, 'last_type': 'manager', 'last_bot_text': '', 'tags': [], 'bot_msgs': 1, 'createdAt': '2026-09-01'},
+        'd': {'alf': False, 'assigned': True, 'agent_public': True, 'last_type': 'manager', 'last_bot_text': '', 'tags': [], 'bot_msgs': 0, 'createdAt': '2026-09-01'},
+        # 배정됐지만 상담원이 고객에게 말하지 않음(내부 메모만) → 봇완결
+        'e': {'alf': True, 'assigned': True, 'agent_public': False, 'last_type': 'user', 'last_bot_text': '', 'tags': [], 'bot_msgs': 2, 'createdAt': '2026-09-01'},
     }
     m = measure(chats)
-    assert (m['total'], m['alf'], m['no_alf'], m['done'], m['bounce']) == (4, 3, 1, 2, 1), m
-    assert abs(m['done_rate'] - 2 / 3) < 1e-9 and abs(m['bounce_rate'] - 1 / 3) < 1e-9
+    assert (m['total'], m['alf'], m['no_alf'], m['done'], m['bounce']) == (5, 4, 1, 3, 1), m
+    assert abs(m['done_rate'] - 3 / 4) < 1e-9 and abs(m['bounce_rate'] - 1 / 4) < 1e-9
+    assert (m['done_by_assign'], m['assigned_silent'], m['public_unassigned']) == (2, 1, 0), m
     assert m['ai_tags']['AI상담/오안내'] == 1
     print('measure.py selftest ok')
 
