@@ -1,0 +1,10 @@
+{
+ "_note": "KR2(상담원 1인 하루 감당 건수) 계산 고정값. 은주가 다시 재면 여기만 바꾼다. 계산기 https://claude.ai/artifact/LcnLpvs9hN2kv6SgVE59a7 와 같은 식",
+ "reviewMin": 2.5,
+ "_reviewMin": "AI 관여 상담 확인 1건당 분 — 10/7·8 아침 표본",
+ "consultMin": 4.0,
+ "_consultMin": "상담 1건당 분(AI 미관여 상담 · 이관 건 상담) — 3분기 채팅 상담 평균",
+ "dayMin": 480,
+ "fallbackChats": {"academy": 786, "partner": 1576},
+ "_fallbackChats": "그 주 export 채팅 건수가 없을 때 쓰는 비중 — 9월 채팅 건수"
+}
