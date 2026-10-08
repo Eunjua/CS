@@ -86,4 +86,4 @@ python3 .claude/skills/cert-detail/send_to_sheet.py '{"name":"{자격증명} {�
 ## 5. 마무리
 1. 만든 파일 전문과 시트에 들어간 줄(추가/수정, 몇 행), 교재 발송 템플릿 결과(added/exists/skipped)를 보여준다
 2. 은주가 검토해야 할 항목을 짚는다 (추론한 주요 업무 / 비어 있는 값 / 나중에 채울 URL)
-3. `GitHub에 push할까요? (cspush)` 라고 묻는다
+3. "GitHub에 올릴까요?"라고 묻는다(CLAUDE.md Git 규칙)

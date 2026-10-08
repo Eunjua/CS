@@ -49,3 +49,7 @@ gas-request-log/.local.json
 
 # VOC v2 원격 실행 웹앱 주소·열쇠
 gas-v2/.local.json
+
+# 자격증 주소 확인 시트 읽기·쓰기 웹앱 (clasp 식별자 · 웹앱 주소·열쇠)
+gas-address-check/.clasp.json
+gas-address-check/.local.json
