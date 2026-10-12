@@ -33,6 +33,14 @@ python3 $S/tally.py <같은 폴더> 신뢰 [기준] --total <총건수> --chat <
 - **전화/채팅:** `--chat`·`--phone`을 주면 채널별 신뢰 비중과 원인별 채널 나눔이 나오고 기록에도 남는다. 연휴처럼 전화가 크게 준 주에 비중이 움직이면 이 줄부터 본다.
 - `trust_history.json`에는 주차별 건수만 있다(개인정보 없음). 첫 기록은 10/05~10/11.
 
+## 추이 대시보드 — 매주 갱신 (2026-10-12~)
+
+「자격증 신뢰 추이」 https://claude.ai/artifact/CHaB15cdxPMsso52uSVx7G — 신뢰 비중·결제 후 환불·채팅/전화 카드, 원인별 비중 꺾은선, 주별 비중 막대, 최근 주 원인 표. 데이터는 첨부 파일 두 개(데이터셋 `weekly`·`causes`)라 **`tally.py --save` 뒤에 매주 다시 올려야** 한다:
+
+1. `python3 trust_dashboard.py <저장소 밖 폴더>` → `trust_weekly.json`·`trust_causes.json`
+2. 두 파일을 대시보드 자산으로 올린다(Artifact publish, `url`=대시보드, `asset: true`, 파일마다 한 번)
+3. `ArtifactData` `datasets/weekly`·`datasets/causes`를 `update` — `source.url`(새 `/_blob/…`)·`updated: {at, by}`만 바꾼다(`if_version`은 읽은 버전). 화면(`files/index.html`)은 손대지 않는다
+
 ## 숫자 두 종류 — 섞지 않는다
 
 | | 어디서 | 무엇을 말하나 | 리포트 자리 |
