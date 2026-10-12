@@ -31,7 +31,8 @@ git diff                        # 로컬과 뭐가 다른지 확인
 
 ## 파일 설명
 
-- `Code.js` — 자격증 발급·배송·정산 스크립트 본체 (이것만 고치면 됩니다)
+- `Code.js` — 자격증 발급·배송·정산 스크립트 본체
+- `AddressCheck.js` · `AddressJudge.js` — 메뉴 「🏠 주소 확인」(배송 전 주소 불일치·동호수·확인필요 표시). 판정 규칙은 `AddressJudge.js`
 - `appsscript.json` — 시간대·런타임 설정 (건드릴 일 거의 없음)
 - `.clasp.json` — 어느 시트에 배포할지 가리키는 주소. git에 올리지 않음 (`.gitignore` 처리)
 

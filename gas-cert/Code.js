@@ -927,6 +927,8 @@ function onOpen() {
       .addItem('베이비시터',            'updateDeliveryBaby')
       .addItem('NCS (한국검정평가원 포함)', 'updateDeliveryNCS'))
     .addItem('💰 정산표 생성', 'createSettlementTable')
+    .addSeparator()
+    .addItem('🏠 주소 확인', 'checkAddresses')   // AddressCheck.js
     .addToUi();
 }
 
