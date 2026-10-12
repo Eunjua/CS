@@ -45,11 +45,12 @@ python3 $S/trend.py 09/07~09/13 "주제 이름=태그1,태그2" ...             
 python3 $S/sample_chats.py 채널톡 --by-tag "A=태그1,태그2" ... --chunk 40 --out <저장소 밖 임시 폴더>   # 원문 전체·마스킹·근거 링크·묶음
 python3 $S/tally.py <같은 폴더> A B [--reassign chat8=원인 ...]         # 분류 결과 검증·원인별 집계
 python3 $S/trust_prompt.py > <저장소 밖>/기준표.txt                     # 신뢰 분류 기준표(trust.json에서)
+python3 $S/trust_links.py <같은 폴더> > <저장소 밖>/notion_links.md     # 지표판 아래 원인별 상담 링크 토글
 python3 $S/sample_chats.py 채널톡/처리완료 --chats "기준=<표본 번호>" --out <같은 폴더>   # 기준 표본 다시 뽑기
 python3 $S/tally.py <같은 폴더> 신뢰 기준 --total <총건수> --chat <채팅> --phone <전화> --week <주차> --save   # 지표판·환불·채널·표본 대조·기록
 ```
 
-스크립트를 고치면 `trend.py --selftest`, `sample_chats.py --selftest`, `tally.py --selftest`, `trust_prompt.py --selftest`를 돌린다.
+스크립트를 고치면 `trend.py --selftest`, `sample_chats.py --selftest`, `tally.py --selftest`, `trust_prompt.py --selftest`, `trust_links.py --selftest`를 돌린다.
 
 ## 진행 순서
 
@@ -68,7 +69,7 @@ python3 $S/tally.py <같은 폴더> 신뢰 기준 --total <총건수> --chat <�
    - 원문 이유 비중과 태그 4주 추이가 한 표·한 문장에 섞이지 않았나
    - 덩어리의 `📎 태그 묶음`과 추적표 행의 묶음이 같은가, 판정이 서로 모순되지 않나(4주 판정 `비슷`인데 ✅ 같은 것)
    - "늘었다·줄었다"가 전부 `trend.py` 4주 판정에서 왔나 — 전주 대비로 쓴 곳은 없나
-   - 개인정보 — 고객 이름·전화번호·계좌·주소, `desk.channel.io` 링크, 상담원 이름이 **인용문까지 포함해** 없나
+   - 개인정보 — 고객 이름·전화번호·계좌·주소, 상담원 이름이 **인용문까지 포함해** 없나. 상담 링크는 지표판 아래 「원인별 상담 링크」 토글 안에만, `trust_links.py`가 만든 `desk.channel.io/…/user-chats/{상담 ID}` 형식만 있나(닉네임 들어간 링크 금지)
    - 규모 숫자가 `tally.py` 출력과 맞나, 분류표 합계 = 원문 건수인가
    - 팀 공유용 0~3번이 다 있나(4번은 그 밖의 신호가 있을 때만), 원문을 안 읽은 주제가 팀 공유용에 올라가 있지 않나
    - 응대 이슈·팀원 업무 목록이 리포트 본문에 섞이지 않았나
