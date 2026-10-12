@@ -5,12 +5,14 @@
   python3 sample_chats.py voc-원문/0914 "A=환불수강취소" "B=자격증신뢰" --n all --chunk 40 --out /tmp/voc   # 10/7 이전 방식
   python3 sample_chats.py --selftest
 
+- --chats: 주제=상담 번호(끝 8자리, 쉼표). 기준 표본처럼 정해진 상담만 다시 뽑을 때 — 예: "기준=b99468a6,878e7c63" (폴더는 채널톡/처리완료).
 - --by-tag: 주제=태그 묶음(쉼표). 폴더의 전체 export(채널별 파일 전부)에서 그 태그가 하나라도 붙은 상담만 고른다.
 - --by-tag 없으면 주제=파일 이름 앞부분. 앞부분이 같은 파일(환불수강취소.xlsx, 환불수강취소2.xlsx)을 한 주제로 묶는다.
 - --n all(기본)이면 전체, 숫자면 파일별 상담 수 비율대로 그만큼만 뽑는다(채널톡은 채널별로 파일을 나눠 준다).
 - --chunk K: 하위 에이전트에게 나눠 맡기도록 chunk_<주제><번호>.txt를 K건씩 추가로 쓴다.
 - 결과는 --out 폴더에 raw_<주제>.txt(대화)·links_<주제>.md(상담 링크). 공개 저장소라 저장소 안에는 쓰지 않는다.
-- 못 가리는 것: 사람 이름, 전화 상담에서 한글로 읽은 숫자("공일공…"), 도로명·지번 주소 앞부분. 인용 전에 직접 확인한다.
+- 이름은 일부만 가린다(2026-10-12 추가): 예금주·입금자·수령인 뒤, '이름:'·'성함:' 뒤, 계좌번호 바로 뒤, '…한/는 ○○○입니다' 자기소개.
+- 못 가리는 것: 그 밖의 문장 속 사람 이름, 전화 상담에서 한글로 읽은 숫자("공일공…"), 도로명·지번 주소 앞부분. 인용 전에 직접 확인한다.
 """
 import glob
 import os
@@ -25,11 +27,23 @@ SEED = 7                      # 같은 파일이면 같은 표본 — 나중에 
 LONG_NUMBER = re.compile(r'\d(?:[\s\-~.]*\d){7,}')
 # 상담원이 붙여넣은 배송지의 동·호수 (○○동 ○○○○호, ○○○호). 2026-09-14 시험 운영에서 원문에 그대로 남았다.
 UNIT = re.compile(r'\d+\s*동\s*\d+\s*호|(?<!\d)\d{3,4}\s*호(?!선)')
+# 고객 이름 — 2026-10-12 신뢰 원문에서 '…계좌이체한 ○○○입니다'·'예금주: ○○○'·'[계좌] ○○○'가 그대로 남았다.
+NAME_AFTER_KEY = re.compile(r'((?:예금주|입금자|수령인|받는\s?분)\s*[:：]?\s*|(?:이름|성함|고객명)\s*[:：]\s*)[가-힣]{2,4}')
+NAME_AFTER_NUMBER = re.compile(r'(\[숫자\]\s*)[가-힣]{2,4}(?=\s*(?:\]|$|입니다|\s))')
+NAME_SELF_INTRO = re.compile(r'(?<=[한는]\s)[가-힣]{2,4}(?=\s?입니다)')
+# 계좌번호 앞 이름('○○○ [숫자]')·도로명 주소('○○로 43') — 10/12 표본 대조에서 남은 것. 은행 이름이 같이 가려질 수 있다(개인정보 쪽을 택한다).
+NAME_BEFORE_NUMBER = re.compile(r'(?<![가-힣])[가-힣]{2,4}(?=\s*\[숫자\])')
+ROAD_ADDRESS = re.compile(r'[가-힣0-9]+(?:로|길)\s?\d+(?:-\d+)?(?![\d가-힣])')
 WHO = {'user': '고객', 'manager': '상담원', 'bot': '봇'}
 
 
 def mask(text):
-    return LONG_NUMBER.sub('[숫자]', UNIT.sub('[주소]', text))
+    text = LONG_NUMBER.sub('[숫자]', UNIT.sub('[주소]', text))
+    text = NAME_AFTER_KEY.sub(r'\1[이름]', text)
+    text = NAME_AFTER_NUMBER.sub(r'\1[이름]', text)
+    text = NAME_BEFORE_NUMBER.sub('[이름]', text)
+    text = ROAD_ADDRESS.sub('[주소]', text)
+    return NAME_SELF_INTRO.sub('[이름]', text)
 
 
 def allocate(sizes, n):
@@ -69,6 +83,13 @@ def selftest():
     assert '19000101' not in mask('상장+카드 19000101 테스트시')
     assert '1001' not in mask('테스트로 1 101동 1001호') and '2002' not in mask('테스트로 2 /202동2002호')
     assert mask('지하철 2호선') == '지하철 2호선'
+    assert '홍길동' not in mask('계좌이체한 홍길동입니다.') and '홍길동' not in mask('예금주: 홍길동]')
+    assert '홍길동' not in mask('테스트은행 123 4567 8901 홍길동') and '홍길동' not in mask('이름 : 홍길동')
+    assert '김철수' not in mask('입금자 김철수로 보냈어요') and '이순자' not in mask('[테스트은행 0000-0000-0000 이순자]')
+    assert mask('이름 변경해 주세요') == '이름 변경해 주세요' and mask('성함이 틀렸어요') == '성함이 틀렸어요'
+    assert mask('자격증 발급비 93,000원입니다') == '자격증 발급비 93,000원입니다'
+    assert '홍길동' not in mask('홍길동 1234 5678 9012 입금 부탁') and '테스트로' not in mask('경기도 테스트로 43 101호')
+    assert mask('지하철 2호선 타고 오세요') == '지하철 2호선 타고 오세요' and mask('3일 걸려요') == '3일 걸려요'
     assert allocate([27, 57], 30) == [10, 20]
     assert allocate([90, 28], 30) == [23, 7]
     assert allocate([5, 3], 30) == [5, 3]
@@ -93,6 +114,9 @@ def main(argv):
     by_tag = '--by-tag' in argv
     if by_tag:
         argv.remove('--by-tag')
+    by_chat = '--chats' in argv
+    if by_chat:
+        argv.remove('--chats')
     if '--out' in argv:
         out = argv.pop(argv.index('--out') + 1); argv.remove('--out')
     if not out or len(argv) < 2 or any('=' not in t for t in argv[1:]):
@@ -108,7 +132,7 @@ def main(argv):
     for spec in argv[1:]:
         topic, prefix = [x.strip() for x in spec.split('=', 1)]
         wanted = {t.strip() for t in prefix.split(',') if t.strip()}
-        mine = sorted(files) if by_tag else sorted(name for name in files if name.startswith(prefix))
+        mine = sorted(files) if (by_tag or by_chat) else sorted(name for name in files if name.startswith(prefix))
         if not mine:
             sys.exit(f"'{prefix}'로 시작하는 파일이 {folder}에 없어요. 있는 파일: {', '.join(files)}")
         books = []
@@ -116,14 +140,22 @@ def main(argv):
             x = pd.ExcelFile(files[name])
             chats, msgs = x.parse('UserChat'), x.parse('Message data')
             msgs = msgs[msgs.isPrivate != True].sort_values('createdAt')
-            if by_tag:
+            if by_chat:
+                chats = chats[chats['id'].astype(str).str[-8:].isin(wanted)].reset_index(drop=True)
+                if chats.empty:
+                    continue
+            elif by_tag:
                 chats = chats[chats['tags'].apply(lambda c: has_tag(c, wanted))].reset_index(drop=True)
                 if chats.empty:
                     continue
             books.append((name, chats, msgs, channel(msgs)))
 
         if not books:
-            sys.exit(f"{topic}: {', '.join(sorted(wanted))} 태그가 붙은 상담이 {folder}에 없어요.")
+            sys.exit(f"{topic}: {', '.join(sorted(wanted))} {'상담' if by_chat else '태그가 붙은 상담'}이 {folder}에 없어요.")
+        if by_chat:
+            found = {str(i)[-8:] for b in books for i in b[1]['id']}
+            if wanted - found:
+                print(f"⚠️ {topic}: {folder}에서 못 찾은 상담 {sorted(wanted - found)} — export가 처리완료에 있는지 확인")
         lines, links = [], []
         rng = random.Random(SEED)
         sizes = [len(b[1]) for b in books]
