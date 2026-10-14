@@ -236,6 +236,21 @@ function judgeRow(row, a, lookup) {
     out.note = '도로명 번호 반복'; da = null;
   }
 
+  // 2-0) 리 이름 없이 '읍·면 + 번지'만 적음: '장기면24'. 어느 리인지 몰라 카카오로 비교할 수 없다 (2026-10-14)
+  if (dt && !da && !out.note) {
+    var mem = /[가-힣](?:읍|면)(?:산)?(\d+(?:-\d+)?)(?![\d-])/.exec(nd);
+    if (mem && !BAD_AFTER.test(nd.slice(mem.index + mem[0].length))) {
+      var en = mem[1];
+      if (en === bjnum || (tail && en === tail[2])) {
+        out.note = '읍·면+번지만 적음·같음';
+      } else {
+        out.res = '확인필요';
+        out.note = '리 이름 없이 번지만 적음: 상세 ' + en + ' / 쉼표앞 ' + (bj.main || bq) + ' = ' + bjt;
+        return out;
+      }
+    }
+  }
+
   // 2) 번지 숫자만 적은 단독주택: '215번지', '86_1'. 아파트·건물이면 동-호라 건너뜀
   if (dt && !da && !out.note) {
     var mnum = /^(\d+(?:-\d+)?)$/.exec(nd);
