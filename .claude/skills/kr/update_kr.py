@@ -193,11 +193,11 @@ def selftest():
     prm = json.load(open(os.path.join(HERE, "kr2_params.json"), encoding="utf-8"))
     base = {"academy": {"ai": 0.93, "resolved": 0.564}, "partner": {"ai": 0.65, "resolved": 0.30}}
     got = kr2_week(base, None, prm)   # 9월 비중 — 계산기 기준선과 같아야 한다
-    assert (got["handledPerDay"], got["kr2"]["academy"]["handled"], got["kr2"]["partner"]["handled"]) == (103, 114, 99), got
+    assert (got["handledPerDay"], got["kr2"]["academy"]["handled"], got["kr2"]["partner"]["handled"]) == (83, 91, 79), got
     assert got["kr2"]["weight"] == "9월 고정"
     same = {"academy": {"ai": 0.93, "resolved": 0.6}, "partner": {"ai": 0.65, "resolved": 0.6}}
     p = dict(prm, consultMin=4.6)
-    assert kr2_week(same, None, dict(p, reviewMin=1.5))["handledPerDay"] == 131   # 이전 계산(4.6분) 131건
+    assert kr2_week(same, None, dict(p, reviewMin=1.5))["handledPerDay"] == 105   # 이전 계산(4.6분) 131건 × 384/480
     assert kr2_week(base, {"academy": 100, "partner": 100}, prm)["kr2"]["weight"] == "export"
     assert kr2_week({"academy": base["academy"]}, None, prm) is None
     print("update_kr.py selftest ok")

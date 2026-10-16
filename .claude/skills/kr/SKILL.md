@@ -8,7 +8,7 @@ description: 4분기 CX KR 대시보드(웹 페이지)의 주간 숫자를 자�
 - 대시보드: https://claude.ai/artifact/Bpe37UAZtUyMCCTfHzHzNq (저장소: `records` 주간 문서 `week_YYYY-MM-DD`, `config/targets`, `config/sync`)
 - KR 원문: 노션 「26년 4분기」 (CX 하위)
 - 계산: `.claude/skills/kr/update_kr.py` · 3분기 요청 건수(고정): `requests_q3_daily.json`
-- KR2: `kr2_chats.py`(채널별 채팅 건수) · `kr2_params.json`(확인 2.5분·상담 4.0분·하루 480분·9월 비중 — 다시 재면 여기만 고친다) · 계산기 https://claude.ai/artifact/LcnLpvs9hN2kv6SgVE59a7 와 같은 식
+- KR2: `kr2_chats.py`(채널별 채팅 건수) · `kr2_params.json`(확인 2.5분·상담 4.0분·하루 384분(480의 80%)·9월 비중 — 다시 재면 여기만 고친다) · 계산기 https://claude.ai/artifact/LcnLpvs9hN2kv6SgVE59a7 와 같은 식
 
 ## 자동으로 채우는 칸 / 손으로 넣는 칸
 
@@ -20,11 +20,11 @@ description: 4분기 CX KR 대시보드(웹 페이지)의 주간 숫자를 자�
 | csatAgent | v2 `agent` | 상담원 배정된 상담만, 응답 수 가중 평균. v2 `상담원만족도` 칸은 9월부터 AI 응대가 섞여서 쓰지 않는다 |
 | chatInflow | v2 `week` | 채팅 |
 | autoNote | — | v2 최신 주에 "집계 중일 수 있음" 표시 |
-| handledPerDay · kr2 (KR2) | 은주 값 + export | 하루 480분 ÷ 1건당 평균. 채널별 1건당 = (1−관여율)×4.0 + 관여율×(2.5 + (1−해결률)×4.0), 그 주 채널별 채팅 건수로 가중(export 없으면 9월 비중). `kr2`에 채널별 관여율·해결률·채팅 건수·감당 건수를 남긴다 |
+| handledPerDay · kr2 (KR2) | 은주 값 + export | 하루 384분(480분의 80%, 휴식·회복 제외) ÷ 1건당 평균. 채널별 1건당 = (1−관여율)×4.0 + 관여율×(2.5 + (1−해결률)×4.0), 그 주 채널별 채팅 건수로 가중(export 없으면 9월 비중). `kr2`에 채널별 관여율·해결률·채팅 건수·감당 건수를 남긴다 |
 
 손으로: `csatAI`(cxScore), `note`. 스크립트는 이 칸을 건드리지 않는다.
 
-KR2 목표는 **150건**(`config/targets.kr2Min`, 10/8 은주 결정). **은주 값이 없는 주는 KR2를 비워 둔다** — export의 봇완결률로 대신 채우지 않는다.
+KR2 목표는 **100건**(`config/targets.kr2Min`). 10/8에 480분·150건으로 정했다가 10/16 휴식시간을 빼 384분·100건으로 바꿨다(1건 3.84분 = 480분 기준 120건과 같은 난이도). **은주 값이 없는 주는 KR2를 비워 둔다** — export의 봇완결률로 대신 채우지 않는다.
 
 ## 순서
 
@@ -49,7 +49,7 @@ KR2 목표는 **150건**(`config/targets.kr2Min`, 10/8 은주 결정). **은주 
 
 4. **쓰기** — `kr_batch.json`의 `batches` 각각을 `ArtifactData batch`로 보낸다(이미 있는 문서는 update+if_version, 새 주는 set). 이어서 `config/sync`를 `sync` 값으로 update(if_version = 1단계에서 본 버전). 버전 충돌로 거절되면 1단계부터 다시.
 
-5. **보고** — 이번에 새로 들어온 주의 KR1 비율(요청/문의)·KR2 감당 건수(채널별 포함)·해결률·상담원 만족도를 표로, 목표(KR1 3% 미만·KR2 150건 이상·상담원 만족도 4.1 이상) 대비 상태와 함께. KR2는 추정이고 가중 비중이 export인지 9월 고정인지 밝힌다. 최신 주가 집계 중이면 그 숫자는 확정 아님을 밝힌다.
+5. **보고** — 이번에 새로 들어온 주의 KR1 비율(요청/문의)·KR2 감당 건수(채널별 포함)·해결률·상담원 만족도를 표로, 목표(KR1 3% 미만·KR2 100건 이상·상담원 만족도 4.1 이상) 대비 상태와 함께. KR2는 추정이고 가중 비중이 export인지 9월 고정인지 밝힌다. 최신 주가 집계 중이면 그 숫자는 확정 아님을 밝힌다.
 
 ## 주의
 
