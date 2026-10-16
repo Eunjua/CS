@@ -50,3 +50,6 @@ gas-request-log/.local.json
 # VOC v2 원격 실행 웹앱 주소·열쇠
 gas-v2/.local.json
 
+
+# 하루 메모 페이지 목록 (상담원 이름·페이지 주소 — 로컬 보관만)
+.claude/skills/monday/memo_pages.local.json
