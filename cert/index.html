@@ -6,6 +6,8 @@
 <title>증명서 발급 — 케어파트너아카데미</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@400;500&display=swap" rel="stylesheet">
+<!-- 국비 수료증 글자 — works 레포(job-training-business)와 같은 글꼴 -->
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -284,6 +286,12 @@
     padding: 2px 6px; margin-left: 6px; font-weight: 500;
   }
 
+  /* ── 국비 수료증 (그림으로 굽는 문서) ── */
+  .gov-paper { max-width: 600px; margin: 0 auto; }
+  .gov-paper canvas { width: 100%; height: auto; display: block; border: 1px solid #e0e0e0; }
+  .gov-status { font-size: 12px; color: #999; text-align: center; margin-top: 10px; }
+  .gov-status.warn { color: #c0392b; }
+
   /* ── 숨김 ── */
   .hidden { display: none !important; }
 
@@ -318,6 +326,9 @@
     }
 
     .cert.hidden { display: none !important; }
+    .gov-paper { max-width: none; }
+    .gov-paper canvas { width: 210mm; border: none; }
+    .gov-status { display: none !important; }
 
     .cert-title { font-size: 32px; }
     .cert-section-title { font-size: 15px; }
@@ -337,6 +348,7 @@
 <div class="type-tabs">
   <button class="tab-btn active" id="tab-edu" onclick="switchType('edu')">📋 교육 이수증</button>
   <button class="tab-btn" id="tab-exam" onclick="switchType('exam')">📝 시험응시 확인서</button>
+  <button class="tab-btn" id="tab-gov" onclick="switchType('gov')">🎓 국비</button>
   <span class="list-status" id="list-status"></span>
   <a class="top-link" href="https://docs.google.com/spreadsheets/d/1jXPEfaol5hhIklzjTa8INudskEnVvKo9urHr7vO9MSg/edit" target="_blank" rel="noopener">⚙ 과목 목록 관리 (시트) →</a>
 </div>
@@ -400,6 +412,43 @@
     <p class="hint">비워두면 '온라인'으로 표시됩니다.</p>
 
     <button class="btn-print" onclick="window.print()">🖨 PDF로 저장 / 인쇄</button>
+  </aside>
+
+  <!-- ═══ 국비 수료증 폼 ═══ -->
+  <aside class="form-panel hidden" id="form-gov">
+    <h2>국비 수료증 정보 입력</h2>
+
+    <label for="gov-name">이름</label>
+    <input type="text" id="gov-name" placeholder="홍길동" oninput="renderGov()">
+
+    <label for="gov-birth">생년월일</label>
+    <input type="text" id="gov-birth" placeholder="19621014" maxlength="8" oninput="renderGov()">
+    <p class="hint">8자리 입력 (예: 19620314 → 1962. 03. 14.)</p>
+
+    <label for="gov-course">과정명</label>
+    <input type="text" id="gov-course" placeholder="요양보호사 취업교육" oninput="renderGov()">
+
+    <label>수강시간</label>
+    <div class="time-row">
+      <input type="number" id="gov-hours" min="0" placeholder="0" oninput="renderGov()"><span>시간</span>
+      <input type="number" id="gov-minutes" min="0" max="59" placeholder="0" oninput="renderGov()"><span>분</span>
+    </div>
+
+    <label for="gov-start">수강 시작일</label>
+    <input type="date" id="gov-start" oninput="renderGov()">
+
+    <label for="gov-end">수강 종료일</label>
+    <input type="date" id="gov-end" oninput="renderGov()">
+
+    <label for="gov-issued">발급일</label>
+    <input type="date" id="gov-issued" oninput="renderGov()">
+    <p class="hint">처음엔 오늘 날짜가 들어가 있어요.</p>
+
+    <label for="gov-no">문서번호</label>
+    <input type="text" id="gov-no" placeholder="2026-0123" oninput="renderGov()">
+    <p class="hint">「제 2026-0123 호」로 찍혀요. 비워두면 문서번호 줄이 안 나와요.</p>
+
+    <button class="btn-print" onclick="downloadGov()">📥 수료증 이미지 저장</button>
   </aside>
 
   <!-- 미리보기 영역 -->
@@ -507,6 +556,12 @@
       </div>
     </div><!-- /cert-exam -->
 
+    <!-- ═══ 국비 수료증 — 바탕 그림 위에 값만 얹어 PNG 로 굽는다 ═══ -->
+    <div class="gov-paper hidden" id="cert-gov">
+      <canvas id="gov-canvas" width="2480" height="3508"></canvas>
+      <p class="gov-status" id="gov-status"></p>
+    </div>
+
   </main>
 
 </div><!-- /page-wrap -->
@@ -520,12 +575,15 @@
 
     document.getElementById('tab-edu').classList.toggle('active', type === 'edu');
     document.getElementById('tab-exam').classList.toggle('active', type === 'exam');
+    document.getElementById('tab-gov').classList.toggle('active', type === 'gov');
 
     document.getElementById('form-edu').classList.toggle('hidden', type !== 'edu');
     document.getElementById('form-exam').classList.toggle('hidden', type !== 'exam');
+    document.getElementById('form-gov').classList.toggle('hidden', type !== 'gov');
 
     document.getElementById('cert-edu').classList.toggle('hidden', type !== 'edu');
     document.getElementById('cert-exam').classList.toggle('hidden', type !== 'exam');
+    document.getElementById('cert-gov').classList.toggle('hidden', type !== 'gov');
   }
 
   /* ── 날짜 유틸 ── */
@@ -742,9 +800,108 @@
     document.getElementById('exam-out-issue-date').textContent = todayStr();
   }
 
+  /* ── 국비 수료증 ──
+     works 레포 tf-b2g/job-training-business/design/src/lib/certificateImage.ts 와 같은 자리·크기로 굽는다.
+     바탕(gov-bg.png)은 리소스센터 certificate-bg-hanowon.png 복사본 — CDN 이 CORS 를 안 줘서 같은 폴더에 둔다.
+     works 쪽 바탕 그림이 바뀌면 이 파일도 다시 받아야 한다 */
+  const GOV_ROW_X = 922;
+  const GOV_ROW_Y = { name: 1184, birth: 1307, course: 1430, hours: 1556, period: 1680 };
+  const GOV_FONT = '"Pretendard Variable", Pretendard, "Noto Sans KR", sans-serif';
+  const GOV_COLORS = { primary: '#1f2324', secondary: '#4a5052', tertiary: '#8a9093' };
+
+  const govBg = new Image();
+  const govBgReady = new Promise((resolve, reject) => {
+    govBg.onload = resolve;
+    govBg.onerror = () => reject(new Error('바탕 그림을 못 불러왔어요'));
+  });
+  govBg.src = 'gov-bg.png';
+
+  function govDot(d) {
+    return d ? `${d.slice(0,4)}. ${d.slice(5,7)}. ${d.slice(8,10)}.` : '';
+  }
+
+  function govValues() {
+    const v = id => document.getElementById(id).value.trim();
+    const birth = v('gov-birth');
+    const start = v('gov-start'), end = v('gov-end');
+    const issued = v('gov-issued');
+    return {
+      name:   v('gov-name'),
+      birth:  birth.length === 8 ? `${birth.slice(0,4)}. ${birth.slice(4,6)}. ${birth.slice(6,8)}.` : '',
+      course: v('gov-course'),
+      hours:  fmtHours(v('gov-hours'), v('gov-minutes')).replace('총 ', ''),
+      period: start || end ? `${govDot(start)} ~ ${govDot(end)}` : '',
+      issued: issued ? fmtDate(issued).replace(/ 0/g, ' ') : '',
+      no:     v('gov-no'),
+    };
+  }
+
+  let govDrawSeq = 0;
+  async function renderGov() {
+    const seq = ++govDrawSeq;
+    const status = document.getElementById('gov-status');
+    try {
+      await Promise.all([govBgReady, document.fonts.load(`600 54px ${GOV_FONT}`, '가')]);
+    } catch (e) {
+      status.textContent = '⚠ 바탕 그림을 못 불러왔어요. 새로고침해 주세요.';
+      status.classList.add('warn');
+      return;
+    }
+    if (seq !== govDrawSeq) return;
+
+    const d = govValues();
+    const canvas = document.getElementById('gov-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    ctx.drawImage(govBg, 0, 0, W, canvas.height);
+
+    const text = (value, x, y, o) => {
+      if (!value) return;
+      ctx.font = `${o.weight} ${o.size}px ${GOV_FONT}`;
+      ctx.fillStyle = o.color;
+      ctx.textAlign = o.align;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(value, x, y, o.max);
+    };
+
+    // 긴 과정명 · 기간은 오른쪽 틀 안(x 2160)까지만 눌러 담는다
+    const row = { size: 54, weight: 600, color: GOV_COLORS.primary, align: 'left', max: 2160 - GOV_ROW_X };
+    text(d.name,   GOV_ROW_X, GOV_ROW_Y.name,   row);
+    text(d.birth,  GOV_ROW_X, GOV_ROW_Y.birth,  row);
+    text(d.course, GOV_ROW_X, GOV_ROW_Y.course, row);
+    text(d.hours,  GOV_ROW_X, GOV_ROW_Y.hours,  row);
+    text(d.period, GOV_ROW_X, GOV_ROW_Y.period, row);
+
+    text(d.issued, W / 2, 2478, { size: 56, weight: 400, color: GOV_COLORS.secondary, align: 'center' });
+    if (d.no) text(`제 ${d.no} 호`, 330, 3066, { size: 34, weight: 400, color: GOV_COLORS.tertiary, align: 'left' });
+
+    status.classList.remove('warn');
+    status.textContent = '미리보기예요. 저장하면 A4 크기(2480×3508) 그림으로 받아져요.';
+  }
+
+  async function downloadGov() {
+    await renderGov();
+    const name = document.getElementById('gov-name').value.trim() || '이름없음';
+    document.getElementById('gov-canvas').toBlob(blob => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `수료증_${name}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, 'image/png');
+  }
+
+  (() => {
+    const now = new Date();
+    document.getElementById('gov-issued').value =
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+
   /* ── 초기 렌더 ── */
   renderEdu();
   renderExam();
+  renderGov();
   loadList();
 </script>
 </body>
