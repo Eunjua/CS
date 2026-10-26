@@ -41,7 +41,14 @@ python3 $S/tally.py <같은 폴더> 신뢰 [기준] --total <총건수> --chat <
 
 1. `python3 trust_dashboard.py <저장소 밖 폴더>` → `trust_weekly.json`·`trust_causes.json`
 2. 두 파일을 대시보드 자산으로 올린다(Artifact publish, `url`=대시보드, `asset: true`, 파일마다 한 번)
-3. `ArtifactData` `datasets/weekly`·`datasets/causes`를 `update` — `source.url`(새 `/_blob/…`)·`updated: {at, by}`만 바꾼다(`if_version`은 읽은 버전). 화면(`files/index.html`)은 손대지 않는다
+3. `ArtifactData` `datasets/weekly`·`datasets/causes`를 `update` — `source.url`(새 `/_blob/…`)·`updated: {at, by}`만 바꾼다(`if_version`은 읽은 버전). 평소 주에는 화면(`files/index.html`)을 손대지 않는다
+4. **화면을 한 번 열어 확인한다** — 맨 위 요약과 카드가 이번 주(예 `10/19~10/25`)인지, 신뢰 비중·환불 카드 아래에 "지난주 대비"가 나오는지. "지난주 기록 없음"이 뜨면 비교 방식이 어긋난 것이다(첫 기록 주만 예외)
+
+**기준 버전을 바꾼 주(`trust.json` `version`을 올린 주)에는 화면도 같이 고친다**(2026-10-26 은주 요청 — v2 첫 주에 데이터만 올리고 화면을 그대로 둬서 "지난주 기록 없음"·옛 판정 시작 주가 남았다). `files/index.html`을 `get`해 아래를 고치고 `update`(if_version)한 뒤 4번으로 확인한다:
+- 맨 위 안내 한 줄 — "○주부터 기준 v○ — 무엇이 바뀌었나 · 원인별 숫자는 이전 버전과 비교하지 않음 · 신뢰 비중·환불은 이어 봄"
+- 「원인별 비중 추이」 설명 — 새 버전 시작 주와 4주 판정 시작 주(새 버전 첫 주 + 3주)
+- 「지난주 대비」 계산(`dash.calc('change')`) — 신뢰 비중·환불은 상담 수 기준이라 **버전과 상관없이 직전 주와** 비교. 원인별 표(`latest`)·추이 그래프만 같은 버전끼리
+- `datasets/weekly`·`causes`의 `description`에 버전별 기간(예 "v1(10/5~10/18) · v2(10/19~)")
 
 ## 숫자 두 종류 — 섞지 않는다
 
