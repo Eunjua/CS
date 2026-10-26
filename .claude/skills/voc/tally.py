@@ -15,6 +15,9 @@
 - v1(10/12~): 분류 줄의 refund=true는 '결제 후 환불·취소 요청'. 원인은 환불 사유로 두고, 원인마다 '그중 환불 n건'을 붙인다.
 - 기준 표본(trust.json gold): 이번 실행의 분류 줄(신뢰·기준 주제 전부)에서 정답이 확정된 표본을 찾아 맞춘 비율을 낸다.
   min_agree 미만이거나 표본이 다 분류되지 않았으면 --save를 막는다(분류가 흔들린 주를 기록하지 않으려고).
+- v2(10/19~): 한 상담에 원인이 여러 개면 분류 줄의 causes(코드 목록)를 원인마다 1건씩 센다 — 원인 합계가 신뢰 문의 수보다 많을 수 있다.
+  신뢰 문의 비중·결제 후 환불 합계·지표판 원인이 나온 상담 수는 상담 1건 = 1번. category(주된 원인)는 기준 표본 대조와 CX 내부용 참고로 남긴다.
+  causes가 없는 줄(v1)은 category 하나로 센다.
 - --chat·--phone(analyze.py 인입요약 채팅·전화)을 주면 원문 머리줄의 medium(phone=전화, 그 밖=채팅)으로 나눠 채널별 비중도 낸다.
   전화가 줄어든 주(연휴)엔 고객 변화 없이 비율이 움직이므로, 이유 비중이 크게 바뀌면 이 줄부터 본다.
 """
@@ -36,6 +39,13 @@ def check(headers, rows):
     got = [r.get('chat') for r in rows]
     dup = sorted(c for c, k in collections.Counter(got).items() if k > 1)
     return sorted(set(headers) - set(got)), dup, sorted(set(got) - set(headers))
+
+
+def causes_of(r, valid=None):
+    """그 상담에서 센 원인 코드 목록 — category를 맨 앞에, 중복 없이. valid가 있으면 기준표 코드만."""
+    out = [r['category']] + [c for c in (r.get('causes') or []) if c != r['category']]
+    out = list(dict.fromkeys(out))
+    return [c for c in out if c in valid] if valid else out
 
 
 def summarize(rows, total):
@@ -100,8 +110,16 @@ def gold_check(all_rows, gold):
 
 def trust_report(rows, raw_n, total, week, save, ok, mediums=None, totals_by=None, all_rows=None):
     cfg = json.load(open(TRUST, encoding='utf-8'))
-    counts = collections.Counter(r['category'] for r in rows)
-    refunds = collections.Counter(r['category'] for r in rows if r.get('refund') is True)
+    valid = {c['code'] for c in cfg['categories']}
+    bad = sorted({c for r in rows for c in (r.get('causes') or []) if c not in valid})
+    if bad:
+        print(f'⚠️ 기준표에 없는 원인 코드는 빼고 셌어요: {bad}')
+    counts = collections.Counter(c for r in rows for c in causes_of(r, valid))      # 원인마다 1건(중복 포함)
+    refunds = collections.Counter(c for r in rows if r.get('refund') is True for c in causes_of(r, valid))
+    primary = collections.Counter(r['category'] for r in rows)
+    on_board_codes = {c['code'] for c in cfg['categories'] if c.get('board')}
+    board_chats = sum(1 for r in rows if on_board_codes & set(causes_of(r, valid)))
+    refund_chats = sum(1 for r in rows if r.get('refund') is True)
     lines, teams = board(counts, total, cfg, refunds)
     print(f"기준 {cfg.get('version', '-')} (since {cfg.get('version_from', '-')})")
     if cfg.get('gold'):
@@ -114,17 +132,20 @@ def trust_report(rows, raw_n, total, week, save, ok, mediums=None, totals_by=Non
             save = False
     print(f'\n===== 신뢰 지표판 (전체 문의 {total}건 기준)')
     print(f'신뢰 태그 원문 {raw_n}건 = 전체 문의의 {raw_n / total * 100:.1f}%')
-    on_board = sum(x['n'] for x in lines)
-    print(f'그중 지표판 이유 {on_board}건 = 전체 문의의 {on_board / total * 100:.1f}% (나머지 {raw_n - on_board}건은 CX 내부용)')
+    multi = sum(counts.values())
+    print(f'그중 지표판 원인이 하나라도 나온 상담 {board_chats}건 = 전체 문의의 {board_chats / total * 100:.1f}% (나머지 {raw_n - board_chats}건은 CX 내부용)')
+    print(f'원인 합계 {multi}건(중복 포함) — 한 상담에 원인이 여러 개면 각각 세서 신뢰 문의 {raw_n}건보다 많을 수 있음 · 상담당 평균 {multi / raw_n:.2f}개' if raw_n else '')
     hist = json.load(open(HISTORY, encoding='utf-8')) if os.path.exists(HISTORY) else {'weeks': {}}
     if week and save:
         if not ok:
             print('⚠️ 빠지거나 겹친 상담이 있어 기록하지 않았어요.')
         else:
-            entry = {'version': cfg.get('version'), 'total': total, 'raw': raw_n, 'counts': dict(counts), 'refunds': dict(refunds)}
+            entry = {'version': cfg.get('version'), 'total': total, 'raw': raw_n, 'counts': dict(counts), 'refunds': dict(refunds),
+                     'mode': 'multi', 'primary': dict(primary), 'board_chats': board_chats, 'refund_chats': refund_chats}
             if mediums and totals_by:
                 entry['by_medium'] = {k: {'total': totals_by[k], 'raw': sum(1 for v in mediums.values() if v == k),
-                                          'counts': dict(collections.Counter(r['category'] for r in rows if mediums.get(r['chat']) == k))}
+                                          'counts': dict(collections.Counter(c for r in rows if mediums.get(r['chat']) == k
+                                                                             for c in causes_of(r, valid)))}
                                       for k in totals_by}
             hist['weeks'][week] = entry
             json.dump(hist, open(HISTORY, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
@@ -152,15 +173,21 @@ def trust_report(rows, raw_n, total, week, save, ok, mediums=None, totals_by=Non
             parts.append(f'{k} {n / t * 100:.1f}% ({n}/{t})')
         print('채널별 신뢰 비중:', ' · '.join(parts))
         for x in lines:
-            split = collections.Counter(mediums.get(r['chat']) for r in rows if r['category'] == x['code'])
+            split = collections.Counter(mediums.get(r['chat']) for r in rows if x['code'] in causes_of(r, valid))
             if x['n']:
                 print(f"    {x['label']}: " + ' · '.join(f'{k} {split.get(k, 0)}' for k in totals_by))
     off = [(c['label'], counts.get(c['code'], 0), refunds.get(c['code'], 0)) for c in cfg['categories'] if not c.get('board')]
     print('지표판 밖(CX 내부용):', ' · '.join(f'{l} {n}건' + (f'(환불 {r})' if r else '') for l, n, r in off))
-    print(f"결제 후 환불 합계: {sum(refunds.values())}건")
+    print(f"결제 후 환불 합계: {refund_chats}건(상담 수)")
+    print('참고 — 주된 원인 하나로 셌을 때(v1 방식, CX 내부용):',
+          ' · '.join(f"{c['label']} {primary.get(c['code'], 0)}" for c in cfg['categories'] if primary.get(c['code'])))
     if teams:
         print('팀별 합계:', ' · '.join(f'{t} {n}건 ({n / total * 100:.1f}%)' for t, n in teams.most_common()))
-    raw_h = [(w, past[w]['raw'], past[w]['total']) for w in weeks]
+    # 신뢰 문의 비중(상담 수 ÷ 전체)은 원인 기준과 상관없어 버전이 달라도 잇는다
+    all_w = [w for w in hist['weeks'] if w != week] + ([week] if week else [])
+    if week in hist['weeks']:
+        all_w = [w for w in all_w if w == week or list(hist['weeks']).index(w) < list(hist['weeks']).index(week)]
+    raw_h = [(w, (raw_n if w == week else hist['weeks'][w]['raw']), (total if w == week else hist['weeks'][w]['total'])) for w in all_w]
     if raw_h:
         print('신뢰 문의 비중 4주:', ' → '.join(f'{n / t * 100:.1f}%' for _, n, t in raw_h[-4:]), '·', share_verdict(raw_h, 'raw'))
 
@@ -186,6 +213,9 @@ def selftest():
     assert gold_check([{'chat': 'a', 'category': '인정'}], gold)[1:3] == (1, 2)   # 표본 하나가 분류 안 됨
     assert medium_of('phone') == '전화' and medium_of('app') == '채팅' and medium_of('native') == '채팅'
     assert share_verdict([('a', 20, 1000), ('b', 20, 1000), ('c', 20, 1000), ('d', 20, 500)], 'x').startswith('비슷')  # 비중은 2배지만 건수 같음
+    assert causes_of({'category': '인정', 'causes': ['일자리', '인정', '일자리']}) == ['인정', '일자리']
+    assert causes_of({'category': '기타'}) == ['기타']                                   # v1 줄
+    assert causes_of({'category': '인정', 'causes': ['없는코드']}, {'인정'}) == ['인정']
     print('tally.py selftest ok')
 
 

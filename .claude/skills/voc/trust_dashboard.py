@@ -29,12 +29,13 @@ def build(hist, cfg):
         start = start_of(week)
         refunds = w.get('refunds', {})
         bm = w.get('by_medium', {})
-        board_n = sum(w['counts'].get(c['code'], 0) for c in cats if c.get('board'))
+        # v2(10/19~)부터 counts는 원인마다 1건(중복 포함) — 상담 수는 board_chats·refund_chats로 따로 남긴다
+        board_n = w.get('board_chats', sum(w['counts'].get(c['code'], 0) for c in cats if c.get('board')))
         weekly.append({
             'week': week, 'start': start, 'version': w.get('version', ''),
             'total': w['total'], 'trust': w['raw'], 'trust_share': round(w['raw'] / w['total'], 4),
             'board': board_n, 'board_share': round(board_n / w['total'], 4),
-            'refund': sum(refunds.values()),
+            'refund': w.get('refund_chats', sum(refunds.values())), 'mode': w.get('mode', 'primary'),
             'chat_share': round(bm['채팅']['raw'] / bm['채팅']['total'], 4) if '채팅' in bm else None,
             'phone_share': round(bm['전화']['raw'] / bm['전화']['total'], 4) if '전화' in bm else None,
         })
@@ -64,6 +65,10 @@ def selftest():
     assert weekly[1]['refund'] == 2 and weekly[1]['chat_share'] is None
     a = [c for c in causes if c['code'] == 'a']
     assert a[0]['share'] == 0.15 and a[0]['chat'] == 9 and a[1]['refund'] == 2
+    hist['weeks']['10/19~10/25'] = {'version': 'v2', 'total': 100, 'raw': 10, 'counts': {'a': 12}, 'refunds': {'a': 3},
+                                    'mode': 'multi', 'board_chats': 9, 'refund_chats': 2}
+    weekly, _ = build(hist, cfg)
+    assert weekly[-1]['board'] == 9 and weekly[-1]['refund'] == 2 and weekly[-1]['mode'] == 'multi'
     print('trust_dashboard.py selftest ok')
 
 
