@@ -103,7 +103,7 @@
 
   label:first-of-type { margin-top: 0; }
 
-  input[type="text"], input[type="date"] {
+  input[type="text"], input[type="date"], select {
     width: 100%;
     padding: 10px 14px;
     border: 1.5px solid #dde1e7;
@@ -379,13 +379,13 @@
       <input type="number" id="edu-hours" min="0" placeholder="0" oninput="onHoursEdit()"><span>시간</span>
       <input type="number" id="edu-minutes" min="0" max="59" placeholder="0" oninput="onHoursEdit()"><span>분</span>
     </div>
-    <p class="hint">직접 고칠 수 있어요. 비워두면 이수증에 교육 시간 줄이 안 나와요.</p>
+    <p class="hint">직접 고칠 수 있어요.</p>
 
     <label for="edu-end">수강 만료일</label>
     <input type="date" id="edu-end" oninput="renderEdu()">
     <p class="hint">시작일은 만료일 기준 2주 전으로 자동 계산됩니다.</p>
 
-    <button class="btn-print" onclick="window.print()">🖨 PDF로 저장 / 인쇄</button>
+    <button class="btn-print" onclick="downloadPaper('edu')">📥 이수증 이미지 저장</button>
   </aside>
 
   <!-- ═══ 시험응시 확인서 폼 ═══ -->
@@ -399,20 +399,17 @@
     <input type="text" id="exam-birth" placeholder="19961019" maxlength="8" oninput="renderExam()">
     <p class="hint">8자리 입력 (예: 19961019 → 1996년 10월 19일)</p>
 
-    <label for="exam-name2">시험명</label>
+    <label for="exam-name2">과정명</label>
     <div class="combo">
-      <input type="text" id="exam-name2" placeholder="시험명 검색 (예: 베이비)" autocomplete="off">
+      <input type="text" id="exam-name2" placeholder="과정명 검색 (예: 베이비)" autocomplete="off">
       <div class="combo-list hidden" id="exam-name2-list"></div>
     </div>
 
-    <label for="exam-date">응시일</label>
+    <label for="exam-date">응시 일시</label>
     <input type="date" id="exam-date" oninput="renderExam()">
+    <p class="hint">응시 방법은 '온라인'으로 자동 표시돼요.</p>
 
-    <label for="exam-method">응시방법</label>
-    <input type="text" id="exam-method" placeholder="온라인" oninput="renderExam()">
-    <p class="hint">비워두면 '온라인'으로 표시됩니다.</p>
-
-    <button class="btn-print" onclick="window.print()">🖨 PDF로 저장 / 인쇄</button>
+    <button class="btn-print" onclick="downloadPaper('exam')">📥 확인서 이미지 저장</button>
   </aside>
 
   <!-- ═══ 국비 수료증 폼 ═══ -->
@@ -427,12 +424,16 @@
     <p class="hint">8자리 입력 (예: 19620314 → 1962. 03. 14.)</p>
 
     <label for="gov-course">과정명</label>
-    <input type="text" id="gov-course" placeholder="요양보호사 취업교육" oninput="scheduleGov()">
+    <select id="gov-course" onchange="onGovCourse()">
+      <option value="">과정을 골라주세요</option>
+      <option>실버인지활동지도사 국비</option>
+      <option>실버케어지도사 국비</option>
+    </select>
 
-    <label>수강시간</label>
+    <label>수강시간 <span class="auto-tag hidden" id="gov-auto-tag">자동 입력됨</span></label>
     <div class="time-row">
-      <input type="number" id="gov-hours" min="0" placeholder="0" oninput="scheduleGov()"><span>시간</span>
-      <input type="number" id="gov-minutes" min="0" max="59" placeholder="0" oninput="scheduleGov()"><span>분</span>
+      <input type="number" id="gov-hours" min="0" placeholder="0" oninput="onGovHoursEdit()"><span>시간</span>
+      <input type="number" id="gov-minutes" min="0" max="59" placeholder="0" oninput="onGovHoursEdit()"><span>분</span>
     </div>
 
     <label for="gov-start">수강 시작일</label>
@@ -455,107 +456,19 @@
   <!-- 미리보기 영역 -->
   <main class="preview-wrap">
 
-    <!-- ═══ 교육 이수증 증명서 ═══ -->
-    <div class="cert" id="cert-edu">
-      <div class="cert-title">교 육 이 수 증</div>
-      <hr class="cert-divider">
+    <!-- ═══ 교육 이수증 — 국비와 같은 바탕(로고·제목 지운 것) 위에 값만 얹어 PNG 로 굽는다 ═══ -->
+    <div class="gov-paper" id="cert-edu">
+      <canvas id="edu-canvas" width="2480" height="3508" class="hidden"></canvas>
+      <img id="edu-preview" alt="교육 이수증 미리보기">
+      <p class="gov-status" id="edu-status"></p>
+    </div>
 
-      <div class="cert-section-title">■ 수강자 정보</div>
-      <div class="cert-row">
-        <span class="field">성 명</span>
-        <span> : </span>
-        <span class="value" id="edu-out-name">—</span>
-      </div>
-      <div class="cert-row">
-        <span class="field">생 년 월 일</span>
-        <span> : </span>
-        <span class="value" id="edu-out-birth">—</span>
-      </div>
-
-      <hr class="cert-divider" style="margin-top:24px;">
-
-      <div class="cert-section-title">■ 과정 정보</div>
-      <div class="cert-row">
-        <span class="field">과 정 명</span>
-        <span> : </span>
-        <span class="value" id="edu-out-course">—</span>
-      </div>
-      <div class="cert-row">
-        <span class="field">수 강 기 간</span>
-        <span> : </span>
-        <span class="value" id="edu-out-period">—</span>
-      </div>
-      <div class="cert-row" id="edu-row-hours">
-        <span class="field">교 육 시 간</span>
-        <span> : </span>
-        <span class="value" id="edu-out-hours">—</span>
-      </div>
-
-      <hr class="cert-divider" style="margin-top:24px;">
-
-      <div class="cert-confirm">
-        위 사람은 상기 교육 과정을 이수하였음을 확인합니다.
-      </div>
-
-      <div class="cert-footer">
-        <div class="cert-issue-date" id="edu-out-date"></div>
-        <div class="cert-org-wrap">
-          <span class="cert-org">케 어 파 트 너 아 카 데 미</span>
-          <img class="cert-stamp" src="stamp.png" alt="도장">
-        </div>
-      </div>
-    </div><!-- /cert-edu -->
-
-    <!-- ═══ 시험응시 확인서 증명서 ═══ -->
-    <div class="cert hidden" id="cert-exam">
-      <div class="cert-title">시 험 응 시 확 인 서</div>
-      <hr class="cert-divider">
-
-      <div class="cert-section-title">■ 응시자 정보</div>
-      <div class="cert-row">
-        <span class="field">성 명</span>
-        <span> : </span>
-        <span class="value" id="exam-out-name">—</span>
-      </div>
-      <div class="cert-row">
-        <span class="field">생 년 월 일</span>
-        <span> : </span>
-        <span class="value" id="exam-out-birth">—</span>
-      </div>
-
-      <hr class="cert-divider" style="margin-top:24px;">
-
-      <div class="cert-section-title">■ 시험 정보</div>
-      <div class="cert-row">
-        <span class="field">시 험 명</span>
-        <span> : </span>
-        <span class="value" id="exam-out-exam">—</span>
-      </div>
-      <div class="cert-row">
-        <span class="field">응 시 일 시</span>
-        <span> : </span>
-        <span class="value" id="exam-out-date">—</span>
-      </div>
-      <div class="cert-row">
-        <span class="field">응 시 방 법</span>
-        <span> : </span>
-        <span class="value" id="exam-out-method">—</span>
-      </div>
-
-      <hr class="cert-divider" style="margin-top:24px;">
-
-      <div class="cert-confirm">
-        위 사람은 상기 시험에 응시하였음을 확인합니다.
-      </div>
-
-      <div class="cert-footer">
-        <div class="cert-issue-date" id="exam-out-issue-date"></div>
-        <div class="cert-org-wrap">
-          <span class="cert-org">케 어 파 트 너 아 카 데 미</span>
-          <img class="cert-stamp" src="stamp.png" alt="도장">
-        </div>
-      </div>
-    </div><!-- /cert-exam -->
+    <!-- ═══ 시험응시 확인서 — 교육 이수증 바탕에서 4·5번째 칸 이름과 아래 문구를 지운 그림 위에 굽는다 ═══ -->
+    <div class="gov-paper hidden" id="cert-exam">
+      <canvas id="exam-canvas" width="2480" height="3508" class="hidden"></canvas>
+      <img id="exam-preview" alt="시험응시 확인서 미리보기">
+      <p class="gov-status" id="exam-status"></p>
+    </div>
 
     <!-- ═══ 국비 수료증 — 바탕 그림 위에 값만 얹어 PNG 로 굽는다 ═══ -->
     <div class="gov-paper hidden" id="cert-gov">
@@ -617,30 +530,9 @@
     return `${y}년 ${m}월 ${d}일`;
   }
 
-  /* ── 교육 이수증 렌더 ── */
+  /* ── 교육 이수증 렌더 — 국비와 같은 방식으로 그림에 굽는다(아래 PAPERS) ── */
   function renderEdu() {
-    const name   = document.getElementById('edu-name').value.trim();
-    const birth  = document.getElementById('edu-birth').value.trim();
-    const course = document.getElementById('edu-course').value.trim();
-    const end    = document.getElementById('edu-end').value;
-
-    document.getElementById('edu-out-name').textContent   = name   || '—';
-    document.getElementById('edu-out-birth').textContent  = fmtBirth(birth);
-    document.getElementById('edu-out-course').textContent = course || '—';
-
-    if (end) {
-      const start = subWeeks(end, 2);
-      document.getElementById('edu-out-period').textContent = `${fmtDate(start)} ~ ${fmtDate(end)}`;
-    } else {
-      document.getElementById('edu-out-period').textContent = '—';
-    }
-
-    const hoursText = fmtHours(document.getElementById('edu-hours').value,
-                               document.getElementById('edu-minutes').value);
-    document.getElementById('edu-out-hours').textContent = hoursText;
-    document.getElementById('edu-row-hours').classList.toggle('hidden', !hoursText);
-
-    document.getElementById('edu-out-date').textContent = todayStr();
+    schedulePaper('edu');
   }
 
   function onHoursEdit() {
@@ -786,50 +678,58 @@
 
   setupCombo('exam-name2', () => LIST.exams, () => '', () => renderExam(), renderExam);
 
-  /* ── 시험응시 확인서 렌더 ── */
+  /* ── 시험응시 확인서 렌더 — 그림으로 굽는다(아래 PAPERS) ── */
   function renderExam() {
-    const name   = document.getElementById('exam-name').value.trim();
-    const birth  = document.getElementById('exam-birth').value.trim();
-    const exam   = document.getElementById('exam-name2').value.trim();
-    const date   = document.getElementById('exam-date').value;
-    const method = document.getElementById('exam-method').value.trim();
-
-    document.getElementById('exam-out-name').textContent   = name   || '—';
-    document.getElementById('exam-out-birth').textContent  = fmtBirth(birth);
-    document.getElementById('exam-out-exam').textContent   = exam   || '—';
-    document.getElementById('exam-out-date').textContent   = fmtDate(date);
-    document.getElementById('exam-out-method').textContent = method || '온라인';
-    document.getElementById('exam-out-issue-date').textContent = todayStr();
+    schedulePaper('exam');
   }
 
-  /* ── 국비 수료증 ──
+  /* ── 국비 수료증 · 교육 이수증 (그림으로 굽는 문서) ──
      works 레포 tf-b2g/job-training-business/design/src/lib/certificateImage.ts 와 같은 자리·크기로 굽는다.
      바탕(gov-bg.png)은 리소스센터 certificate-bg-hanowon.png 복사본 — CDN 이 CORS 를 안 줘서 같은 폴더에 둔다.
-     works 쪽 바탕 그림이 바뀌면 이 파일도 다시 받아야 한다 */
+     works 쪽 바탕 그림이 바뀌면 이 파일도 다시 받아야 한다.
+     edu-bg.png 는 gov-bg.png 에서 한국노인인력개발원 로고·'수료증' 제목·아래 문구 두 줄을 지운 것 — 제목·문구는 캔버스에 직접 쓴다.
+     exam-bg.png 는 edu-bg.png 에서 4·5번째 칸 이름(수강시간·수강기간)까지 지운 것 — 칸 이름도 캔버스에 쓴다.
+     둘 다 tools/make_bg.py 로 gov-bg.png 에서 한 번에 만든다 (글자 뒤 초록 무늬를 메워 되살림).
+     gov-bg.png 를 다시 받으면 edu-bg.png · exam-bg.png 도 다시 만들어야 한다 */
   const GOV_ROW_X = 922;
   const GOV_ROW_Y = { name: 1184, birth: 1307, course: 1430, hours: 1556, period: 1680 };
   const GOV_FONT = '"Pretendard Variable", Pretendard, "Noto Sans KR", sans-serif';
-  const GOV_COLORS = { primary: '#1f2324', secondary: '#4a5052', tertiary: '#8a9093' };
+  const GOV_COLORS = { title: '#2a2f30', primary: '#1f2324', secondary: '#4a5052', tertiary: '#8a9093' };
+  // 교육 이수증 제목 — 위 테두리(y 165)와 첫 줄 '이 름'(y 1159) 사이 세로 가운데, 원래 '수료증' 글자 높이(175)에 맞춘다
+  const EDU_TITLE = { text: '교 육 이 수 증', centerY: 662, height: 175, gap: 70 };
+  const EXAM_TITLE = { text: '시 험 응 시 확 인 서', centerY: 662, height: 175, gap: 50 };
+  // 칸 이름은 바탕에 박힌 '생 년 월 일' 과 같은 자리 — 첫 글자 가운데 566, 끝 글자 가운데 803 사이에 고르게 놓는다
+  // 글자 크기·굵기는 바탕에 박힌 글자와 잉크 크기를 재서 맞췄다. dy 는 바탕 글자와 같은 높이에 오도록 내리는 값
+  const LABEL = { firstX: 566, lastX: 803, size: 54, weight: 400, color: '#3b4041', dy: 3 };
+  const SENTENCE = { size: 61, weight: 500, color: '#2a2f30' };
+  // 문구 두 줄 — 원래 바탕 문구(잉크 1979~2032 · 2095~2148)와 같은 높이
+  const SENTENCE_Y = [2009, 2125];
 
-  const govBg = new Image();
-  const govBgReady = new Promise((resolve, reject) => {
-    govBg.onload = resolve;
-    govBg.onerror = () => reject(new Error('바탕 그림을 못 불러왔어요'));
-  });
-  govBg.src = 'gov-bg.png';
+  function loadBg(src) {
+    const img = new Image();
+    const ready = new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('바탕 그림을 못 불러왔어요'));
+    });
+    img.src = src;
+    return { img, ready };
+  }
 
   function govDot(d) {
     return d ? `${d.slice(0,4)}. ${d.slice(5,7)}. ${d.slice(8,10)}.` : '';
   }
 
+  function dotBirth(birth) {
+    return birth.length === 8 ? `${birth.slice(0,4)}. ${birth.slice(4,6)}. ${birth.slice(6,8)}.` : '';
+  }
+
   function govValues() {
     const v = id => document.getElementById(id).value.trim();
-    const birth = v('gov-birth');
     const start = v('gov-start'), end = v('gov-end');
     const issued = v('gov-issued');
     return {
       name:   v('gov-name'),
-      birth:  birth.length === 8 ? `${birth.slice(0,4)}. ${birth.slice(4,6)}. ${birth.slice(6,8)}.` : '',
+      birth:  dotBirth(v('gov-birth')),
       course: v('gov-course'),
       hours:  fmtHours(v('gov-hours'), v('gov-minutes')).replace('총 ', ''),
       period: start || end ? `${govDot(start)} ~ ${govDot(end)}` : '',
@@ -838,31 +738,99 @@
     };
   }
 
-  let govDrawSeq = 0;
-  async function renderGov() {
-    const seq = ++govDrawSeq;
-    const status = document.getElementById('gov-status');
-    const d = govValues();
+  function eduValues() {
+    const v = id => document.getElementById(id).value.trim();
+    const end = v('edu-end');
+    // 발급일은 오늘, 시작일은 만료일 2주 전 (예전 이수증과 같은 규칙)
+    return {
+      name:   v('edu-name'),
+      birth:  dotBirth(v('edu-birth')),
+      course: v('edu-course'),
+      hours:  fmtHours(v('edu-hours'), v('edu-minutes')).replace('총 ', ''),
+      period: end ? `${govDot(subWeeks(end, 2))} ~ ${govDot(end)}` : '',
+      issued: todayStr().replace(/ 0/g, ' '),
+      no:     '',
+    };
+  }
+
+  function examValues() {
+    const v = id => document.getElementById(id).value.trim();
+    return {
+      name:   v('exam-name'),
+      birth:  dotBirth(v('exam-birth')),
+      course: v('exam-name2'),
+      hours:  govDot(v('exam-date')),   // 4번째 칸 = 응시 일시
+      period: '온라인',                  // 5번째 칸 = 응시 방법 (온라인뿐)
+      issued: todayStr().replace(/ 0/g, ' '),
+      no:     '',
+    };
+  }
+
+  const PAPERS = {
+    gov: { bg: loadBg('gov-bg.png'), values: govValues, file: '수료증', seq: 0, timer: null, blob: null },
+    edu: { bg: loadBg('edu-bg.png'), values: eduValues, file: '이수증', title: EDU_TITLE,
+           sentence: ['위 사람은 케어파트너아카데미에서 실시한 위 교육 과정을',
+                      '성실히 이수하였으므로 이 교육이수증을 드립니다.'],
+           seq: 0, timer: null, blob: null },
+    exam: { bg: loadBg('exam-bg.png'), values: examValues, file: '응시확인서', title: EXAM_TITLE,
+            labels: { hours: '응시일시', period: '응시방법' },
+            sentence: ['위 사람은 케어파트너아카데미에서 실시한 위 교육 과정',
+                       '시험에 응시하였음을 확인합니다.'],
+            seq: 0, timer: null, blob: null },
+  };
+
+  // 국비 과정 — 고르면 수강시간이 자동으로 들어간다. 시간은 [시간, 분]. 아직 모르는 과정은 null(자동 입력 안 함)
+  const GOV_COURSES = {
+    '실버인지활동지도사 국비': [7, 24],
+    '실버케어지도사 국비': null,
+  };
+
+  function onGovCourse() {
+    const t = GOV_COURSES[document.getElementById('gov-course').value];
+    const tag = document.getElementById('gov-auto-tag');
+    if (t) {
+      document.getElementById('gov-hours').value = t[0] || '';
+      document.getElementById('gov-minutes').value = t[1] || '';
+      tag.classList.remove('hidden');
+    } else {
+      tag.classList.add('hidden');
+    }
+    scheduleGov();
+  }
+
+  function onGovHoursEdit() {
+    document.getElementById('gov-auto-tag').classList.add('hidden');
+    scheduleGov();
+  }
+
+  async function renderPaper(kind) {
+    const p = PAPERS[kind];
+    const seq = ++p.seq;
+    const status = document.getElementById(`${kind}-status`);
+    const d = p.values();
     // Pretendard 는 한글을 조각 파일로 나눠 둔다. 캔버스는 조각을 스스로 안 받아 — 찍을 글자가 든 조각을 먼저 받는다
     const rows = [d.name, d.birth, d.course, d.hours, d.period].join('');
     const small = d.issued + (d.no ? `제 ${d.no} 호` : '');
     try {
       await Promise.all([
-        govBgReady,
+        p.bg.ready,
         rows && document.fonts.load(`600 54px ${GOV_FONT}`, rows),
         small && document.fonts.load(`400 56px ${GOV_FONT}`, small),
+        p.title && document.fonts.load(`700 200px ${GOV_FONT}`, p.title.text),
+        p.labels && document.fonts.load(`${LABEL.weight} ${LABEL.size}px ${GOV_FONT}`, Object.values(p.labels).join('')),
+        p.sentence && document.fonts.load(`${SENTENCE.weight} ${SENTENCE.size}px ${GOV_FONT}`, p.sentence.join('')),
       ]);
     } catch (e) {
       status.textContent = '⚠ 바탕 그림을 못 불러왔어요. 새로고침해 주세요.';
       status.classList.add('warn');
       return;
     }
-    if (seq !== govDrawSeq) return;
+    if (seq !== p.seq) return;
 
-    const canvas = document.getElementById('gov-canvas');
+    const canvas = document.getElementById(`${kind}-canvas`);
     const ctx = canvas.getContext('2d');
     const W = canvas.width;
-    ctx.drawImage(govBg, 0, 0, W, canvas.height);
+    ctx.drawImage(p.bg.img, 0, 0, W, canvas.height);
 
     const text = (value, x, y, o) => {
       if (!value) return;
@@ -872,6 +840,42 @@
       ctx.textBaseline = 'middle';
       ctx.fillText(value, x, y, o.max);
     };
+
+    if (p.title) {
+      // 글자 크기는 실제 글자 높이가 맞도록 재서 정하고, 잉크 기준으로 세로 가운데에 놓는다.
+      // 글자 사이는 원래 '수 료 증' 처럼 넓게 — 한 글자씩 간격(gap)을 두고 찍는다
+      const t = p.title;
+      const chars = [...t.text.replace(/ /g, '')];
+      ctx.font = `700 100px ${GOV_FONT}`;
+      const m100 = ctx.measureText(t.text);
+      const size = 100 * t.height / (m100.actualBoundingBoxAscent + m100.actualBoundingBoxDescent);
+      ctx.font = `700 ${size}px ${GOV_FONT}`;
+      ctx.fillStyle = GOV_COLORS.title;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      const m = ctx.measureText(t.text);
+      const y = t.centerY + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+      const widths = chars.map(c => ctx.measureText(c).width);
+      const total = widths.reduce((a, b) => a + b, 0) + t.gap * (chars.length - 1);
+      let x = (W - total) / 2;
+      chars.forEach((c, i) => { ctx.fillText(c, x, y); x += widths[i] + t.gap; });
+    }
+
+    if (p.labels) {
+      // 바탕에서 지운 칸 이름을 한 글자씩 고르게 벌려 쓴다 (콜론은 바탕에 남아 있음)
+      ctx.font = `${LABEL.weight} ${LABEL.size}px ${GOV_FONT}`;
+      ctx.fillStyle = LABEL.color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const [key, label] of Object.entries(p.labels)) {
+        const chars = [...label];
+        const step = (LABEL.lastX - LABEL.firstX) / (chars.length - 1);
+        chars.forEach((c, i) => ctx.fillText(c, LABEL.firstX + step * i, GOV_ROW_Y[key] + LABEL.dy));
+      }
+    }
+    if (p.sentence) {
+      p.sentence.forEach((line, i) => text(line, W / 2, SENTENCE_Y[i], { ...SENTENCE, align: 'center' }));
+    }
 
     // 긴 과정명 · 기간은 오른쪽 틀 안(x 2160)까지만 눌러 담는다
     const row = { size: 54, weight: 600, color: GOV_COLORS.primary, align: 'left', max: 2160 - GOV_ROW_X };
@@ -885,44 +889,50 @@
     if (d.no) text(`제 ${d.no} 호`, 330, 3066, { size: 34, weight: 400, color: GOV_COLORS.tertiary, align: 'left' });
 
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    if (seq !== govDrawSeq || !blob) return;
-    const preview = document.getElementById('gov-preview');
+    if (seq !== p.seq || !blob) return;
+    const preview = document.getElementById(`${kind}-preview`);
     if (preview.src) URL.revokeObjectURL(preview.src);
     preview.src = URL.createObjectURL(blob);
-    govBlob = blob;
+    p.blob = blob;
 
     status.classList.remove('warn');
     status.textContent = '미리보기예요. 저장하면 A4 크기(2480×3508) 그림으로 받아져요.';
   }
 
-  let govBlob = null;
   // 칸마다 칠 때마다 PNG 를 다시 굽지 않게 잠깐 기다렸다 굽는다
-  let govTimer = null;
-  function scheduleGov() {
-    clearTimeout(govTimer);
-    govTimer = setTimeout(renderGov, 250);
+  function schedulePaper(kind) {
+    const p = PAPERS[kind];
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => renderPaper(kind), 250);
   }
 
-  async function downloadGov() {
-    const issued = document.getElementById('gov-issued');
-    if (!issued.value) {
-      const status = document.getElementById('gov-status');
-      status.textContent = '⚠ 발급일을 골라주세요.';
-      status.classList.add('warn');
-      issued.focus();
-      return;
+  async function downloadPaper(kind) {
+    if (kind === 'gov') {
+      const issued = document.getElementById('gov-issued');
+      if (!issued.value) {
+        const status = document.getElementById('gov-status');
+        status.textContent = '⚠ 발급일을 골라주세요.';
+        status.classList.add('warn');
+        issued.focus();
+        return;
+      }
     }
-    clearTimeout(govTimer);
-    govBlob = null;
-    await renderGov();
-    if (!govBlob) return;
-    const name = document.getElementById('gov-name').value.trim() || '이름없음';
+    const p = PAPERS[kind];
+    clearTimeout(p.timer);
+    p.blob = null;
+    await renderPaper(kind);
+    if (!p.blob) return;
+    const name = document.getElementById(`${kind}-name`).value.trim() || '이름없음';
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(govBlob);
-    a.download = `수료증_${name}.png`;
+    a.href = URL.createObjectURL(p.blob);
+    a.download = `${p.file}_${name}.png`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
+
+  const renderGov   = () => renderPaper('gov');
+  const scheduleGov = () => schedulePaper('gov');
+  const downloadGov = () => downloadPaper('gov');
 
   /* ── 초기 렌더 ── */
   renderEdu();
