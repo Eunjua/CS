@@ -44,6 +44,9 @@ gas-cert-detail/.local.json
 gas-request-log/.clasp.json
 gas-request-log/.local.json
 
+# ALF 재설계 시험지 — 실제 고객 질문 원문(개인정보 가림, 말투 그대로 — 로컬 보관만)
+cs-triage/ALF_설계/시험지/
+
 # 월요일 채널톡 export 단일 보관 폴더 (고객 개인정보 — 로컬 보관만)
 채널톡/
 
