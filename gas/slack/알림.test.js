@@ -1,5 +1,5 @@
 // 어떤 편집에 알림이 가고 어떤 편집에 안 가는지 점검
-// 실행: node gas-slack/알림.test.js   (통과하면 아무것도 안 나오고, 틀리면 에러)
+// 실행: node gas/slack/알림.test.js   (통과하면 아무것도 안 나오고, 틀리면 에러)
 var assert = require('assert');
 var fs = require('fs');
 eval(fs.readFileSync(__dirname + '/Code.js', 'utf8'));

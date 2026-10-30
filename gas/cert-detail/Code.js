@@ -5,7 +5,7 @@
 
 const SHEET_GID = 0;
 
-// 발송 도구 템플릿 시트 (gas/EmailSender.gs가 읽는 곳). 과정을 추가하면 교재 발송 문자 템플릿도 여기 만든다
+// 발송 도구 템플릿 시트 (gas/email-sender/EmailSender.gs가 읽는 곳). 과정을 추가하면 교재 발송 문자 템플릿도 여기 만든다
 const TEMPLATE_SHEET_ID = '1CE4RQ2MKPsyA4hGHBT-p8TPCDK8D5VqfmVbc5mFOgFs';
 const TPL_HEADER = ['key', '구분', '템플릿명', '제목', '본문', '수정일시'];
 

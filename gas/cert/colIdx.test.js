@@ -1,5 +1,5 @@
 // 열 알파벳 → 배열 번호 변환 점검
-// 실행: node gas-cert/colIdx.test.js   (통과하면 아무것도 안 나오고, 틀리면 에러)
+// 실행: node gas/cert/colIdx.test.js   (통과하면 아무것도 안 나오고, 틀리면 에러)
 var assert = require('assert');
 var fs = require('fs');
 var src = fs.readFileSync(__dirname + '/Code.js', 'utf8');

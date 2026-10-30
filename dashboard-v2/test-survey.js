@@ -112,10 +112,10 @@ console.log('통과 — 비중 계산, 기타 처리, 빈 주차, KPI, 빈 집�
 //  체감 × 실제 대기시간
 // ============================================================
 
-// ── 1) 집계 쪽 구간 나누기 (gas-v2/Aggregate.gs 의 waitBucket_ 를 그대로 불러 쓴다)
+// ── 1) 집계 쪽 구간 나누기 (gas/voc-v2/Aggregate.gs 의 waitBucket_ 를 그대로 불러 쓴다)
 const gasSb = { SpreadsheetApp: undefined, console };
 vm.createContext(gasSb);
-vm.runInContext(fs.readFileSync('/Users/eunju/work/CS/gas-v2/Aggregate.gs', 'utf8'), gasSb);
+vm.runInContext(fs.readFileSync('/Users/eunju/work/CS/gas/voc-v2/Aggregate.gs', 'utf8'), gasSb);
 const wb = gasSb.waitBucket_;
 
 [ ['',   '측정불가'], [null, '측정불가'], [undefined, '측정불가'],

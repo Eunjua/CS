@@ -8,7 +8,7 @@
 
 - 같은 링크가 시트 E열에 이미 있으면 그 줄은 건너뛴다
 - 유형이 드롭다운에 없거나 날짜 형식이 틀린 줄이 하나라도 있으면 아무것도 쓰지 않는다
-- 웹앱 주소·열쇠는 gas-request-log/.local.json (git에 안 올라감)
+- 웹앱 주소·열쇠는 gas/request-log/.local.json (git에 안 올라감)
 """
 import json
 import sys
@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LOCAL = ROOT / "gas-request-log" / ".local.json"
+LOCAL = ROOT / "gas" / "request-log" / ".local.json"
 KST = timezone(timedelta(hours=9))
 
 

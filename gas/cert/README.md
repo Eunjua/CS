@@ -4,7 +4,7 @@
 Apps Script 편집기에 붙여넣을 필요 없습니다.
 
 ```bash
-cd gas-cert && clasp push --force
+cd gas/cert && clasp push --force
 ```
 
 ## 어디에 반영되나
@@ -25,7 +25,7 @@ cd gas-cert && clasp push --force
 `clasp push` 는 시트 코드를 덮어쓰기 때문에, 편집기에서 손댄 내용이 있으면 사라집니다.
 
 ```bash
-cd gas-cert && clasp pull      # 시트의 현재 코드 내려받기
+cd gas/cert && clasp pull      # 시트의 현재 코드 내려받기
 git diff                        # 로컬과 뭐가 다른지 확인
 ```
 

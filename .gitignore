@@ -2,11 +2,10 @@
 # ALF docs 미검색 추출물 (상담 링크 포함, 로컬 보관만)
 cs-triage/ALF_docs_미검색_추출_*.xlsx
 
-# v2 로컬 전용 (clasp 식별자)
-gas-v2/.clasp.json
-
-# 자격증 기준 시트 배포용 (clasp 식별자)
-gas-cert/.clasp.json
+# Apps Script(GAS) — 폴더마다 clasp 식별자·웹앱 주소·열쇠 (gas/<이름>/ 어디에 새로 만들어도 자동으로 빠짐)
+**/.clasp.json
+**/.stray-clasp.json
+**/.local.json
 
 # OMC 임시 상태 — 어느 폴더에 생기든 무시
 .omc/
@@ -32,27 +31,11 @@ cs-triage/ALF_task/
 # VOC 리포트용 채널톡 원문 export (고객 개인정보 — 로컬 보관만)
 voc-원문/
 
-# 이수증 과목 목록 API (clasp 식별자)
-gas-cert-list/.clasp.json
-gas-cert-list/.stray-clasp.json
-
-# 자격증 상세 시트 입력 웹앱 (clasp 식별자 · 웹앱 주소·열쇠)
-gas-cert-detail/.clasp.json
-gas-cert-detail/.local.json
-
-# 은주에게 요청한 것들 시트 입력 웹앱 (clasp 식별자 · 웹앱 주소·열쇠)
-gas-request-log/.clasp.json
-gas-request-log/.local.json
-
 # ALF 재설계 시험지 — 실제 고객 질문 원문(개인정보 가림, 말투 그대로 — 로컬 보관만)
 cs-triage/ALF_설계/시험지/
 
 # 월요일 채널톡 export 단일 보관 폴더 (고객 개인정보 — 로컬 보관만)
 채널톡/
-
-# VOC v2 원격 실행 웹앱 주소·열쇠
-gas-v2/.local.json
-
 
 # 하루 메모 페이지 목록 (상담원 이름·페이지 주소 — 로컬 보관만)
 .claude/skills/monday/memo_pages.local.json

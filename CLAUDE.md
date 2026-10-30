@@ -14,17 +14,19 @@
 
 # 프로젝트 구조
 - cs-triage/              : ALF(AI 상담봇) 개선 — 규칙·docs·상담내역 판정·개선로그
-- dashboard-v2/ + gas-v2/ : VOC 대시보드 — **현재 사용** (clasp 배포)
+- dashboard-v2/ + gas/voc-v2/ : VOC 대시보드 — **현재 사용** (clasp 배포)
 - certification/          : 민간자격 운영규정 생성 (`/certification`) — 심사기관 제출용
 - cert/                   : 증명서 발급 화면 — 고객에게 주는 이수증·시험응시 확인서
-- gas-cert/               : 자격증 발급·배송·정산 스크립트 (기준 시트, clasp)
-- email-sender/ + gas/    : 발송 도구 화면(메일·문자·알림톡)과 그 백엔드
+- gas/                    : Apps Script 모음 — **폴더 하나 = 프로젝트 하나** (voc-v2·cert·cert-list·cert-detail·request-log·slack·email-sender·b2g-signed-at)
+- gas/cert/               : 자격증 발급·배송·정산 스크립트 (기준 시트, clasp)
+- email-sender/ + gas/email-sender/ : 발송 도구 화면(메일·문자·알림톡)과 그 백엔드
 - b2g_2026/               : B2G 현장점검 대응 (매년 반복)
 - 채널톡/                 : **월요일 채널톡 export 단일 보관 폴더** (2026-10-07~). 파일만 넣으면 대시보드 v2 업로드·`/알프`·`/voc`가 모두 여기서 읽고, 다 쓰면 `채널톡/처리완료/`로 옮겨짐 — 개인정보라 git에 올리지 않음
 - voc-원문/               : VOC 원문 엑셀 보관(10/7 이전) — 개인정보라 git에 올리지 않음
-- dashboard/ + gas/VOC_통합스크립트.gs·Categorizer.gs : VOC **구버전, 수정하지 말 것** (2026-07-20 이후 데이터 안 들어옴)
+- _구버전/                : VOC 구버전(dashboard/ + gas/VOC_통합스크립트.gs·Categorizer.gs) — **수정하지 말 것** (2026-07-20 이후 데이터 안 들어옴, 10/30에 옮김)
 - 폴더 지도·화면↔백엔드 연결·배포 방식은 README.md
-- 월요일 루틴은 `/월요일` 스킬 하나로: 요청기록 → v2 업로드·집계(`gas-v2/Remote.gs` 웹앱) → `/kr` → `/알프`(분석·노션 기록까지) → `/voc`. 은주는 export를 `채널톡/`에 넣기만 한다. ALF 규칙·태스크 수정은 따로 세션을 열어 `/알프 N차 개선 진행`
+- **새 GAS는 `gas/<이름>/`에 만든다**(이름에 gas- 붙이지 않음). 만들면 README 「화면 ↔ 백엔드 연결」 표에 한 줄 추가. `.clasp.json`·`.local.json`은 어느 폴더든 자동으로 git에서 빠짐
+- 월요일 루틴은 `/월요일` 스킬 하나로: 요청기록 → v2 업로드·집계(`gas/voc-v2/Remote.gs` 웹앱) → `/kr` → `/알프`(분석·노션 기록까지) → `/voc`. 은주는 export를 `채널톡/`에 넣기만 한다. ALF 규칙·태스크 수정은 따로 세션을 열어 `/알프 N차 개선 진행`
 
 # 작업 환경
 - 비개발자 (기술 용어는 쉽게 설명할 것)

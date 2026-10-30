@@ -8,7 +8,7 @@ description: 슬랙 #보살핌_고객센터에서 상담원이 은주를 태그�
 목적: **상담원이 하루에 은주에게 요청을 얼마나 하는지** 매일 센다. 날짜별·상담원별·유형별 건수가 쌓이는 게 핵심이고, 처리 여부는 기록하지 않는다(은주 결정, 2026-10-07).
 
 - 시트: [은주에게 요청한 것들 · 시트3](https://docs.google.com/spreadsheets/d/1TEiCEEOwz-V6sgJ3B61Yn49WYGFRoEjqHnR6d0Uygk8/edit?gid=1298766334#gid=1298766334) — A 날짜 · B 요청자 · C 유형 · D 내용 · E 링크
-- 웹앱: `gas-request-log/` (시트에 붙은 앱스크립트, clasp). 이 스킬의 `send_rows.py`가 부른다
+- 웹앱: `gas/request-log/` (시트에 붙은 앱스크립트, clasp). 이 스킬의 `send_rows.py`가 부른다
 - 슬랙: `#보살핌_고객센터` = `C098HRB3HBK` · `#cs_요청하기` = `C0C9BKF20HL` · 은주 = `U06PJ85ML7R`
 
 ## 1. 날짜 정하기
@@ -81,7 +81,7 @@ python3 .claude/skills/request-log/send_rows.py range 2026-10-07   # → oldest 
 3. 응답의 `added`(새로 들어간 줄)·`skipped`(이미 있던 링크라 건너뜀)를 보고, `rows`(시트에서 다시 읽은 값)가 보낸 것과 같은지 확인해 보고한다. 같은 날을 다시 보내도 `skipped`로 빠지니 중복 걱정은 없다.
 
 ## 실패하면
-- `JSON이 아닌 응답` / 403 → 권한이 풀린 것. `gas-request-log/`에서 `clasp open-script` → 편집기에서 `authorize` 실행 → 허용 후 재시도
+- `JSON이 아닌 응답` / 403 → 권한이 풀린 것. `gas/request-log/`에서 `clasp open-script` → 편집기에서 `authorize` 실행 → 허용 후 재시도
 - `유형이 드롭다운에 없음` → 응답의 `types` 목록과 대조해 고쳐서 다시 보낸다
 - `시트 첫 줄이 … 가 아님` → 누가 A~E 머리글을 바꾼 것. 은주에게 확인
 - 그래도 안 되면 탭 구분 줄을 `pbcopy`로 복사해 두고 은주에게 시트3 빈 줄 A칸 ⌘V를 부탁한다

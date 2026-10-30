@@ -4,7 +4,7 @@
 사용: python3 send_to_sheet.py '{"name":"실버케어지도사 1급","org":"...","lectures":"18강","hours":"...","detailUrl":"...","pdfUrl":"..."}'
 - 같은 과정명이 시트에 있으면 그 줄을 고치고, 없으면 새 줄을 추가한다
 - 빈 값은 보내도 기존 칸을 지우지 않는다
-- 웹앱 주소·열쇠는 gas-cert-detail/.local.json (git에 안 올라감)
+- 웹앱 주소·열쇠는 gas/cert-detail/.local.json (git에 안 올라감)
 """
 import json
 import sys
@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LOCAL = ROOT / "gas-cert-detail" / ".local.json"
+LOCAL = ROOT / "gas" / "cert-detail" / ".local.json"
 
 
 def main():

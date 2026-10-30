@@ -7,7 +7,7 @@
   python3 v2_sync.py refresh              # 불러오기 → 만족도(새 응답만 추가) → 집계
   python3 v2_sync.py all 채널톡           # upload + refresh
 
-- 웹앱 주소·열쇠는 gas-v2/.local.json (git에 안 올라감)
+- 웹앱 주소·열쇠는 gas/voc-v2/.local.json (git에 안 올라감)
 - 만족도 "전부 지우고 다시 받기?"에는 항상 [아니오]로 답한다 (은주가 늘 누르던 쪽)
 """
 import base64
@@ -18,7 +18,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LOCAL = ROOT / "gas-v2" / ".local.json"
+LOCAL = ROOT / "gas" / "voc-v2" / ".local.json"
 
 
 def load_conf():
