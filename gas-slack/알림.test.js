@@ -8,6 +8,9 @@ eval(fs.readFileSync(__dirname + '/Code.js', 'utf8'));
 // --- Apps Script 흉내 ---
 var 보낸것 = null;
 슬랙보내기 = function (문구) { 보낸것 = 문구; };
+var 기다린ms = 0;
+Utilities = { sleep: function (ms) { 기다린ms = ms; } };
+SpreadsheetApp = { flush: function () {} };
 PropertiesService = { getScriptProperties: function () {
   return { getProperty: function () { return '{"홍길동":"U000TEST"}'; } };
 } };
@@ -99,3 +102,15 @@ assert.strictEqual(편집(날짜먼저, 2, 5 /* E 처리 사항 */, 빈칸), nul
 var 지운행 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '', '', ''];
 편집(지운행, 2, 5 /* E 처리 사항 */, '101동 603호');
 assert.strictEqual(지운행[6], '', '처리 사항을 지웠으면 처리 날짜도 안 찍는다');
+
+// --- 처리 완료는 1분 기다렸다가 그때 값으로 ---
+기다린ms = 0;
+var 고친행 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '101동 60', '', ''];
+Utilities.sleep = function (ms) { 기다린ms = ms; 고친행[4] = '101동 603호'; };   // 기다리는 사이 오타 수정
+var 고친알림 = 편집(고친행, 2, 5 /* E 처리 사항 */, 빈칸);
+assert.strictEqual(기다린ms, 60000, '1분 기다려야 한다');
+assert.ok(고친알림.indexOf('101동 603호') !== -1, '기다린 뒤 고친 값으로 보내야 한다');
+
+var 지운사이 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '101동 603호', '', ''];
+Utilities.sleep = function () { 지운사이[4] = ''; };   // 기다리는 사이 지움
+assert.strictEqual(편집(지운사이, 2, 5 /* E 처리 사항 */, 빈칸), null, '기다리는 사이 지웠으면 안 보낸다');
