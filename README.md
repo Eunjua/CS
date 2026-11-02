@@ -23,7 +23,7 @@ Apps Script(GAS)는 모두 `gas/` 아래에 있고, **폴더 하나 = 구글 App
 | 화면 | 백엔드 폴더 | 배포 |
 |---|---|---|
 | `email-sender/` | `gas/email-sender/` — `EmailSender.gs` + `BizmSender.gs` (둘은 **반드시 같은 프로젝트에 함께**: 문자·알림톡 요청이 `EmailSender.gs` → `sendBizm_()`로 넘어감) | 수동 복붙 |
-| `dashboard-v2/` | `gas/voc-v2/` 전체 (`WebApp.gs`가 진입점, `Remote.gs`는 `/월요일`이 부르는 업로드·집계 입구 — 주소·열쇠는 `.local.json`) | clasp 자동 |
+| `dashboard-v2/` | `gas/voc-v2/` 전체 (`WebApp.gs`가 진입점, `Remote.gs`는 `/월요일`이 부르는 업로드·집계 입구 + `/voc`가 부르는 설문 자유의견 창구(`comments`) — 주소·열쇠는 `.local.json`) | clasp 자동 |
 | `cert/` | `gas/cert-list/Code.js` — 과목 목록 시트 A열(과정명)·D열(강의 시간)만 읽어줌. PDF는 브라우저에서 바로 생성 | clasp 자동 |
 | (화면 없음) | `gas/cert/Code.js` → 자격증 기준 시트 | clasp 자동 |
 | (화면 없음) | `gas/cert-detail/Code.js` → 과목 관리 시트에 과정 한 줄 쓰기 (`/cert-detail` 스킬이 호출, 주소·열쇠는 `.local.json`) | clasp 자동 |

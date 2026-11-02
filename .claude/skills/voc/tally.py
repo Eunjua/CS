@@ -56,7 +56,13 @@ def summarize(rows, total):
         outcome = ' · '.join(f'{k} {v}' for k, v in collections.Counter(r.get('outcome', '') for r in rs).most_common())
         stage = ' · '.join(f'{k} {v}' for k, v in collections.Counter(r.get('stage', '') for r in rs).most_common())
         quotes = ' | '.join(q for q in (r.get('quote') for r in rs) if q)[:300]
-        print(f'\n[{cat}] {len(rs)}건 ({len(rs) / total * 100:.0f}%)\n  처리: {outcome}\n  시점: {stage}\n  발화: {quotes}')
+        print(f'\n[{cat}] {len(rs)}건 ({len(rs) / total * 100:.0f}%)')
+        # 설문 의견처럼 outcome·stage를 안 쓰는 주제는 빈 줄을 찍지 않는다
+        if any(r.get('outcome') for r in rs):
+            print(f'  처리: {outcome}')
+        if any(r.get('stage') for r in rs):
+            print(f'  시점: {stage}')
+        print(f'  발화: {quotes}')
         notes = [f"{r['chat']}:{r['note']}" for r in rs if r.get('note')]
         if notes:
             print('  메모:', ' | '.join(notes))
