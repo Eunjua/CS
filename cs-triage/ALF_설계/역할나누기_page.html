@@ -1,0 +1,316 @@
+<title>ALF 역할 나누기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 레이아웃: 위 = 고객 여정 지도(단계 카드가 화살표로 이어짐) → 아래 = 고른 단계의 상담 흐름도(문의 → 판단 → 세 갈래) */
+:root{
+  --bg:#f5f6f4; --panel:#ffffff; --fg:#1c2420; --muted:#5d6963; --line:#d9dfdb; --wire:#9aa6a0;
+  --info:#2f7d6b; --info-soft:#e1f1eb;
+  --look:#3a64a8; --look-soft:#e2eaf7;
+  --agent:#b4632a; --agent-soft:#f8e8da;
+  --sel:#1c2420;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#131816; --panel:#1b221f; --fg:#e5ebe8; --muted:#9ba8a1; --line:#2e3833; --wire:#5d6a64;
+  --info:#5fc0a6; --info-soft:#1c3a31; --look:#7ea3e3; --look-soft:#1e2b43;
+  --agent:#e39a62; --agent-soft:#3c291a; --sel:#e5ebe8; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131816; --panel:#1b221f; --fg:#e5ebe8; --muted:#9ba8a1; --line:#2e3833; --wire:#5d6a64;
+  --info:#5fc0a6; --info-soft:#1c3a31; --look:#7ea3e3; --look-soft:#1e2b43;
+  --agent:#e39a62; --agent-soft:#3c291a; --sel:#e5ebe8; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:26px;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:19px;margin:0;text-wrap:balance}
+h3{font-size:14px;margin:0;letter-spacing:.02em}
+.lead{color:var(--muted);margin:6px 0 0;max-width:72ch}
+.num{font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;flex:none;display:inline-block}
+.d-info{background:var(--info)} .d-lookup{background:var(--look)} .d-agent{background:var(--agent)}
+
+/* 여정 지도 */
+.map{display:flex;flex-direction:column;gap:14px}
+.rowlabel{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.journey{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:6px}
+.side{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.arrow{flex:none;width:22px;display:flex;align-items:center;justify-content:center;color:var(--wire);font-size:16px}
+.step{flex:1 0 140px;min-width:140px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.step[aria-pressed="true"]{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+.step:focus-visible{outline:2px solid var(--look);outline-offset:2px}
+.step .nm{font-weight:700;font-size:14px;line-height:1.3}
+.step .meta{font-size:12px;color:var(--muted)}
+.mini{height:6px;display:flex;border-radius:3px;overflow:hidden;background:var(--line)}
+.mini span{height:100%}
+.tops{display:flex;flex-direction:column;gap:3px;margin-top:2px}
+.tops div{font-size:12px;display:flex;gap:6px;align-items:baseline;line-height:1.35}
+.tops .dot{width:7px;height:7px;border-radius:2px;transform:translateY(-1px)}
+.tops b{font-weight:500;color:var(--muted);margin-left:auto;padding-left:4px}
+
+/* 흐름도 */
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:0}
+.node{border:1px solid var(--line);border-radius:10px;padding:10px 16px;background:var(--bg);text-align:center;max-width:520px}
+.node.start{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.node.judge{border-style:dashed}
+.vline{width:2px;height:22px;background:var(--wire)}
+.split{width:100%;position:relative;height:22px}
+.split::before{content:"";position:absolute;left:16.66%;right:16.66%;top:0;height:2px;background:var(--wire)}
+.split::after{content:"";position:absolute;left:50%;top:-22px;width:2px;height:22px;background:var(--wire)}
+.lanes{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.lane{display:flex;flex-direction:column;align-items:stretch;gap:0;min-width:0;position:relative}
+.lane::before{content:"";display:block;width:2px;height:16px;background:var(--wire);margin:-22px auto 6px}
+.lhead{border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.lhead .t{font-weight:700;display:flex;align-items:center;gap:8px}
+.lhead .s{font-size:12.5px}
+.l-info .lhead{background:var(--info-soft);color:var(--info)}
+.l-lookup .lhead{background:var(--look-soft);color:var(--look)}
+.l-agent .lhead{background:var(--agent-soft);color:var(--agent)}
+.box{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.box .bt{font-size:12px;font-weight:600;color:var(--muted);padding:2px 2px 4px}
+.sv{width:2px;height:14px;background:var(--wire);margin:0 auto}
+.sit{border-top:1px solid var(--line);padding:6px 2px}
+.sit:first-of-type{border-top:0}
+.sit summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:baseline}
+.sit summary::-webkit-details-marker{display:none}
+.sit summary:focus-visible{outline:2px solid var(--look);outline-offset:2px;border-radius:4px}
+.sit .w{font-size:13.5px;font-weight:500}
+.sit .st{display:block;font-size:11.5px;color:var(--muted);font-weight:400}
+.sit .n{font-size:12.5px;color:var(--muted)}
+.sit .more{font-size:12.5px;color:var(--muted);margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.sit .more .dec{color:var(--fg)}
+.end{border-radius:10px;padding:8px 12px;font-size:13px;text-align:center;border:1px dashed var(--line);color:var(--muted)}
+.task{border:1px solid var(--look);border-radius:10px;overflow:hidden;background:var(--panel)}
+.task .tt{background:var(--look-soft);color:var(--look);font-weight:700;font-size:13px;padding:7px 10px}
+.task .tb{padding:6px 10px;display:flex;flex-direction:column}
+.outs{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-top:1px dashed var(--line)}
+.out{display:grid;grid-template-columns:14px minmax(0,1fr);gap:6px;font-size:12.5px;align-items:baseline}
+.out .a{color:var(--wire)}
+.out.ag{color:var(--agent)}
+.out .k{font-weight:600}
+.empty{font-size:13px;color:var(--muted);padding:10px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+.note{font-size:12.5px;color:var(--muted)}
+/* 추이 */
+.trend{display:flex;flex-direction:column;gap:14px}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .k{font-size:13px;font-weight:600;color:var(--muted)}
+.tile .v{font-size:28px;font-weight:700;line-height:1.2}
+.tile .s{font-size:12.5px;color:var(--muted)}
+.tile.main{border-color:var(--agent)}
+.tile.main .v{color:var(--agent)}
+.up{color:var(--agent)} .down{color:var(--info)}
+.chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+.chartbox svg{display:block;width:100%;min-width:520px;height:auto}
+.chartbox text{font-family:var(--f-body);fill:var(--muted);font-size:11px}
+.heat{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.heat table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+.heat th,.heat td{padding:7px 10px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+.heat th:first-child,.heat td:first-child{text-align:left}
+.heat thead th{border-top:0;font-weight:600;color:var(--muted);font-size:12px}
+.heat td.c{font-variant-numeric:tabular-nums}
+.heat .st{font-size:11.5px;color:var(--muted);display:block}
+.status{font-size:11.5px;border-radius:999px;padding:1px 8px;width:max-content;border:1px solid var(--line);color:var(--muted)}
+.status.on{border-color:var(--info);color:var(--info)}
+.wk{font-size:12px;color:var(--muted)}
+.step .gap{font-size:12px;color:var(--agent);font-weight:600}
+@media (max-width:820px){
+  .tiles{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:820px){
+  .side{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .lanes{grid-template-columns:minmax(0,1fr);gap:20px}
+  .split{display:none}
+  .lane::before{margin:0 auto 6px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>ALF 역할 나누기</h1>
+    <p class="lead">위는 케어아카데미 고객 여정 지도, 아래는 고른 단계의 상담 흐름도예요. 단계 카드를 누르면 그 단계에서 봇이 어떻게 갈라 처리하는지 보여요. 담당은 10/30 은주 확정 기준이에요. 단계 카드와 흐름도의 건수는 기준선 3주(10/5~10/25) 실제 문의 1,013건이고, 맨 위 추이는 매주 월요일에 한 주씩 더해져요.</p>
+  </header>
+
+  <div class="legend">
+    <span><i class="dot d-info"></i>AI 안내 — 답이 정해져 있어 지식(FAQ·아티클·엑셀)으로 바로 답함</span>
+    <span><i class="dot d-lookup"></i>AI 조회 — 고객 상태를 조회해야 답이 나옴(태스크)</span>
+    <span><i class="dot d-agent"></i>상담원 — 돈·정보 변경·감정·판단이 필요함</span>
+  </div>
+
+  <section class="trend" aria-label="매주 추이">
+    <h2>매주 상담원이 받은 비율 — 설계와의 차이</h2>
+    <div class="tiles" id="tiles"></div>
+    <div class="chartbox"><svg id="chart" viewBox="0 0 760 250" role="img" aria-label="주차별 상담원 대응 비율 추이"></svg></div>
+    <div class="legend" style="font-size:12.5px">
+      <span><i class="dot d-agent"></i>지금 상담원 — 상담원이 고객에게 말한 상담 비율</span>
+      <span><i class="dot" style="background:var(--wire)"></i>설계 상담원 — 지도에서 상담원 담당인 문의 비율</span>
+      <span>두 선 사이 = AI 몫인데 상담원이 받은 몫 · 세로 점선 = 바꾼 날</span>
+    </div>
+    <div class="heat" id="heat"></div>
+  </section>
+
+  <section class="map" aria-label="고객 여정 지도">
+    <div class="rowlabel">고객 여정 — 가입부터 자격증 받기까지</div>
+    <div class="journey" id="journey"></div>
+    <div class="rowlabel">여정 밖 문의 — 어느 단계에서나 나옴</div>
+    <div class="side" id="side"></div>
+  </section>
+
+  <section class="flow" id="flow" aria-live="polite"></section>
+</div>
+
+<script>
+const DATA = __DATA__;
+const TREND = __TREND__;
+const JOURNEY = ["가입·로그인(본인인증 포함)","수강 신청·수강","시험","자격증 신청","결제","배송","수령 후(재발급·정보수정)"];
+const SIDE = ["취소·환불","과목·자격증 정보","일자리","기타(이벤트·앱 오류·사람·전화 요청·운영시간)","분류 불가"];
+const SHORT = {"가입·로그인(본인인증 포함)":"가입·로그인","수령 후(재발급·정보수정)":"수령 후","기타(이벤트·앱 오류·사람·전화 요청·운영시간)":"기타(이벤트·앱 오류 등)"};
+const COLOR = {info:"var(--info)", lookup:"var(--look)", agent:"var(--agent)"};
+// 지금 태스크 노드 기준 조회 결과 갈래
+const TASKS = {
+  t1:{name:"입금·신청 조회", outs:[
+    ["i","계좌 발급됨","입금 계좌번호 안내"],["i","결제 완료","\"입금 확인됐어요, 발급 중이에요\""],
+    ["i","신청만 함","\"아직 결제 전이에요\" + 신청 버튼"],["i","신청·입금 기한 지남","연장 가능하면 결제 기한 3일 연장"],
+    ["a","미결제 신청 취소 요청","취소 처리"],["g","환불 요청","결제 상태를 말하고 상담원 연결"],["g","신청 내역 없음","상담원 연결"]]},
+  t2:{name:"배송 조회", outs:[
+    ["i","송장 있음","택배사·송장번호·발송일 + 배송 조회 버튼"],["i","송장 전","\"발급 중이에요\" + 예상 발송일"],
+    ["i","결제 전","입금 안내"],["g","전전월 이전 결제분","배송 조회 범위(당월+전월) 밖 → 상담원 연결"],["g","배송 완료인데 못 받음","상담원 연결"],["g","내역 없음","상담원 연결"]]},
+  t3:{name:"수강·시험 조회", outs:[
+    ["i","수강 중","진도·남은 기한 안내"],["i","시험 봄","합격 여부·점수 안내"],["i","합격·발급 미신청","발급 신청 버튼"],
+    ["g","다 들었는데 진도 안 오름·시험 버튼 문제","상담원 연결"],["g","내역 없음","상담원 연결"]]},
+  t4:{name:"기한 조회·연장", outs:[
+    ["i","수강 기한 지남","사유 한 번 묻고 수강 7일 연장"],["i","결제 기한 지남","결제 기한 3일 연장"],
+    ["i","기한 전 (미리 늘려 달라)","마감일 안내, \"미리 늘릴 수는 없어요\""],["g","연장 대상 아님 (상담 연장 2번 이미 씀·자격증 기한 지난 지 180일 넘음)","상담원 연결"]]},
+  t5:{name:"수강 알림 끄기", outs:[
+    ["i","알림 켜진 과목 있음","알림 끄기 실행"],["i","이미 다 꺼짐","\"이미 꺼져 있어요\""],["g","일부 남음·내역 없음","상담원 연결"]]},
+  gk:{name:"국비 과정 여부 조회", outs:[
+    ["i","국비 과정","7일 · 「수강 연장하기」 버튼으로 7일씩 연장"],["g","지금 조회 API에 국비 구분값이 없음","개발팀 확인 전까지는 상담원 연결"]]}
+};
+const taskOf = r => r.code === "B18" ? "gk" : r.code === "B10" ? "t4" : ((r.where.match(/t([1-5])/) || [])[0] || "t1");
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rowsOf = s => DATA.filter(r => r.stage === s).sort((a,b) => b.n - a.n);
+const sumOf = rows => rows.reduce((a,r) => a + r.n, 0);
+const splitSit = t => { const i = t.indexOf(" · "); return i < 0 ? ["", t] : [t.slice(0,i), t.slice(i+3)]; };
+let current = "결제";
+
+function stepCard(s){
+  const rows = rowsOf(s), t = sumOf(rows);
+  const by = {info:0, lookup:0, agent:0}; rows.forEach(r => by[r.mode] += r.n);
+  const bar = t ? ["info","lookup","agent"].map(m => `<span style="width:${by[m]/t*100}%;background:${COLOR[m]}"></span>`).join("") : "";
+  const ai = t ? Math.round((by.info + by.lookup)/t*100) : 0;
+  const tops = rows.filter(r => r.n).slice(0,3).map(r => `<div><i class="dot d-${r.mode}"></i><span>${esc(splitSit(r.sit)[1])}</span><b class="num">${r.n}</b></div>`).join("");
+  return `<button class="step" data-s="${esc(s)}" aria-pressed="${s===current}">
+    <span class="nm">${esc(SHORT[s] || s)}</span>
+    <span class="meta num">3주 ${t}건 · AI ${ai}%</span>
+    <span class="mini">${bar}</span>
+    <span class="tops">${tops}</span>${stepExtra(s)}</button>`;
+}
+
+function sitItem(r){
+  const [st, w] = splitSit(r.sit);
+  const dec = r.dec.map(d => `<span class="dec">${esc(d)}</span>`).join("");
+  return `<details class="sit"><summary><span class="w">${esc(w)}${st ? `<span class="st">${esc(st)}</span>` : ""}</span><span class="n num">${r.n}건 · 봇 ${esc(r.bot)}</span></summary>
+    <div class="more"><span>고객 표현: ${esc(r.ex)}</span><span>연결 조건: ${esc(r.cond)}</span>${dec}</div></details>`;
+}
+
+function renderFlow(){
+  const rows = rowsOf(current), t = sumOf(rows);
+  const lane = m => rows.filter(r => r.mode === m);
+  const info = lane("info"), look = lane("lookup"), ag = lane("agent");
+  const sub = (arr) => `<span class="s num">${arr.length}개 상황 · 3주 ${sumOf(arr)}건</span>`;
+
+  const infoHtml = info.length ? `<div class="box">${info.map(sitItem).join("")}</div><div class="sv"></div><div class="end">답하고 "더 도와드릴 것이 있을까요?"</div>` : `<div class="empty">이 단계엔 없음</div>`;
+
+  let lookHtml = `<div class="empty">이 단계엔 없음</div>`;
+  if (look.length){
+    const groups = {}; look.forEach(r => (groups[taskOf(r)] ||= []).push(r));
+    lookHtml = `<div class="box"><div class="note" style="padding:2px">전화번호 받기 — 거부하면 이유를 붙여 한 번 더, 또 거부하면 상담원(#12)</div></div><div class="sv"></div>` +
+      Object.entries(groups).map(([k, rs]) => `<div class="task"><div class="tt">${TASKS[k].name}</div>
+        <div class="tb">${rs.map(sitItem).join("")}</div>
+        <div class="outs">${TASKS[k].outs.map(([c,a,b]) => `<div class="out${c==="g" ? " ag" : ""}"><span class="a">↳</span><span><span class="k">${esc(a)}</span> → ${esc(b)}</span></div>`).join("")}</div></div>`).join(`<div class="sv"></div>`);
+  }
+
+  const agHtml = ag.length ? `<div class="box">${ag.map(sitItem).join("")}</div><div class="sv"></div><div class="end">"상담원에게 연결해 드릴게요" + 운영 시간(평일 10~17시) 안내</div>` : `<div class="empty">이 단계엔 없음</div>`;
+
+  document.getElementById("flow").innerHTML = `
+    <h2 style="align-self:flex-start;margin-bottom:16px">${esc(SHORT[current] || current)} 상담 흐름</h2>
+    <div class="node start num">고객 문의 · 3주 ${t}건</div><div class="vline"></div>
+    <div class="node judge">봇이 문의 종류를 판단</div><div class="split"></div>
+    <div class="lanes">
+      <div class="lane l-info"><div class="lhead"><span class="t"><i class="dot d-info"></i>AI 안내</span>${sub(info)}</div><div class="sv"></div>${infoHtml}</div>
+      <div class="lane l-lookup"><div class="lhead"><span class="t"><i class="dot d-lookup"></i>AI 조회</span>${sub(look)}</div><div class="sv"></div>${lookHtml}</div>
+      <div class="lane l-agent"><div class="lhead"><span class="t"><i class="dot d-agent"></i>상담원</span>${sub(ag)}</div><div class="sv"></div>${agHtml}</div>
+    </div>
+    <p class="note" style="align-self:flex-start;margin:16px 0 0">상황을 누르면 고객 표현·연결 조건·관련 결정이 보여요. 조회 갈래는 지금 채널톡 태스크 노드 기준이에요. 3주 0건인 상황도 함께 넣었어요.</p>`;
+}
+
+const LAST = TREND.weeks[TREND.weeks.length - 1];
+function stepExtra(s){
+  const st = (TREND.status || {})[s] || "설계 완료";
+  const b = LAST && LAST.by_stage[s];
+  const g = b ? `<span class="gap num">${LAST.label} AI 몫인데 상담원 ${b.gap}건</span>` : "";
+  return `${g}<span class="status${st !== "설계 완료" ? " on" : ""}">${esc(st)}</span>`;
+}
+const pc = (a,b) => b ? Math.round(a/b*100) : 0;
+function renderTrend(){
+  const W = TREND.weeks; if (!W.length) return;
+  const base = W.filter(w => (w.note||"").startsWith("기준선"));
+  const avg = k => base.length ? base.reduce((a,w) => a + (k === "gap" ? w.gap : pc(w[k], w.n)), 0) / base.length : null;
+  const L = W[W.length - 1];
+  const diff = (v, b, unit) => b == null || W.length <= base.length ? `<span>기준선 주차예요</span>` :
+    `<span class="${v > b ? "up" : "down"}">기준선 평균 ${Math.round(b)}${unit}보다 ${v > b ? "+" : ""}${Math.round(v - b)}${unit}</span>`;
+  const ch = Object.entries(L.by_channel || {}).map(([c,b]) => `${c === "academy" ? "아카데미" : "케어파트너"} 채널 ${pc(b.now,b.n)}%`).join(" · ");
+  document.getElementById("tiles").innerHTML = `
+    <div class="tile main"><span class="k">AI 몫인데 상담원이 받은 건 · ${esc(L.label)}</span><span class="v num">${L.gap}건</span><span class="s">${diff(L.gap, avg("gap"), "건")} · 줄여 갈 숫자</span></div>
+    <div class="tile"><span class="k">지금 상담원 비율</span><span class="v num">${pc(L.now,L.n)}%</span><span class="s">${L.now}/${L.n}건 · ${diff(pc(L.now,L.n), avg("now"), "%p")}</span><span class="s">${ch}</span></div>
+    <div class="tile"><span class="k">설계 상담원 비율 (최소치)</span><span class="v num">${pc(L.design,L.n)}%</span><span class="s">${L.design}/${L.n}건 · 문의 종류에 따라 주마다 달라져요</span></div>`;
+  // 꺾은선
+  const x0 = 56, x1 = 740, y0 = 20, y1 = 200, n = W.length;
+  const X = i => n === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (n - 1);
+  const Y = v => y1 - (y1 - y0) * v / 100;
+  const now = W.map(w => pc(w.now, w.n)), des = W.map(w => pc(w.design, w.n));
+  const grid = [0,25,50,75,100].map(v => `<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${x0-8}" y="${Y(v)+4}" text-anchor="end">${v}%</text>`).join("");
+  const area = `<polygon fill="var(--agent-soft)" points="${now.map((v,i)=>`${X(i)},${Y(v)}`).join(" ")} ${des.map((v,i)=>`${X(i)},${Y(v)}`).reverse().join(" ")}"/>`;
+  const line = (arr, col, dash) => `<polyline fill="none" stroke="${col}" stroke-width="2.5" ${dash ? 'stroke-dasharray="5 4"' : ""} points="${arr.map((v,i)=>`${X(i)},${Y(v)}`).join(" ")}"/>` +
+    arr.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="${i===n-1?5:3.5}" fill="${col}"/>`).join("");
+  const labels = W.map((w,i) => `<text x="${X(i)}" y="${y1+18}" text-anchor="middle">${esc(w.label)}</text>` +
+    `<text x="${X(i)}" y="${Y(now[i])-10}" text-anchor="middle" style="fill:var(--agent);font-weight:600">${now[i]}%</text>` +
+    `<text x="${X(i)}" y="${Y(des[i])+18}" text-anchor="middle">${des[i]}%</text>`).join("");
+  // 바꾼 날 표시: export 날짜 사이에 놓는다
+  const dates = W.map(w => w.export);
+  const marks = (TREND.changes || []).filter(c => c.stage !== "전체" || c.mark).map(c => {
+    let i = dates.findIndex(d => d > c.date); if (i <= 0) return "";
+    const x = (X(i-1) + X(i)) / 2;
+    return `<line x1="${x}" x2="${x}" y1="${y0}" y2="${y1}" stroke="var(--fg)" stroke-dasharray="2 3"/><text x="${x+4}" y="${y0+10}" style="fill:var(--fg)">${esc(c.short || c.stage)}</text>`;
+  }).join("");
+  const baseEnd = base.length && base.length < n ? `<text x="${X(base.length-1)}" y="${y1+34}" text-anchor="middle" style="font-size:10.5px">↑ 여기까지 기준선</text>` : (base.length ? `<text x="${(x0+x1)/2}" y="${y1+34}" text-anchor="middle" style="font-size:10.5px">모두 기준선(재설계 반영 전)</text>` : "");
+  document.getElementById("chart").innerHTML = grid + area + line(des, "var(--wire)", true) + line(now, "var(--agent)") + labels + marks + baseEnd;
+  // 단계별 표
+  const stages = JOURNEY.concat(SIDE);
+  const maxGap = Math.max(1, ...W.flatMap(w => stages.map(s => (w.by_stage[s]||{}).gap||0)));
+  const cell = b => { if (!b) return `<td class="c">-</td>`; const a = Math.min(.85, b.gap / maxGap);
+    return `<td class="c" style="background:color-mix(in srgb, var(--agent) ${Math.round(a*45)}%, transparent)">${b.gap}<span class="st">${pc(b.now,b.n)}% → ${pc(b.design,b.n)}%</span></td>`; };
+  document.getElementById("heat").innerHTML = `<table><thead><tr><th>단계 · AI 몫인데 상담원 (건)</th>${W.map(w=>`<th>${esc(w.label)}${(w.note||"").startsWith("기준선")?"<span class='st'>기준선</span>":""}</th>`).join("")}<th>진행</th></tr></thead><tbody>${
+    stages.map(s => `<tr><td>${esc(SHORT[s]||s)}</td>${W.map(w => cell(w.by_stage[s])).join("")}<td><span class="status${((TREND.status||{})[s]||"설계 완료")!=="설계 완료"?" on":""}">${esc((TREND.status||{})[s]||"설계 완료")}</span></td></tr>`).join("")
+  }</tbody></table><p class="note" style="padding:8px 10px;margin:0">칸 아래 작은 글씨 = 지금 상담원 % → 설계 상담원 %. 색이 진할수록 AI 몫인데 상담원이 받은 건이 많아요.</p>`;
+}
+
+function renderMap(){
+  document.getElementById("journey").innerHTML = JOURNEY.map(stepCard).join(`<span class="arrow" aria-hidden="true">→</span>`);
+  document.getElementById("side").innerHTML = SIDE.map(stepCard).join("");
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".step"); if (!b) return;
+  current = b.dataset.s; renderMap(); renderFlow();
+  try { localStorage.setItem("alf-flow-stage", current); } catch(e) {}
+});
+try { const s = localStorage.getItem("alf-flow-stage"); if (s && DATA.some(r => r.stage === s)) current = s; } catch(e) {}
+renderTrend(); renderMap(); renderFlow();
+</script>
