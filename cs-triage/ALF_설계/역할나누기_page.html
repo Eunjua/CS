@@ -226,7 +226,7 @@ function renderFlow(){
   const info = lane("info"), look = lane("lookup"), ag = lane("agent");
   const sub = (arr) => `<span class="s num">${arr.length}개 상황 · 3주 ${sumOf(arr)}건</span>`;
 
-  const infoHtml = info.length ? `<div class="box">${info.map(sitItem).join("")}</div><div class="sv"></div><div class="end">답하고 "더 도와드릴 것이 있을까요?"</div>` : `<div class="empty">이 단계엔 없음</div>`;
+  const infoHtml = info.length ? `<div class="box">${info.map(sitItem).join("")}</div><div class="sv"></div><div class="end">답하고, 다음 질문을 조용히 기다림 — 새 질문이 오면 이어서 처리</div>` : `<div class="empty">이 단계엔 없음</div>`;
 
   let lookHtml = `<div class="empty">이 단계엔 없음</div>`;
   if (look.length){
@@ -234,7 +234,8 @@ function renderFlow(){
     lookHtml = `<div class="box"><div class="note" style="padding:2px">전화번호 받기 — 거부하면 이유를 붙여 한 번 더, 또 거부하면 상담원(#12)</div></div><div class="sv"></div>` +
       Object.entries(groups).map(([k, rs]) => `<div class="task"><div class="tt">${TASKS[k].name}</div>
         <div class="tb">${rs.map(sitItem).join("")}</div>
-        <div class="outs">${TASKS[k].outs.map(([c,a,b]) => `<div class="out${c==="g" ? " ag" : ""}"><span class="a">↳</span><span><span class="k">${esc(a)}</span> → ${esc(b)}</span></div>`).join("")}</div></div>`).join(`<div class="sv"></div>`);
+        <div class="outs">${TASKS[k].outs.map(([c,a,b]) => `<div class="out${c==="g" ? " ag" : ""}"><span class="a">↳</span><span><span class="k">${esc(a)}</span> → ${esc(b)}</span></div>`).join("")}</div></div>`).join(`<div class="sv"></div>`) +
+      `<div class="sv"></div><div class="end">안내한 뒤 조용히 기다림 — 새 질문이 오면 이어서 처리</div>`;
   }
 
   const agHtml = ag.length ? `<div class="box">${ag.map(sitItem).join("")}</div><div class="sv"></div><div class="end">"상담원에게 연결해 드릴게요" + 운영 시간(평일 10~17시) 안내</div>` : `<div class="empty">이 단계엔 없음</div>`;
