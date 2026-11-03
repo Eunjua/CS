@@ -24,7 +24,7 @@ def main():
     row = json.loads(sys.argv[1])
     body = json.dumps({"token": conf["token"], "row": row}).encode()
     req = urllib.request.Request(conf["url"], data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as res:
+    with urllib.request.urlopen(req, timeout=90) as res:
         text = res.read().decode()
     try:
         result = json.loads(text)

@@ -9,6 +9,18 @@ const SHEET_GID = 0;
 const TEMPLATE_SHEET_ID = '1CE4RQ2MKPsyA4hGHBT-p8TPCDK8D5VqfmVbc5mFOgFs';
 const TPL_HEADER = ['key', '구분', '템플릿명', '제목', '본문', '수정일시'];
 
+// 자격증관리 기준 시트 (gas/cert/가 붙은 곳). 과정을 추가하면 자격증매핑·발급과정 탭에도 이름을 적는다
+// 이미 복사된 달 시트([11월] 등)에는 안 들어간다 — 다음에 복사하는 달부터 반영
+const CERT_SHEET_ID = '176YVTv5JM21i1p7fc6pBz_kmXnP8AYAXwseLXeBEr6g';
+const CERTMAP_GID = 1587354516; // 자격증매핑: A 자격증명 · B 발급기관(코드)
+const COURSE_GID = 2058228529;  // 발급과정: A 과정명 · B 코드번호(은주가 직접 채움)
+// 발급 기관 이름 → 자격증매핑 B열 코드 (gas/cert/Code.js resolveAgency가 읽는 값)
+const ORG_CODE = {
+  '한국엔씨에스자격개발원(주)': 'ncs',
+  '한국검정평가원': 'korean',
+  '(주)한국자격개발원': 'baby',
+};
+
 // 스킬이 보내는 이름 → 시트 1행 칸 이름
 const FIELDS = {
   name: '과정명',
@@ -23,6 +35,7 @@ const FIELDS = {
 function authorize() {
   Logger.log(getSheet_().getName() + ' 시트 접근 확인');
   Logger.log(SpreadsheetApp.openById(TEMPLATE_SHEET_ID).getName() + ' (템플릿 시트) 접근 확인');
+  Logger.log(SpreadsheetApp.openById(CERT_SHEET_ID).getName() + ' (자격증관리 기준 시트) 접근 확인');
 }
 
 function doPost(e) {
@@ -55,6 +68,11 @@ function doPost(e) {
         result.template = addBookTemplate_(result.values);
       } catch (err) {
         result.template = { ok: false, error: String(err) };
+      }
+      try {
+        result.certSheet = addToCertSheet_(result.values);
+      } catch (err) {
+        result.certSheet = { ok: false, error: String(err) };
       }
     }
     return json_(result);
@@ -137,6 +155,40 @@ function addBookTemplate_(values) {
   const row = [key, '문자', '교재 발송 (' + name + ')', '[케어아카데미] 교재 발송 안내', body, new Date()];
   sh.appendRow(row);
   return { ok: true, action: 'added', key: key, row: sh.getLastRow(), name: row[2], body: body };
+}
+
+// 자격증관리 기준 시트의 자격증매핑·발급과정 탭에 과정명을 한 줄씩 적는다
+// - 같은 이름이 이미 있으면 그 탭은 건드리지 않는다
+// - 발급 기관이 ORG_CODE에 없으면 자격증매핑은 적지 않는다 (틀린 코드가 정산을 흐트리지 않게)
+function addToCertSheet_(values) {
+  const name = String(values[FIELDS.name] || '').trim();
+  const org = String(values[FIELDS.org] || '').trim();
+  const ss = SpreadsheetApp.openById(CERT_SHEET_ID);
+
+  const code = ORG_CODE[org];
+  const mapping = code
+    ? appendIfMissing_(ss, CERTMAP_GID, name, [name, code])
+    : { action: 'skipped', reason: org ? '발급 기관 코드 모름: ' + org : '발급 기관 없음' };
+  const course = appendIfMissing_(ss, COURSE_GID, name, [name]);
+  return { ok: true, mapping: mapping, course: course };
+}
+
+// A열에 name이 없으면 맨 아래에 row를 붙인다
+function appendIfMissing_(ss, gid, name, row) {
+  const sh = ss.getSheets().find(s => s.getSheetId() === gid);
+  if (!sh) throw new Error('자격증관리 시트에 gid=' + gid + ' 탭이 없음');
+  const last = sh.getLastRow();
+  const names = last > 1 ? sh.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  const found = names.indexOf(name);
+  if (found > -1) return { action: 'exists', tab: sh.getName(), row: found + 2 };
+  // 다른 열(발급과정 C~E 안내표 등)이 더 길어도 A열 마지막 이름 바로 아래에 붙인다
+  let lastA = names.length;
+  while (lastA > 0 && !names[lastA - 1]) lastA--;
+  const rowNum = lastA + 2;
+  const range = sh.getRange(rowNum, 1, 1, row.length);
+  range.setNumberFormat('@');
+  range.setValues([row]);
+  return { action: 'added', tab: sh.getName(), row: rowNum, values: row };
 }
 
 function getSheet_() {
