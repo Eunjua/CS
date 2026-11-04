@@ -13,6 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 LOCAL = ROOT / "gas" / "cert-detail" / ".local.json"
+# worktree(.claude/worktrees/…)에서 돌면 열쇠 파일은 원래 폴더에만 있다
+if not LOCAL.exists() and ROOT.parent.name == "worktrees":
+    LOCAL = ROOT.parents[2] / "gas" / "cert-detail" / ".local.json"
 
 
 def main():
