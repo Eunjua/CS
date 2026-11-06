@@ -263,6 +263,8 @@
     color: #555;
   }
 
+  .mail-attach .label.over { color: #c0392b; font-weight: 600; }
+
   /* ── 탭 (문자 / 이메일 / 템플릿 관리) ── */
   .tabs {
     max-width: 1100px;
@@ -530,7 +532,7 @@
     <!-- 첨부파일 -->
     <label for="files">첨부파일 (PC에서 선택)</label>
     <input type="file" id="files" multiple onchange="renderPreview()">
-    <p class="hint">이수증·영수증 등 PDF를 첨부할 수 있습니다. 첨부 합계는 약 25MB 이내로 해주세요.</p>
+    <p class="hint">이수증·영수증 등 PDF를 첨부할 수 있습니다. 첨부 합계 20MB까지 보낼 수 있어요. 넘으면 PDF를 압축하거나 나눠 보내 주세요.</p>
 
     <!-- 공용 PIN -->
     <label for="pin">발송 PIN</label>
@@ -632,7 +634,7 @@
       <div class="mail-subject" id="pv-subject">(제목 없음)</div>
       <div class="mail-body placeholder" id="pv-body">본문 미리보기가 여기에 표시됩니다.</div>
       <div class="mail-attach" id="pv-attach-wrap" style="display:none;">
-        <div class="label">첨부파일</div>
+        <div class="label" id="pv-attach-label">첨부파일</div>
         <div id="pv-attach"></div>
       </div>
     </div>
@@ -934,7 +936,13 @@
     // 첨부 파일명 목록
     const wrap   = document.getElementById('pv-attach-wrap');
     const attach = document.getElementById('pv-attach');
+    const label  = document.getElementById('pv-attach-label');
     if (files && files.length) {
+      const total = totalSize(files);
+      const over  = total > MAX_ATTACH_BYTES;
+      label.textContent = '첨부파일 · 합계 ' + fmtSize(total)
+        + (over ? ' — ' + MAX_ATTACH_MB + 'MB를 넘어 보낼 수 없어요' : '');
+      label.classList.toggle('over', over);
       attach.innerHTML = '';
       for (let i = 0; i < files.length; i++) {
         const chip = document.createElement('span');
@@ -947,6 +955,26 @@
       wrap.style.display = 'none';
     }
   }
+
+  /* ── 첨부 합계 한도 ──
+     Gmail은 첨부 합계 25MB까지만 보내고, 파일은 보낼 때 약 1.3배로 커집니다.
+     넘는 파일(예: 58MB)은 서버까지 가지도 못하고 "보내는 중"에서 멈추므로, 보내기 전에 막습니다. */
+  const MAX_ATTACH_MB    = 20;
+  const MAX_ATTACH_BYTES = MAX_ATTACH_MB * 1024 * 1024;
+
+  function totalSize(files) {
+    let sum = 0;
+    for (let i = 0; i < files.length; i++) sum += files[i].size;
+    return sum;
+  }
+
+  /* 메일 발송 응답을 기다리는 최대 시간(3분). 20MB 첨부도 보통 1분 안에 끝납니다. */
+  const SEND_TIMEOUT_MS = 3 * 60 * 1000;
+
+  const TIMEOUT_MSG =
+    '⚠️ 3분이 지나도 응답이 없어 기다리기를 멈췄어요.\n'
+    + '메일이 나갔을 수도 있으니 보낸편지함에서 먼저 확인하시고, 없을 때만 다시 보내세요.\n'
+    + '(인터넷이 느리거나 첨부가 크면 이럴 수 있어요)';
 
   /* ── 파일 크기 보기 좋게 ── */
   function fmtSize(bytes) {
@@ -1018,9 +1046,16 @@
     if (GAS_URL === "여기에_배포후_URL_붙여넣기" || !GAS_URL) {
       return showResult('err', '❌ 아직 GAS 웹앱 URL이 설정되지 않았습니다. (index.html의 GAS_URL 확인)');
     }
+    const total = totalSize(files);
+    if (total > MAX_ATTACH_BYTES) {
+      return showResult('err', '❌ 첨부 합계가 ' + fmtSize(total) + '예요. ' + MAX_ATTACH_MB
+        + 'MB 이하로 줄여 주세요. (PDF 압축 또는 메일을 나눠 보내기)');
+    }
 
     btn.disabled = true;
-    showResult('loading', '⏳ 첨부파일을 준비하고 메일을 보내는 중입니다…');
+    showResult('loading', files.length
+      ? '⏳ 첨부파일(' + fmtSize(total) + ')을 준비하고 메일을 보내는 중입니다…'
+      : '⏳ 메일을 보내는 중입니다…');
 
     try {
       // 첨부파일 base64 변환
@@ -1032,13 +1067,24 @@
       const payload = { to, subject, body, pin, attachments };
 
       // CORS preflight를 피하기 위해 text/plain 으로 JSON 문자열을 전송
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await readSendResult(res);
+      // 응답이 끝내 안 오면 화면이 영영 멈추므로, 3분이 지나면 기다리기를 멈춥니다.
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), SEND_TIMEOUT_MS);
+      let data;
+      try {
+        const res = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal
+        });
+        data = await readSendResult(res);
+      } catch (err) {
+        if (err.name === 'AbortError') return showResult('warn', TIMEOUT_MSG);
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
       if (!data) return showResult('warn', UNCONFIRMED_MSG);
 
       if (data.ok) {
