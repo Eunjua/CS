@@ -50,7 +50,8 @@ var SUM_COL = {
   '재발급':     'G',
   '취소':       'H',
   '취소일':     'I',
-  'order_id':  'J'    // 송장 매칭용 (고객id·과정코드가 들어 있음)
+  'order_id':  'J',   // 송장 매칭용 (고객id·과정코드가 들어 있음)
+  '제작일자':   'K'    // 제작리스트 B열 제작일자
 };
 
 // 발급과정 시트
@@ -786,6 +787,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
   // (칸마다 setValue 하면 구글 서버와 매번 통신 → 건수 많으면 수십 분 소요)
   var outRows = [];   // [배송일, 이름, 전화번호, 자격증, type_code, 송장번호(빈칸), 재발급]
   var orderIds = [];  // 같은 순서로 order_id (J열, 취소 체크칸 H·I는 건드리지 않으려고 따로 씀)
+  var makeDates = []; // 같은 순서로 제작일자 (K열)
 
   selectedDates.forEach(function(mmdd) {
     var group   = dateGroups[mmdd];
@@ -813,6 +815,7 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
         reissueFlag(row, idx)
       ]);
       orderIds.push([(row[idx['order_id']] || '').toString().trim()]);
+      makeDates.push([normalizeDate(row[idx['제작일자']])]);
     });
   });
 
@@ -828,6 +831,11 @@ function appendToSummarySheet(ss, selectedDates, dateGroups, idx) {
     var orderHeader = summarySheet.getRange(1, orderColNum);
     if (orderHeader.getValue() === '') orderHeader.setValue('order_id');   // 기존 시트엔 제목이 없으니 채움
     summarySheet.getRange(insertRow, orderColNum, orderIds.length, 1).setValues(orderIds);
+
+    var makeColNum = colIdx(SUM_COL['제작일자']) + 1;
+    var makeHeader = summarySheet.getRange(1, makeColNum);
+    if (makeHeader.getValue() === '') makeHeader.setValue('제작일자');
+    summarySheet.getRange(insertRow, makeColNum, makeDates.length, 1).setValues(makeDates);
   }
 }
 
