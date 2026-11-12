@@ -4,6 +4,13 @@
  * 알림 두 종류
  *   새 요청   : B(요청자)·C(담당자)·D(요청 내용)가 모두 채워지는 순간 → 담당자 멘션
  *   처리 완료 : E(처리 사항)에 값이 들어오고 1분 뒤, 그때 적힌 값으로 → 요청자 멘션
+ *               새 요청 글의 스레드(답글) 안에 단다. 스레드 번호가 없는 줄은 채널에 따로 보낸다
+ *
+ * 스레드 번호
+ *   H(슬랙 스레드) : 요청 글의 슬랙 링크나 글 번호. 사람은 볼 일 없다(숨겨도 됨)
+ *                    - 슬랙 워크플로가 요청을 올리면 워크플로가 「메시지 링크」를 적는다
+ *                    - 이 스크립트가 새 요청 알림을 보냈으면 스크립트가 글 번호를 적는다
+ *   봇 토큰으로 보낼 때만 번호를 받을 수 있다. 웹훅은 번호를 안 알려줘서 스레드에 못 단다
  *
  * 날짜 자동 입력
  *   A(날짜)      : B·C·D 중 아무 칸이나 처음 입력될 때. 이미 값이 있으면 두지 않는다
@@ -14,9 +21,12 @@
  *   G(처리 날짜)가 이미 찍힌 줄 : 끝난 요청이라 E·B·C·D를 고쳐도 알림 없음
  *
  * 처음 한 번만 해야 하는 설정 (Apps Script 화면에서)
- *   1) 프로젝트 설정 > 스크립트 속성 두 개 등록
+ *   1) 프로젝트 설정 > 스크립트 속성 등록
  *      SLACK_WEBHOOK_URL = https://hooks.slack.com/services/...
  *      SLACK_USER_MAP    = {"이름":"슬랙멤버ID", ...}   (멘션 안 걸 거면 생략 가능)
+ *      SLACK_BOT_TOKEN   = xoxb-...        (스레드 답장용. chat:write 권한, 봇을 채널에 초대)
+ *      SLACK_CHANNEL_ID  = C0...           (#ncs-보살핌 채널 ID)
+ *      ※ 봇 토큰·채널 ID가 없거나 봇 발송이 실패하면 예전처럼 웹훅으로 채널에 보낸다
  *   2) 함수 목록에서 연결테스트 실행 → 슬랙에 메시지 오는지 확인
  *   3) 함수 목록에서 트리거설치 실행 → 시트 감시 시작
  *
@@ -30,6 +40,7 @@ const 담당자열 = 3;
 const 요청내용열 = 4;
 const 처리사항열 = 5;
 const 처리날짜열 = 7;
+const 스레드열 = 8;
 const 요청칸들 = [요청자열, 담당자열, 요청내용열];
 
 const 처리함수 = '시트수정감지';
@@ -103,12 +114,23 @@ function 새요청알림(셀, e) {
   const [, 요청자, 담당자, 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
   if (!String(요청자).trim() || !String(담당자).trim() || !String(요청내용).trim()) return;
 
-  슬랙보내기([
+  const 글번호 = 슬랙보내기([
     '*요청사항을 확인해주세요*',
     '• 담당자: ' + 멘션(담당자),
     '• 요청 내용: ' + (요청내용 || '-'),
     '<' + 시트.getParent().getUrl() + '|시트에서 보기>'
   ].join('\n'));
+
+  // 처리 완료를 이 글의 스레드에 달려고 번호를 적어 둔다. 못 적어도 알림은 이미 나갔다
+  if (글번호) {
+    try {
+      const 칸 = 시트.getRange(셀.getRow(), 스레드열);
+      칸.setNumberFormat('@');   // 1731123456.123456 이 숫자로 바뀌어 끝자리가 깎이지 않게 글자로
+      칸.setValue(글번호);
+    } catch (err) {
+      console.error('스레드 번호 기록 실패 — 처리 완료는 채널에 따로 갑니다. ' + err);
+    }
+  }
 }
 
 /**
@@ -131,18 +153,81 @@ function 처리완료알림(셀) {
   const 값 = String(시트.getRange(행, 처리사항열).getValue()).trim();
   if (!값) return;                    // 기다리는 사이 지웠으면 안 보냄
 
-  const [, 요청자, , 요청내용] = 시트.getRange(행, 1, 1, 4).getValues()[0];
+  const [, 요청자, 담당자, 요청내용] = 시트.getRange(행, 1, 1, 4).getValues()[0];
+  const 스레드 = 글번호뽑기(시트.getRange(행, 스레드열).getValue());
 
+  const 시트링크 = '<' + 시트.getParent().getUrl() + '|시트에서 보기>';
+
+  // 스레드에 달 땐 요청 내용이 바로 위 원글에 있으니 담당자 멘션과 처리 사항만 보낸다
+  if (스레드) {
+    슬랙보내기([
+      '*처리 완료*',
+      '— 담당자: ' + 멘션(담당자),
+      '— 처리 사항: ' + 값,
+      시트링크
+    ].join('\n'), 스레드);
+    return;
+  }
+
+  // 스레드 번호가 없어 채널에 따로 갈 땐 무슨 요청인지 알 수 있게 요청 내용까지 붙인다
   슬랙보내기([
     '*요청 처리 완료*',
     '• 요청자: ' + 멘션(요청자),
     '• 요청 내용: ' + (요청내용 || '-'),
     '• 처리 사항: ' + 값,
-    '<' + 시트.getParent().getUrl() + '|시트에서 보기>'
-  ].join('\n'));
+    시트링크
+  ].join('\n'), 스레드);
 }
 
-function 슬랙보내기(문구) {
+/**
+ * H열 값에서 슬랙 글 번호를 꺼낸다.
+ *   링크  https://xxx.slack.com/archives/C0.../p1731123456123456  → 1731123456.123456
+ *   번호  1731123456.123456                                       → 그대로
+ * 둘 다 아니면 빈 값(→ 채널로 따로 보낸다)
+ */
+function 글번호뽑기(값) {
+  const 글 = String(값 || '').trim();
+  const 링크 = 글.match(/\/p(\d{10})(\d{6})(?:\D|$)/);
+  if (링크) return 링크[1] + '.' + 링크[2];
+  return /^\d{10}\.\d{6}$/.test(글) ? 글 : '';
+}
+
+/**
+ * 슬랙으로 보내고, 보낸 글 번호를 돌려준다(웹훅으로 보냈으면 빈 값).
+ * 스레드 번호를 주면 그 글의 답글로 단다.
+ * 봇 발송이 실패해도 알림이 사라지지 않게 웹훅으로 채널에 다시 보낸다.
+ */
+function 슬랙보내기(문구, 스레드) {
+  const 속성 = PropertiesService.getScriptProperties();
+  const 토큰 = String(속성.getProperty('SLACK_BOT_TOKEN') || '').trim();
+  const 채널 = String(속성.getProperty('SLACK_CHANNEL_ID') || '').trim();
+  if (토큰 && 채널) {
+    try {
+      return 봇으로보내기(토큰, 채널, 문구, 스레드);
+    } catch (err) {
+      console.error('봇 발송 실패 — 웹훅으로 채널에 보냅니다. ' + err);
+    }
+  }
+  웹훅으로보내기(문구);
+  return '';
+}
+
+function 봇으로보내기(토큰, 채널, 문구, 스레드) {
+  const 내용 = { channel: 채널, text: 문구 };
+  if (스레드) 내용.thread_ts = 스레드;
+  const 응답 = UrlFetchApp.fetch('https://slack.com/api/chat.postMessage', {
+    method: 'post',
+    contentType: 'application/json; charset=utf-8',
+    headers: { Authorization: 'Bearer ' + 토큰 },
+    payload: JSON.stringify(내용),
+    muteHttpExceptions: true
+  });
+  const 결과 = JSON.parse(응답.getContentText() || '{}');
+  if (!결과.ok) throw new Error('chat.postMessage ' + 응답.getResponseCode() + ' ' + (결과.error || 응답.getContentText()));
+  return String(결과.ts || '');
+}
+
+function 웹훅으로보내기(문구) {
   const url = String(PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL') || '').trim();
   if (!url) throw new Error('스크립트 속성에 SLACK_WEBHOOK_URL 이 없습니다.');
 
@@ -157,11 +242,17 @@ function 슬랙보내기(문구) {
   }
 }
 
-/** 웹훅 연결 + 멘션 표시를 한 번에 확인하는 함수 */
+/** 연결 + 멘션 표시 + 스레드 답장을 한 번에 확인하는 함수 */
 function 연결테스트() {
   const 이름들 = Object.keys(이름표());
   const 멘션들 = 이름들.length ? 이름들.map(멘션).join(' ') : '(SLACK_USER_MAP 비어 있음)';
-  슬랙보내기('연결 테스트 — 이 메시지가 보이면 웹훅 정상입니다.\n멘션 확인(' + 이름들.length + '명): ' + 멘션들);
+  const 글번호 = 슬랙보내기('연결 테스트 — 이 메시지가 보이면 발송 정상입니다.\n멘션 확인(' + 이름들.length + '명): ' + 멘션들);
+  if (글번호) {
+    슬랙보내기('스레드 답장 테스트 — 이 글이 위 메시지의 답글로 보이면 정상입니다.', 글번호);
+    console.log('봇으로 보냈습니다. 슬랙에서 답글 1개가 달렸는지 확인하세요.');
+  } else {
+    console.log('웹훅으로 보냈습니다. 스레드 답장을 쓰려면 SLACK_BOT_TOKEN·SLACK_CHANNEL_ID를 넣으세요(실행 로그에 봇 실패 이유가 있으면 확인).');
+  }
 }
 
 /** 수정 시 트리거 설치. 여러 번 실행해도 중복으로 쌓이지 않는다. */

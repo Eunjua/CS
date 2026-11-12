@@ -28,7 +28,7 @@ Apps Script(GAS)는 모두 `gas/` 아래에 있고, **폴더 하나 = 구글 App
 | (화면 없음) | `gas/cert/Code.js` → 자격증 기준 시트 | clasp 자동 |
 | (화면 없음) | `gas/cert-detail/Code.js` → 과목 관리 시트에 과정 한 줄 쓰기 (`/cert-detail` 스킬이 호출, 주소·열쇠는 `.local.json`) | clasp 자동 |
 | (화면 없음) | `gas/request-log/Code.js` → 「은주에게 요청한 것들」 시트3에 슬랙 요청 한 줄씩 쓰기 (`/요청기록` 스킬이 호출, 주소·열쇠는 `.local.json`) | clasp 자동 |
-| (화면 없음) | `gas/slack/Code.js` → 「주소 확인 요청」 시트에 요청·처리 완료가 적히면 슬랙 #ncs-보살핌에 알림 | clasp 자동 |
+| (화면 없음) | `gas/slack/Code.js` → 「주소 확인 요청」 시트에 요청·처리 완료가 적히면 슬랙 #ncs-보살핌에 알림 (요청 글은 슬랙 워크플로가 올림. 처리 완료는 H열 메시지 링크로 요청 글 스레드에 답글) | clasp 자동 |
 | (화면 없음) | `gas/b2g-signed-at/B2GSignedAt.gs` → B2G 취업확인서 서명일자 일괄 수정 | 수동 복붙 |
 
 **새 GAS를 만들 때** — `gas/<이름>/` 폴더에 만들고(이름에 `gas-`를 붙이지 않음), 위 표에 한 줄 추가하세요.

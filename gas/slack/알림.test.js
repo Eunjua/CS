@@ -7,7 +7,10 @@ eval(fs.readFileSync(__dirname + '/Code.js', 'utf8'));
 
 // --- Apps Script 흉내 ---
 var 보낸것 = null;
-슬랙보내기 = function (문구) { 보낸것 = 문구; };
+var 보낸스레드 = null;
+var 돌려줄글번호 = '';
+var 진짜슬랙보내기 = 슬랙보내기;   // 아래 '발송 방식' 점검에서 쓴다
+슬랙보내기 = function (문구, 스레드) { 보낸것 = 문구; 보낸스레드 = 스레드; return 돌려줄글번호; };
 var 기다린ms = 0;
 Utilities = { sleep: function (ms) { 기다린ms = ms; } };
 SpreadsheetApp = { flush: function () {} };
@@ -114,3 +117,92 @@ assert.ok(고친알림.indexOf('101동 603호') !== -1, '기다린 뒤 고친 �
 var 지운사이 = ['2026. 9. 7', '홍길동', '홍길동', '주소 확인', '101동 603호', '', ''];
 Utilities.sleep = function () { 지운사이[4] = ''; };   // 기다리는 사이 지움
 assert.strictEqual(편집(지운사이, 2, 5 /* E 처리 사항 */, 빈칸), null, '기다리는 사이 지웠으면 안 보낸다');
+
+Utilities.sleep = function () {};
+
+// --- 스레드 답장 ---
+// 봇으로 보내 글 번호를 받으면 H열에 글자로 적어 둔다
+돌려줄글번호 = '1731123456.123456';
+var 스레드행 = ['', '홍길동', '홍길동', '주소 확인 부탁드립니다', '', '', '', ''];
+편집(스레드행, 2, 4 /* D 요청 내용 */, 빈칸);
+assert.strictEqual(스레드행[7], '1731123456.123456', '새 요청 글 번호를 H열에 적어야 한다');
+assert.ok(!보낸스레드, '새 요청은 채널에 새 글로 보낸다');
+
+// 처리 완료는 H열 번호의 스레드로
+돌려줄글번호 = '9999.0001';
+스레드행[4] = '101동 603호';
+편집(스레드행, 2, 5 /* E 처리 사항 */, 빈칸);
+assert.strictEqual(보낸스레드, '1731123456.123456', '처리 완료는 요청 글 스레드에 달아야 한다');
+assert.ok(보낸것.indexOf('*처리 완료*\n— 담당자: <@U000TEST>\n— 처리 사항: 101동 603호') === 0, '스레드 답글은 담당자 멘션 + 처리 사항');
+assert.ok(보낸것.indexOf('요청자') === -1, '스레드 답글엔 요청자를 넣지 않는다');
+assert.ok(보낸것.indexOf('요청 내용') === -1, '스레드 답글엔 요청 내용을 다시 넣지 않는다');
+assert.strictEqual(스레드행[7], '1731123456.123456', '처리 완료가 H열 번호를 바꾸면 안 된다');
+
+// 웹훅으로 보내 번호가 없으면 H열은 비워 두고, 처리 완료는 채널로
+돌려줄글번호 = '';
+var 웹훅행 = ['', '홍길동', '홍길동', '주소 확인', '', '', '', ''];
+편집(웹훅행, 2, 4, 빈칸);
+assert.strictEqual(웹훅행[7], '', '번호가 없으면 H열을 건드리지 않는다');
+웹훅행[4] = '101동 603호';
+편집(웹훅행, 2, 5, 빈칸);
+assert.strictEqual(보낸스레드, '', 'H열이 비면 채널로 보낸다');
+
+// 이번 변경 전 줄(H열 자체가 없음)도 채널로
+편집(['9/9', '홍길동', '홍길동', '주소 확인', '101동', '', ''], 2, 5, 빈칸);
+assert.strictEqual(보낸스레드, '', '옛 줄은 채널로 보낸다');
+
+// 워크플로가 H열에 적은 메시지 링크로도 스레드에 단다
+var 링크행 = ['9/9', '홍길동', '홍길동', '주소 확인', '101동', '', '', 'https://bosalpim.slack.com/archives/C0123ABC/p1731123456123456'];
+편집(링크행, 2, 5, 빈칸);
+assert.strictEqual(보낸스레드, '1731123456.123456', '메시지 링크에서 글 번호를 꺼내야 한다');
+
+assert.strictEqual(글번호뽑기('https://x.slack.com/archives/C01/p1731123456123456?thread_ts=1.2&cid=C01'), '1731123456.123456');
+assert.strictEqual(글번호뽑기('1731123456.123456'), '1731123456.123456');
+assert.strictEqual(글번호뽑기('메모'), '', '엉뚱한 값이면 채널로');
+assert.strictEqual(글번호뽑기(''), '');
+
+// --- 발송 방식 (봇 → 실패하면 웹훅) ---
+var 호출 = [];
+var 봇응답 = '';
+UrlFetchApp = { fetch: function (url, 옵션) {
+  호출.push({ url: url, 내용: JSON.parse(옵션.payload), 옵션: 옵션 });
+  var 봇 = url.indexOf('slack.com/api') !== -1;
+  return { getResponseCode: function () { return 200; },
+           getContentText: function () { return 봇 ? 봇응답 : 'ok'; } };
+} };
+function 속성(값) {
+  PropertiesService = { getScriptProperties: function () {
+    return { getProperty: function (k) { return 값[k] || null; } };
+  } };
+}
+
+// 토큰·채널이 있으면 봇으로, 스레드 번호를 실어 보내고 글 번호를 돌려준다
+속성({ SLACK_BOT_TOKEN: 'xoxb-test', SLACK_CHANNEL_ID: 'C000', SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x' });
+봇응답 = '{"ok":true,"ts":"111.222"}';
+호출 = [];
+assert.strictEqual(진짜슬랙보내기('안녕', '100.001'), '111.222');
+assert.strictEqual(호출.length, 1);
+assert.strictEqual(호출[0].내용.thread_ts, '100.001');
+assert.strictEqual(호출[0].내용.channel, 'C000');
+assert.strictEqual(호출[0].옵션.headers.Authorization, 'Bearer xoxb-test');
+
+// 스레드 번호가 없으면 thread_ts를 안 보낸다
+호출 = [];
+진짜슬랙보내기('안녕');
+assert.ok(!('thread_ts' in 호출[0].내용));
+
+// 봇이 실패하면(초대 안 됨 등) 웹훅으로 채널에 다시 보내 알림이 사라지지 않는다
+봇응답 = '{"ok":false,"error":"not_in_channel"}';
+호출 = [];
+var 원래에러 = console.error; console.error = function () {};
+assert.strictEqual(진짜슬랙보내기('안녕', '100.001'), '');
+console.error = 원래에러;
+assert.strictEqual(호출.length, 2);
+assert.ok(호출[1].url.indexOf('hooks.slack.com') !== -1, '실패하면 웹훅으로 보낸다');
+
+// 토큰이 없으면 지금처럼 웹훅만
+속성({ SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x' });
+호출 = [];
+assert.strictEqual(진짜슬랙보내기('안녕'), '');
+assert.strictEqual(호출.length, 1);
+assert.ok(호출[0].url.indexOf('hooks.slack.com') !== -1);
