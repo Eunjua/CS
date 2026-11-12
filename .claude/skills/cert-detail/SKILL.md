@@ -1,11 +1,11 @@
 ---
 name: cert-detail
-description: 케어아카데미에 신규 자격증 과정이 열렸을 때 ALF 봇이 참고하는 자격증 상세 문서(cs-triage/ALF_docs/자격증상세/)를 기존 형식대로 추가한다. 사용자가 "자격증 상세 추가해줘", "신규 과정 추가", "○○지도사 자격증 문서 만들어줘", "새 자격증 정보 입력할게" 같은 요청을 하면 필요한 정보를 먼저 묻고, 받은 만큼만 채워 파일을 만들고, 시트·채널톡 두 채널 도큐먼트·CS 공유 보드 카드까지 넣는다. /자격증추가 로도 호출.
+description: 케어아카데미에 신규 자격증 과정이 열렸을 때 ALF 봇이 참고하는 자격증 상세 문서(cs-triage/ALF_docs/자격증상세/)를 기존 형식대로 추가한다. 사용자가 "자격증 상세 추가해줘", "신규 과정 추가", "○○지도사 자격증 문서 만들어줘", "새 자격증 정보 입력할게" 같은 요청을 하면 필요한 정보를 먼저 묻고, 받은 만큼만 채워 파일을 만들고, 시트·채널톡 두 채널 도큐먼트·CS 공유 보드 카드까지 넣고, 기출문제 답안지 페이지도 시트 기준으로 갱신한다. /자격증추가 로도 호출.
 ---
 
 # 자격증 상세 문서 추가 스킬
 
-케어아카데미에 신규 과정이 생기면 `cs-triage/ALF_docs/자격증상세/{자격증명}_{급수}.md`를 만들고, **같은 내용을 [자격증 상세 시트](https://docs.google.com/spreadsheets/d/1jXPEfaol5hhIklzjTa8INudskEnVvKo9urHr7vO9MSg/edit?gid=0)에도 한 줄 추가한다.** 교안링크가 있으면 [발송 도구 템플릿 시트](https://docs.google.com/spreadsheets/d/1CE4RQ2MKPsyA4hGHBT-p8TPCDK8D5VqfmVbc5mFOgFs/edit?gid=0)에 교재 발송 문자 템플릿도 자동으로 생긴다. 그다음 **채널톡 두 채널(케어아카데미·케어파트너) ALF 도큐먼트에 같은 아티클을 게시하고, [CS 관련 공유 사항 보드](https://claude.ai/artifact/1gy83nc1q2AsuYKmUibems)에 콘텐츠 카드를 넣는다.**
+케어아카데미에 신규 과정이 생기면 `cs-triage/ALF_docs/자격증상세/{자격증명}_{급수}.md`를 만들고, **같은 내용을 [자격증 상세 시트](https://docs.google.com/spreadsheets/d/1jXPEfaol5hhIklzjTa8INudskEnVvKo9urHr7vO9MSg/edit?gid=0)에도 한 줄 추가한다.** 교안링크가 있으면 [발송 도구 템플릿 시트](https://docs.google.com/spreadsheets/d/1CE4RQ2MKPsyA4hGHBT-p8TPCDK8D5VqfmVbc5mFOgFs/edit?gid=0)에 교재 발송 문자 템플릿도 자동으로 생긴다. 그다음 **채널톡 두 채널(케어아카데미·케어파트너) ALF 도큐먼트에 같은 아티클을 게시하고, [CS 관련 공유 사항 보드](https://claude.ai/artifact/1gy83nc1q2AsuYKmUibems)에 콘텐츠 카드를 넣는다.** 마지막으로 **[기출문제 답안지](https://claude.ai/artifact/QA3vTTxhFWudaDt3ykCmMj)를 기출문제 시트 기준으로 다시 올린다.**
 이 폴더는 **ALF 봇이 "이 자격증 따면 무슨 일 해요 / 어디서 써요 / 강의 어디서 들어요" 문의에 답할 때 쓰는 사실 잣대**다. 여기 없으면 봇이 답을 못 한다.
 
 ## 먼저 확인된 것 (다시 조사하지 말 것)
@@ -115,8 +115,23 @@ python3 .claude/skills/cert-detail/send_to_sheet.py '{"name":"{자격증명} {�
 - `response`(이렇게 안내)는 기존 카드 말투로 글머리 `• ` 줄들: "과목 소개는 아래 '강의 상세 보기' 내용으로 안내해 주세요." / "강의 상세 페이지 링크를 함께 보내 드리면 좋아요." + 특이사항이 있으면 그 혼동 포인트 한 줄, 교안이 없으면 "별도 교육자료(PDF)는 없는 과목이에요."
 - 큰 본문은 스크래치 폴더에 JSON으로 써서 `file_path`로 보낸다
 
-## 7. 마무리
+## 7. 기출문제 답안지 갱신
+[기출문제 답안지](https://claude.ai/artifact/QA3vTTxhFWudaDt3ykCmMj)는 문제를 페이지 안에 담아 두는 방식이라 시트가 바뀌어도 저절로 안 바뀐다. 새 과정을 넣을 때마다 시트 전체 기준으로 다시 올린다. 은주에게 따로 묻지 않는다. 기출문제가 아직 시트에 없으면 건너뛰고 마무리에서 알린다.
+
+- 원본: [케어아카데미 자격증 기출문제 데이터](https://docs.google.com/spreadsheets/d/1S00LWdnOInmkEjsp_AGWl6U7_r4G-aLI162z6QZcHrA/edit) — 탭 하나 = 과정 하나, 칸은 `exam_id·question_text·options(JSON {"1":…})·correct_answer·explanation·explanation_source`. 은주는 보기 권한만 있다(주인 김슬아)
+1. Google Drive `download_file_content`로 시트를 xlsx로 받는다 (`exportMimeType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`). `read_file_content`는 칸 값이 안 나와서 못 쓴다
+2. `Artifact` `read`(url 위 링크)로 지금 페이지를 받는다 — 결과에 저장된 HTML 파일 경로가 나온다
+3. `python3 .claude/skills/cert-detail/build_answer_sheet.py <xlsx> <받은 HTML> <스크래치/answer-sheet.html>` — 화면은 그대로 두고 문제 데이터만 바꾼다. 탭 이름 끝 "시험"은 떼고, 위쪽 `EXCLUDE`에 적힌 탭은 뺀다
+4. 출력(추가·뺌·문제 바뀜·확인 필요)을 보고, **새로 넣은 과정이 "추가"에 있는지** 확인한다. "뺌"에 예상 밖 과정이 있거나 "확인 필요"가 있으면 올리지 말고 은주에게 보여준다
+5. `Artifact` publish — `file_path` 새 HTML, `url` 위 링크. `capabilities`는 넘기지 않는다(이미지 저장 기능 유지)
+
+빼 둔 탭(`EXCLUDE`, 2026-11-12):
+- 디지털튜터 — 문제 없음
+- 시니어웰니스전문가·일상돌봄매니저 — 폐강
+- 이름이 겹치는 5쌍 10개 탭(학교안전지도사 시험/학교안전지도사5, 노인심리상담사 시험/노인심리상담사2, 안전지도사/안전지도사2, 경로당행정매니저/경로당행정매니저2, 병원원무행정전문가/병원원무행정전문가2) — 두 묶음 문제가 서로 달라서 어느 쪽을 쓸지 은주가 확인 중. 정해지면 쓸 탭을 `EXCLUDE`에서 지운다
+
+## 8. 마무리
 1. 만든 파일 전문과 시트에 들어간 줄(추가/수정, 몇 행), 교재 발송 템플릿 결과(added/exists/skipped), 자격증관리 시트 두 탭 결과(몇 행)를 보여준다
-2. 채널톡 두 채널 게시 결과(스페이스 이름·ID)와 보드 카드(검토 대기에 들어감, 등록일)를 알린다
+2. 채널톡 두 채널 게시 결과(스페이스 이름·ID)와 보드 카드(검토 대기에 들어감, 등록일)를 알린다. 기출문제 답안지 갱신 결과(과정 몇 개, 새 과정이 들어갔는지)도 한 줄로 알린다
 3. 은주가 검토해야 할 항목을 짚는다 (추론한 주요 업무 / 넣은 특이사항 / 비어 있는 값 / 나중에 채울 URL / 발급과정 코드번호 / 보드 카드 공개 체크·등록일)
 4. "GitHub에 올릴까요?"라고 묻는다(CLAUDE.md Git 규칙)
