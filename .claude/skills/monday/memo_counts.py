@@ -11,6 +11,9 @@
   (페이지에 "split"이 있으면 3분류 — 걸었는데 안 받음=mi, 연결+인터뷰 태그뿐=ac, 나머지 연결=pt. 민강·지영 같은 기준)
 - 기간: export가 빠짐없이 담고 있는 첫날 ~ cutoff(기본: 오늘 전 마지막 일요일). 그 사이 모든 날짜를 0 포함해 내보내
   페이지의 같은 날짜 값을 덮어쓴다(일부만 센 날이 남지 않게)
+  · 첫날 = 가장 이른 managedAt(없으면 openedAt)의 날짜. createdAt은 쓰지 않는다 — 몇 주~1년 전에 만든 상담이
+    다시 열려 섞이면 첫날이 그만큼 앞당겨져 지난 날짜를 0으로 덮는다(2026-11-16 고침)
+  · 기간이 7일을 넘으면 멈춘다(월요일 export는 한 주치). 여러 주를 일부러 넣을 때만 --allow-long
 - 결과: <out>/<key>.json = {"days": {...}, "through": cutoff} → ArtifactData update(병합)로 stats/daily에 넣는다
 """
 import argparse
@@ -39,17 +42,21 @@ def read_export(path):
     ch = CHANNEL.get(int(mg["channelId"].iloc[0]))
     if ch is None:
         sys.exit(f"{path.name}: 모르는 channelId {mg['channelId'].iloc[0]}")
-    uc = x.parse("UserChat", usecols=["id", "createdAt", "tags"])
+    uc = x.parse("UserChat", usecols=lambda c: c in ("id", "createdAt", "openedAt", "managedAt", "tags"))
     tagsets = {str(r["id"]): frozenset(t.strip() for t in str(r["tags"]).split(",") if t.strip()) if pd.notna(r["tags"]) else frozenset() for _, r in uc.iterrows()}
     m = x.parse("Message data", usecols=["chatId", "personType", "personId", "createdAt", "isPrivate"])
     m = m[(m.personType == "manager") & (m.isPrivate.astype(str).str.lower() != "true")].copy()
     m["personId"] = m.personId.astype(str).str.replace(r"\.0$", "", regex=True)
     m["t"] = pd.to_datetime(m.createdAt, errors="coerce")
-    # 상한에 걸린 export는 오래된 재오픈 상담이 섞여 createdAt이 몇 달 전까지 가므로, 첫 답장 다음 날부터 온전하다고 본다
+    # export에는 예전에 만든 상담이 다시 열려 섞이므로 createdAt이 아니라 managedAt(없으면 openedAt)으로 기간 첫날을 잡는다
+    # 상한에 걸린 export는 첫날이 일부만 담기므로, 첫 답장 다음 날부터 온전하다고 본다
     if len(uc) >= EXPORT_CAP:
         first_full = m.t.min().date() + timedelta(days=1)
     else:
-        first_full = pd.to_datetime(uc["createdAt"], errors="coerce").min().date()
+        col = next((c for c in ("managedAt", "openedAt") if c in uc.columns and uc[c].notna().any()), None)
+        if col is None:
+            sys.exit(f"{path.name}: UserChat에 managedAt·openedAt이 없어 기간 첫날을 정할 수 없음")
+        first_full = pd.to_datetime(uc[col], errors="coerce").min().date()
     cols = ["userChatId", "callAssigneeId", "direction", "startedAt", "firstEngagedAt"]
     meet = x.parse("UserChat meet data", usecols=cols) if "UserChat meet data" in x.sheet_names else pd.DataFrame(columns=cols)
     meet["conn"] = meet.firstEngagedAt.notna()  # 연결된 통화
@@ -65,6 +72,7 @@ def main():
     ap.add_argument("folder")
     ap.add_argument("--out", required=True)
     ap.add_argument("--cutoff")
+    ap.add_argument("--allow-long", action="store_true", help="7일 넘는 기간도 내보냄(여러 주 복구할 때만)")
     a = ap.parse_args()
     if not CONF.exists():
         sys.exit(f"{CONF} 가 없음 — 하루 메모 페이지 목록을 먼저 만들어 주세요")
@@ -77,6 +85,10 @@ def main():
     start = max(e["first_full"] for e in ex)
     if start > cutoff:
         sys.exit(f"export가 {start}부터라 {cutoff}까지 채울 날이 없음")
+    if (cutoff - start).days + 1 > 7 and not a.allow_long:
+        sys.exit(f"기간이 {start}~{cutoff} ({(cutoff - start).days + 1}일)로 한 주보다 김 — 지난 날짜를 덮어쓸 수 있어 멈춤. "
+                 f"파일별 첫날: " + ", ".join(f"{e['file']}={e['first_full']}" for e in ex) +
+                 " · 일부러 여러 주를 넣는 거면 --allow-long")
     span = [start + timedelta(days=i) for i in range((cutoff - start).days + 1)]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
