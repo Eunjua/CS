@@ -5,6 +5,7 @@
  *   새 요청   : B(요청자)·C(담당자)·D(요청 내용)가 모두 채워지는 순간 → 담당자 멘션
  *   처리 완료 : E(처리 사항)에 값이 들어오고 1분 뒤, 그때 적힌 값으로 → 요청자 멘션
  *               새 요청 글의 스레드(답글) 안에 단다. 스레드 번호가 없는 줄은 채널에 따로 보낸다
+ *               스레드에 달았으면 원글에 ✅도 단다(봇 토큰에 reactions:write 권한 필요)
  *
  * 스레드 번호
  *   H(슬랙 스레드) : 요청 글의 슬랙 링크나 글 번호. 사람은 볼 일 없다(숨겨도 됨)
@@ -166,6 +167,7 @@ function 처리완료알림(셀) {
       '— 처리 사항: ' + 값,
       시트링크
     ].join('\n'), 스레드);
+    체크달기(시트.getRange(행, 스레드열).getValue());   // 원글에 ✅ — 채널에서 끝난 요청이 한눈에 보이게
     return;
   }
 
@@ -190,6 +192,39 @@ function 글번호뽑기(값) {
   const 링크 = 글.match(/\/p(\d{10})(\d{6})(?:\D|$)/);
   if (링크) return 링크[1] + '.' + 링크[2];
   return /^\d{10}\.\d{6}$/.test(글) ? 글 : '';
+}
+
+/**
+ * H열 원글에 ✅를 단다. 봇 토큰에 reactions:write 권한이 있어야 한다.
+ * 채널은 메시지 링크 안의 채널 번호를 쓰고, 글 번호만 적힌 줄은 SLACK_CHANNEL_ID를 쓴다.
+ * 이미 ✅가 있으면 그냥 넘어간다. 실패해도 알림은 이미 나갔으니 로그만 남긴다.
+ * 달았으면 true.
+ */
+function 체크달기(H값) {
+  try {
+    const 글번호 = 글번호뽑기(H값);
+    if (!글번호) return false;
+    const 속성 = PropertiesService.getScriptProperties();
+    const 토큰 = String(속성.getProperty('SLACK_BOT_TOKEN') || '').trim();
+    const 링크채널 = String(H값 || '').match(/\/archives\/([A-Z0-9]+)\//);
+    const 채널 = 링크채널 ? 링크채널[1] : String(속성.getProperty('SLACK_CHANNEL_ID') || '').trim();
+    if (!토큰 || !채널) return false;
+
+    const 응답 = UrlFetchApp.fetch('https://slack.com/api/reactions.add', {
+      method: 'post',
+      contentType: 'application/json; charset=utf-8',
+      headers: { Authorization: 'Bearer ' + 토큰 },
+      payload: JSON.stringify({ channel: 채널, timestamp: 글번호, name: 'white_check_mark' }),
+      muteHttpExceptions: true
+    });
+    const 결과 = JSON.parse(응답.getContentText() || '{}');
+    if (결과.ok || 결과.error === 'already_reacted') return true;
+    console.error('✅ 달기 실패 — ' + (결과.error || 응답.getContentText()) + ' (missing_scope면 봇에 reactions:write 권한 필요)');
+    return false;
+  } catch (err) {
+    console.error('✅ 달기 실패 — ' + err);
+    return false;
+  }
 }
 
 /**

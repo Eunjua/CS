@@ -11,6 +11,9 @@ var 보낸스레드 = null;
 var 돌려줄글번호 = '';
 var 진짜슬랙보내기 = 슬랙보내기;   // 아래 '발송 방식' 점검에서 쓴다
 슬랙보내기 = function (문구, 스레드) { 보낸것 = 문구; 보낸스레드 = 스레드; return 돌려줄글번호; };
+var 체크한것 = [];
+var 진짜체크달기 = 체크달기;      // 아래 '✅ 달기' 점검에서 쓴다
+체크달기 = function (H값) { 체크한것.push(H값); return true; };
 var 기다린ms = 0;
 Utilities = { sleep: function (ms) { 기다린ms = ms; } };
 SpreadsheetApp = { flush: function () {} };
@@ -138,8 +141,14 @@ assert.ok(보낸것.indexOf('요청자') === -1, '스레드 답글엔 요청자�
 assert.ok(보낸것.indexOf('요청 내용') === -1, '스레드 답글엔 요청 내용을 다시 넣지 않는다');
 assert.strictEqual(스레드행[7], '1731123456.123456', '처리 완료가 H열 번호를 바꾸면 안 된다');
 
+// 스레드에 답글을 달면 원글에 ✅도 단다
+체크한것 = [];
+편집(['9/9', '홍길동', '홍길동', '주소 확인', '101동', '', '', '1731123456.123456'], 2, 5, 빈칸);
+assert.deepStrictEqual(체크한것, ['1731123456.123456'], '처리 완료 후 H열 원글에 ✅를 달아야 한다');
+
 // 웹훅으로 보내 번호가 없으면 H열은 비워 두고, 처리 완료는 채널로
 돌려줄글번호 = '';
+체크한것 = [];
 var 웹훅행 = ['', '홍길동', '홍길동', '주소 확인', '', '', '', ''];
 편집(웹훅행, 2, 4, 빈칸);
 assert.strictEqual(웹훅행[7], '', '번호가 없으면 H열을 건드리지 않는다');
@@ -150,6 +159,7 @@ assert.strictEqual(보낸스레드, '', 'H열이 비면 채널로 보낸다');
 // 이번 변경 전 줄(H열 자체가 없음)도 채널로
 편집(['9/9', '홍길동', '홍길동', '주소 확인', '101동', '', ''], 2, 5, 빈칸);
 assert.strictEqual(보낸스레드, '', '옛 줄은 채널로 보낸다');
+assert.deepStrictEqual(체크한것, [], '원글이 없는 줄엔 ✅를 달지 않는다');
 
 // 워크플로가 H열에 적은 메시지 링크로도 스레드에 단다
 var 링크행 = ['9/9', '홍길동', '홍길동', '주소 확인', '101동', '', '', 'https://bosalpim.slack.com/archives/C0123ABC/p1731123456123456'];
@@ -206,3 +216,40 @@ assert.ok(호출[1].url.indexOf('hooks.slack.com') !== -1, '실패하면 웹훅�
 assert.strictEqual(진짜슬랙보내기('안녕'), '');
 assert.strictEqual(호출.length, 1);
 assert.ok(호출[0].url.indexOf('hooks.slack.com') !== -1);
+
+// --- ✅ 달기 ---
+// 메시지 링크면 링크 안의 채널로, ✅(white_check_mark)를 원글 번호에
+속성({ SLACK_BOT_TOKEN: 'xoxb-test', SLACK_CHANNEL_ID: 'C000' });
+봇응답 = '{"ok":true}';
+호출 = [];
+assert.strictEqual(진짜체크달기('https://bosalpim.slack.com/archives/C0C04CME8MS/p1794198384948279'), true);
+assert.strictEqual(호출.length, 1);
+assert.ok(호출[0].url.indexOf('reactions.add') !== -1);
+assert.deepStrictEqual(호출[0].내용, { channel: 'C0C04CME8MS', timestamp: '1794198384.948279', name: 'white_check_mark' });
+assert.strictEqual(호출[0].옵션.headers.Authorization, 'Bearer xoxb-test');
+
+// 스크립트가 적은 글 번호만 있으면 SLACK_CHANNEL_ID 채널로
+호출 = [];
+진짜체크달기('1731123456.123456');
+assert.strictEqual(호출[0].내용.channel, 'C000');
+
+// 이미 ✅가 있으면 성공으로 본다
+봇응답 = '{"ok":false,"error":"already_reacted"}';
+assert.strictEqual(진짜체크달기('1731123456.123456'), true);
+
+// 권한이 없거나 오류가 나도 멈추지 않고 false만 돌려준다
+console.error = function () {};
+봇응답 = '{"ok":false,"error":"missing_scope"}';
+assert.strictEqual(진짜체크달기('1731123456.123456'), false);
+UrlFetchApp = { fetch: function () { throw new Error('네트워크 오류'); } };
+assert.strictEqual(진짜체크달기('1731123456.123456'), false);
+console.error = 원래에러;
+
+// 원글 번호·토큰이 없으면 아예 부르지 않는다
+호출 = [];
+UrlFetchApp = { fetch: function (u, o) { 호출.push(u); return { getContentText: function () { return '{"ok":true}'; } }; } };
+assert.strictEqual(진짜체크달기(''), false);
+assert.strictEqual(진짜체크달기('메모'), false);
+속성({ SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x' });
+assert.strictEqual(진짜체크달기('1731123456.123456'), false);
+assert.strictEqual(호출.length, 0);
