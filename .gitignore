@@ -41,3 +41,4 @@ cs-triage/ALF_설계/논의/
 
 # 하루 메모 페이지 목록 (상담원 이름·페이지 주소 — 로컬 보관만)
 .claude/skills/monday/memo_pages.local.json
+.claude/skills/monday/deploy_log.local.json
