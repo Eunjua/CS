@@ -34,7 +34,7 @@ python3 .claude/skills/cert-detail/from_detail_page.py https://www.carepartner.k
 
 ### 여러 과정을 한꺼번에 받을 때 (11/16, 4개로 해 봄)
 은주는 `1. 상세페이지 URL / 시트 탭 링크 / 기관 / 교안 링크 또는 "교안 없음"`처럼 줄마다 과정 하나씩 준다. 그대로 받는다.
-- 1~4단계(읽기·md·시트)와 6단계(보드 카드)는 **과정마다** 한다. 시트 전송은 하나에 30초 넘게 걸리니 백그라운드로 돌리고, 보드 카드는 `batch` 한 번으로 넣는다
+- 1~4단계(읽기·md·시트)는 **과정마다** 한다. 시트 전송은 하나에 30초 넘게 걸리니 백그라운드로 돌린다. 6단계 보드 카드는 **과정 전부를 카드 한 장**에 담아 한 번에 넣는다
 - 5단계 채널톡은 **채널마다 요청 한 번에 과정 전부**를 담는다(`<<A1 제목: …>> 본문: …` 식으로 이어 붙임). 두 채널을 탭 두 개로 동시에 보내도 된다
   - 초안을 만들 때 과정마다 「승인」 카드가 뜨기도 한다 — 초안 생성 승인이라 눌러도 된다
   - 아카데미 CoS는 초안만 만들고 "게시 승인 버튼은 지원하지 않는다"며 멈출 수 있다 → 같은 대화에 "초안 N개를 본문 그대로 게시해 줘, 스페이스는 미게시로 둬"를 보내면 과정마다 게시 승인 카드가 차례로 뜬다
@@ -116,12 +116,24 @@ python3 .claude/skills/cert-detail/send_to_sheet.py '{"name":"{자격증명} {�
 - 실패하거나 CoS를 못 쓰면 md는 그대로 두고, 어느 채널이 안 됐는지 보고한다
 
 ## 6. CS 공유 보드에 콘텐츠 카드 추가
-[CS 관련 공유 사항 보드](https://claude.ai/artifact/1gy83nc1q2AsuYKmUibems)의 데이터베이스 `cards` 컬렉션에 `ArtifactData` `set`으로 새 문서를 넣는다(페이지 재게시 아님). 은주에게 따로 묻지 않는다.
+[CS 관련 공유 사항 보드](https://claude.ai/artifact/1gy83nc1q2AsuYKmUibems)의 데이터베이스 `cards` 컬렉션에 넣는다(`ArtifactData`, 페이지 재게시 아님). 은주에게 따로 묻지 않는다.
 
-- 먼저 `query`로 `type == "콘텐츠"`이고 `course`가 같은 카드가 있는지 본다. 있으면 새로 만들지 말고 `courseDoc`·`courseUrl`만 `update`(`if_version` 붙여서)
-- doc_id: `a-YYYYMMDD-영문슬러그`(영문 소문자·숫자·하이픈. 예 `a-20261111-senior-job-counselor`)
-- 넣는 값: `type:"콘텐츠"`, `contentKind:"새로 등록"`, `title:"신규 과목 등록: {과정명}"`, `course:"{과정명}"`(띄어쓰기), `courseUrl`(상세페이지, 없으면 ""), `courseDoc`(md 파일 전문), `services:["케어아카데미"]`, `status:"진행 중"`, `start`(오늘 날짜 `YYYY-MM-DD`), `end:null`, `tag:null`, `owner:null`, `links:[]`, `sources:[]`, `csShared:false`, **`visible:false`·`needsCheck:true`**(검토 대기로 들어감 — 상담원 공개 체크는 은주가 한다), `createdAt`·`updatedAt`(현재 밀리초)
-- `response`(이렇게 안내)는 기존 카드 말투로 글머리 `• ` 줄들: "과목 소개는 아래 '강의 상세 보기' 내용으로 안내해 주세요." / "강의 상세 페이지 링크를 함께 보내 드리면 좋아요." + 특이사항이 있으면 그 혼동 포인트 한 줄, 교안이 없으면 "별도 교육자료(PDF)는 없는 과목이에요."
+**같은 날 열린 과목은 카드 한 장에 모은다**(11/17 은주 요청). 과목마다 카드를 따로 만들지 않는다. 카드 안에서 과목마다 이름·링크·한 줄 요약이 보이고, 「강의 상세 보기」 토글로 과목별 상세가 펼쳐진다.
+
+- 먼저 `list`로 콘텐츠 카드를 훑는다(안내 안 함 카드 포함)
+  - 이 과정이 이미 어떤 카드의 `courses`(또는 옛 칸 `course`)에 있으면 새로 넣지 않고 그 항목의 `courseDoc`·`courseUrl`·`summary`·`caution`만 고친다
+  - `contentKind:"새로 등록"`이고 `start`가 오늘인 카드가 있으면(카드 수집 작업이 먼저 만든 카드일 수 있음) 그 카드의 `courses` 뒤에 과정을 더한다
+    - 그 카드가 옛 형식(과목 여러 개를 `course` 한 칸에 줄로 적음)이면 `courses` 배열로 옮기고 `course`·`courseUrl`은 지운다(`{"__delete__": true}`)
+    - 제목의 과목 수·이름도 맞춰 고친다(예 「신규 과목 4개 열림: A · B · C · D」)
+    - `response`·`sources`·`links` 등 이미 있는 칸은 덮어쓰지 않는다
+  - 없으면 새 카드를 만든다
+- 여러 과정을 한꺼번에 받으면 모든 과정을 한 카드에 담아 `set`/`update` 한 번으로 넣는다
+- `courses` 항목 하나: `{"course":"{과정명}"(띄어쓰기), "courseUrl":"상세페이지(없으면 \"\")", "summary":"{발급 기관} · {N}강 · 교안 있음/없음", "caution":"특이사항(혼동 포인트). 없으면 \"\"", "courseDoc":"md 파일 전문"}`
+- 새 카드 doc_id: `a-YYYYMMDD-new-courses`(그날 두 번째 카드가 필요할 일은 없다 — 있으면 위 규칙대로 그 카드에 더한다)
+- 새 카드 값: `type:"콘텐츠"`, `contentKind:"새로 등록"`, `title`(한 과목이면 「신규 과목: {과정명}」, 여럿이면 「신규 과목 N개 열림: A · B · …」), `courses`, `services:["케어아카데미"]`, `status:"진행 중"`, `start`(오늘 `YYYY-MM-DD`), `end:null`, `tag:null`, `owner:null`, `links:[]`, `sources:[]`, `response:""`, `csShared:false`, **`visible:false`·`needsCheck:true`**(검토 대기로 들어감 — 상담원 공개 체크는 은주가 한다), `createdAt`·`updatedAt`(현재 밀리초)
+  - `course`·`courseUrl`·`courseDoc` 칸(옛 형식)은 쓰지 않는다
+  - `response`는 과목 공통으로 꼭 알 것이 있을 때만 쓴다. "과목 소개는 아래 강의 상세로 안내해 주세요" 같은 고정 문장은 쓰지 않는다
+- 기존 카드에 더할 때는 읽은 `version`을 `if_version`으로 붙인다. 이미 공개 중(`visible:true`)인 카드에 과목을 더했으면 `needsCheck:true`와 `changes`에 "과목 추가: {과정명}"을 남긴다
 - 큰 본문은 스크래치 폴더에 JSON으로 써서 `file_path`로 보낸다
 
 ## 7. 기출문제 답안지 갱신
@@ -141,6 +153,6 @@ python3 .claude/skills/cert-detail/send_to_sheet.py '{"name":"{자격증명} {�
 
 ## 8. 마무리
 1. 만든 파일 전문과 시트에 들어간 줄(추가/수정, 몇 행), 교재 발송 템플릿 결과(added/exists/skipped), 자격증관리 시트 두 탭 결과(몇 행)를 보여준다
-2. 채널톡 두 채널 게시 결과(스페이스 이름·ID)와 보드 카드(검토 대기에 들어감, 등록일)를 알린다. 기출문제 답안지 갱신 결과(과정 몇 개, 새 과정이 들어갔는지)도 한 줄로 알린다
+2. 채널톡 두 채널 게시 결과(스페이스 이름·ID)와 보드 카드(과정 몇 개를 담았는지 · 새 카드인지 그날 카드에 더했는지 · 검토 대기)를 알린다. 기출문제 답안지 갱신 결과(과정 몇 개, 새 과정이 들어갔는지)도 한 줄로 알린다
 3. 은주가 검토해야 할 항목을 짚는다 (추론한 주요 업무 / 넣은 특이사항 / 비어 있는 값 / 나중에 채울 URL / 발급과정 코드번호 / 보드 카드 공개 체크·등록일)
 4. "GitHub에 올릴까요?"라고 묻는다(CLAUDE.md Git 규칙)
