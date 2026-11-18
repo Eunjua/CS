@@ -253,3 +253,14 @@ assert.strictEqual(진짜체크달기('메모'), false);
 속성({ SLACK_WEBHOOK_URL: 'https://hooks.slack.com/x' });
 assert.strictEqual(진짜체크달기('1731123456.123456'), false);
 assert.strictEqual(호출.length, 0);
+
+// --- 이미 슬랙에 올라간 요청(H열 있음)은 칸을 고쳐도 새 알림 없음, 링크 유지 ---
+슬랙보내기 = function (문구, 스레드) { 보낸것 = 문구; 보낸스레드 = 스레드; return '2222.000002'; };
+var 올라간행 = ['9/9', '홍길동', '', '주소 확인', '', '', '', 'https://x.slack.com/archives/C01/p1731123456123456'];
+올라간행[2] = '김철수';
+assert.strictEqual(편집(올라간행, 2, 3 /* C 담당자 */, 빈칸), null, '담당자를 바꿔도 새 요청 알림을 보내지 않는다');
+assert.strictEqual(올라간행[7], 'https://x.slack.com/archives/C01/p1731123456123456', 'H열 링크는 그대로');
+// H열이 비어 있는 손으로 쓴 줄은 예전처럼 새 요청 알림
+var 손으로쓴행 = ['', '홍길동', '김철수', '주소 확인', '', '', '', ''];
+assert.ok(편집(손으로쓴행, 2, 3, 빈칸), 'H열이 비면 새 요청 알림은 그대로 간다');
+assert.strictEqual(손으로쓴행[7], '2222.000002');

@@ -112,6 +112,10 @@ function 새요청알림(셀, e) {
   const 시트 = 셀.getSheet();
   날짜채우기(시트, 셀.getRow(), 날짜열);   // 요청을 쓰기 시작한 날. 알림 조건과 무관하게 먼저 찍는다
 
+  // H열(슬랙 링크·글 번호)이 이미 있으면 슬랙에 올라간 요청이다.
+  // 담당자만 바꾸는 등 칸을 고쳐도 새 알림을 보내지 않고 링크도 그대로 둔다
+  if (String(시트.getRange(셀.getRow(), 스레드열).getValue() || '').trim()) return;
+
   const [, 요청자, 담당자, 요청내용] = 시트.getRange(셀.getRow(), 1, 1, 4).getValues()[0];
   if (!String(요청자).trim() || !String(담당자).trim() || !String(요청내용).trim()) return;
 
